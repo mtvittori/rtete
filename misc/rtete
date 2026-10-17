@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# RTete — client Telegram TUI (~/Work/rtete).
+# Avvia il client nel miglior terminale disponibile per gli sticker:
+# kitty (kitty graphics protocol) → ghostty → wezterm → terminale di sistema.
+# Su foot/senza grafica sono visibili solo le etichette emoji.
+# Errori del client (stderr) finiscono su ~/.local/state/rtete.err.log:
+# la TUI usa solo stdout, quindi la visualizzazione resta intatta.
+set -uo pipefail
+
+bin="$HOME/Work/rtete/target/release/rtete"
+if [[ ! -x $bin ]]; then
+  echo "rtete: binario non trovato." >&2
+  echo "Compila: ~/.cargo/bin/cargo build --release  (in ~/Work/rtete)" >&2
+  read -r -p "Premi Invio per chiudere "; exit 1
+fi
+mkdir -m 700 -p "$HOME/.local/state"
+touch "$HOME/.local/state/rtete.err.log" && chmod 600 "$HOME/.local/state/rtete.err.log"
+
+# Già dentro un terminale compatibile: esegui qui, senza aprire finestre.
+if [[ -n ${KITTY_WINDOW_ID:-} || -n ${GHOSTTY_RESOURCES_DIR:-} || -n ${WEZTERM_PANE:-} ]]; then
+  exec "$bin"
+fi
+
+if command -v kitty >/dev/null 2>&1; then
+  # Il log stderr non tocca la TUI (che scrive su stdout); in caso di errore
+  # la finestra resta aperta mostrando le ultime righe di log finché Invio.
+  exec kitty --class RTete --title RTete /bin/bash -c '
+    rc=0; "$1" 2>>"$2" || rc=$?
+    # 130 = SIGINT, 143 = SIGTERM: chiusure volute (pkill/menu) → niente schermata
+    if (( rc != 0 && rc != 130 && rc != 143 )); then
+      echo
+      echo "== rtete è uscito con errore ($rc). Ultimo log: =="
+      tail -6 "$2"
+      echo
+      read -r -p "Premi Invio per chiudere "
+    fi' _ "$bin" "$HOME/.local/state/rtete.err.log"
+elif command -v ghostty >/dev/null 2>&1; then
+  exec ghostty --class=RTete --title=RTete "$bin" 2>>"$HOME/.local/state/rtete.err.log"
+elif command -v wezterm >/dev/null 2>&1; then
+  exec wezterm start --always-new-process -- "$bin"
+elif command -v xdg-terminal-exec >/dev/null 2>&1; then
+  exec xdg-terminal-exec -e "$bin"
+else
+  exec "$bin"
+fi
