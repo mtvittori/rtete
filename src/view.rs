@@ -83,7 +83,8 @@ pub fn msg_label(name: &str) -> String {
     format!("{trunc:<LABEL_W$} │ ")
 }
 
-/// Word wrapping lineare, senza dipendenze.
+/// Word wrapping lineare, senza dipendenze. Le parole più larghe della riga
+/// vengono spezzate a livello di carattere (URL, parole appiccicate…).
 pub fn wrap(text: &str, width: usize) -> Vec<String> {
     if width < 4 {
         return vec![text.to_string()];
@@ -92,6 +93,19 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
     for para in text.split('\n') {
         let mut cur = String::new();
         for word in para.split_whitespace() {
+            // parola sola più larga della riga: spezzala carattere per carattere
+            if word.chars().count() > width {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+                for ch in word.chars() {
+                    if cur.chars().count() == width {
+                        out.push(std::mem::take(&mut cur));
+                    }
+                    cur.push(ch);
+                }
+                continue;
+            }
             if cur.chars().count() + word.chars().count() + 1 > width && !cur.is_empty() {
                 out.push(std::mem::take(&mut cur));
             }
@@ -816,4 +830,44 @@ fn draw_card(
             height: cols[1].height,
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Il riquadro di composizione deve crescere oltre una riga coi testi lunghi.
+    #[test]
+    fn compose_grows_multiline() {
+        let breve = wrap("ciao", 70);
+        assert_eq!(breve.len(), 1);
+        let lungo = wrap(
+            "questa è una frase piuttosto lunga che supera la larghezza della colonna e deve andare a capo",
+            40,
+        );
+        assert!(
+            lungo.len() > 1,
+            "wrap doveva produrre più righe, ne ha {}",
+            lungo.len()
+        );
+    }
+
+    #[test]
+    fn msg_label_fits() {
+        assert_eq!(msg_label("Pippo").chars().count(), LABEL_W + 3);
+        assert_eq!(msg_label("NomeLunghissimo"), "NomeLung │ ");
+    }
+
+    /// Le parole senza spazi più larghe della riga vanno spezzate.
+    #[test]
+    fn wrap_breaks_long_words() {
+        let w = wrap("ciao_world_come_stai_oggi_bene_molto_bene_grazie_molto", 12);
+        assert!(
+            w.len() >= 4,
+            "l'URL doveva essere spezzato in più righe, ne ha {w:?}"
+        );
+        for piece in &w {
+            assert!(piece.chars().count() <= 12, "riga troppo lunga: {piece}");
+        }
+    }
 }
