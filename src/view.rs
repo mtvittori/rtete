@@ -73,6 +73,16 @@ impl HistoryLine {
     }
 }
 
+/// Larghezza della colonna autore nelle righe di storia.
+pub const LABEL_W: usize = 8;
+
+/// Colonna autore: nome troncato su 8 caratteri + separatore, es.
+/// "Pippo    │ " — le righe successive ripetono la colonna vuota.
+pub fn msg_label(name: &str) -> String {
+    let trunc: String = name.chars().take(LABEL_W).collect();
+    format!("{trunc:<LABEL_W$} │ ")
+}
+
 /// Word wrapping lineare, senza dipendenze.
 pub fn wrap(text: &str, width: usize) -> Vec<String> {
     if width < 4 {
@@ -277,44 +287,89 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
         }
         return;
     };
-    // composizione, modifica, cancellazione, ricerca: nella cornice inferiore
-    let bottom: Line<'static> = if app.del_arm {
-        Line::from(Span::styled(
-            " ⚠️ Invio = cancella l'ultimo tuo messaggio · Esc scelta saggia",
-            Style::new().fg(WARNING),
-        ))
-        .left_aligned()
-    } else if let Some(id) = app.editing {
-        Line::from(Span::styled(
-            format!(" ✎ #{id} {}", app.compose),
-            Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
-        ))
-        .left_aligned()
-    } else if app.compose.is_empty() {
-        Line::from(vec![
-            Span::styled(" scrivi ", Style::new().fg(BG).bg(SELECT)),
-            Span::styled("<testo>", Style::new().fg(ACCENT)),
-            Span::styled(" ", Style::new().fg(FAINT)),
-            Span::styled(" invia ", Style::new().fg(BG).bg(SELECT)),
-            Span::styled("<Invio>", Style::new().fg(ACCENT)),
-            Span::styled(" edita ", Style::new().fg(BG).bg(SELECT)),
-            Span::styled("<Ctrl-E>", Style::new().fg(ACCENT)),
-            Span::styled(" sticker ", Style::new().fg(BG).bg(SELECT)),
-            Span::styled("<Tab>", Style::new().fg(ACCENT)),
-        ])
-        .centered()
-    } else {
-        Line::from(Span::styled(
-            format!(" ❯ {}", app.compose),
-            Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
-        ))
-        .left_aligned()
-    };
-    let block = pane(&chat.name.clone(), true).title_bottom(bottom);
-    let inner = block.inner(area);
-    f.render_widget(block, area);
+    // area messaggi + riquadro composizione multifila in basso
+    let inner_w = area.width.saturating_sub(2) as usize;
+    let comp_lines = (wrap(&app.compose, inner_w.saturating_sub(2)).len() as u16).clamp(1, 5);
+    let body = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(comp_lines + 2)])
+        .split(area);
 
-    let msgs = inner;
+    // suggerimenti fissi nella cornice dei messaggi
+    let hints = hints_line(&[
+        ("invia", "Invio"),
+        ("edita", "Ctrl-E"),
+        ("canc", "Ctrl-D"),
+        ("sticker", "Tab"),
+        ("ricerca", "Ctrl-F"),
+    ]);
+    let block = pane(&chat.name.clone(), true).title_bottom(hints);
+    let msgs = block.inner(body[0]);
+    f.render_widget(block, body[0]);
+
+    // riquadro di composizione: ambra in modifica, giallo se cancella
+    let (c_border, c_title): (Color, Option<String>) = if app.del_arm {
+        (
+            WARNING,
+            Some(" \u{2620} Invio = CANCELLA \u{b7} Esc annulla ".into()),
+        )
+    } else if let Some(id) = app.editing {
+        (
+            ACCENT,
+            Some(format!(
+                " \u{270e} modifica #{id} \u{b7} Invio salva \u{b7} Esc annulla "
+            )),
+        )
+    } else {
+        (FAINT, None)
+    };
+    let mut cblock = Block::bordered()
+        .border_set(border::ROUNDED)
+        .border_style(Style::new().fg(c_border));
+    if let Some(t) = c_title {
+        cblock = cblock
+            .title_top(Line::from(t).left_aligned())
+            .title_style(Style::new().fg(c_border));
+    }
+    let cinner = cblock.inner(body[1]);
+    f.render_widget(cblock, body[1]);
+
+    // testo composto: avvolto sulle righe disponibili, mostra la coda
+    let c_wrapped = wrap(&app.compose, cinner.width.saturating_sub(1) as usize);
+    let skip = c_wrapped.len().saturating_sub(comp_lines as usize);
+    let last = c_wrapped.len().saturating_sub(1);
+    let mut c_rows: Vec<Line> = Vec::new();
+    for (i, piece) in c_wrapped.iter().skip(skip).enumerate() {
+        let lead = if skip > 0 && i == 0 {
+            "\u{2026} "
+        } else if i == 0 {
+            "\u{276f} "
+        } else {
+            "  "
+        };
+        if i + skip == last {
+            c_rows.push(Line::from(vec![
+                Span::styled(format!("{lead}{piece}"), Style::new().fg(FG)),
+                Span::styled(
+                    "\u{25ae}",
+                    Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        } else {
+            c_rows.push(Line::from(Span::styled(
+                format!("{lead}{piece}"),
+                Style::new().fg(FG),
+            )));
+        }
+    }
+    if c_rows.is_empty() {
+        c_rows.push(Line::from(Span::styled(
+            "\u{276f} ",
+            Style::new().fg(FAINT),
+        )));
+    }
+    f.render_widget(Paragraph::new(c_rows), cinner);
+
     let width = msgs.width.saturating_sub(1) as usize;
     let lines = app.history_lines(width);
 
@@ -460,7 +515,13 @@ fn draw_search(f: &mut Frame, app: &crate::App, area: Rect) {
         .iter()
         .enumerate()
         .map(|(i, h)| {
-            let who = if h.outgoing { "Io" } else { "Lui" };
+            let who = if !h.from.is_empty() {
+                h.from.clone()
+            } else if h.outgoing {
+                "Io".to_string()
+            } else {
+                "Lui".to_string()
+            };
             let mut spans = vec![
                 Span::styled(
                     format!("{:>3} {} {} · ", i + 1, h.date, who),

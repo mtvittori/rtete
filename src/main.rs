@@ -33,6 +33,7 @@ fn row_from_msg(m: grammers_client::message::Message) -> Result<(PeerId, tg::His
     let row = tg::HistoryRow {
         id: m.id(),
         outgoing: true,
+        from: tg::sender_name(&m),
         kind: tg::row_kind(m.media(), m.text().to_string()),
     };
     Ok((peer_id, row))
@@ -71,6 +72,8 @@ pub struct App {
     pub previews: HashMap<String, PathBuf>,
     /// conversioni in volo.
     pub pending: HashSet<String>,
+    /// il nome dell'utente connesso (etichette "Nome │ testo").
+    pub me: String,
     /// id del messaggio che stiamo modificando (Ctrl-E).
     pub editing: Option<i32>,
     /// eliminazione armata da Ctrl-D: il prossimo Invio la conferma.
@@ -212,6 +215,7 @@ async fn handle_event(
                             app.search_results = None;
                             app.search_cursor = 0;
                             app.search_q.clear();
+                            app.del_arm = false;
                         }
                         _ => {}
                     }
@@ -620,6 +624,7 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
             let row = tg::HistoryRow {
                 id: m.id(),
                 outgoing,
+                from: tg::sender_name(&m),
                 kind: tg::row_kind(m.media(), m.text().to_string()),
             };
             let open_id = app.current_chat().map(|c| c.peer_id);
@@ -639,6 +644,7 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
             let row = tg::HistoryRow {
                 id: m.id(),
                 outgoing: m.outgoing(),
+                from: tg::sender_name(&m),
                 kind: tg::row_kind(m.media(), m.text().to_string()),
             };
             app.replace_row(peer_id, row);
@@ -736,6 +742,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         open_set: None,
         previews: HashMap::new(),
         pending: HashSet::new(),
+        me: tg::own_name(&client).await,
         editing: None,
         del_arm: false,
         show_search: false,
@@ -853,6 +860,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 tg::HistoryRow {
                                     id,
                                     outgoing: true,
+                                    from: String::new(),
                                     kind: tg::RowKind::Text(text),
                                 },
                             )),
@@ -1087,7 +1095,19 @@ impl App {
         };
         let mut lines = Vec::new();
         for row in rows {
-            let prefix = if row.outgoing { "Io" } else { "Tu" };
+            // etichetta: nome proprio per i messaggi in uscita, mittente per gli altri
+            let name = if row.outgoing {
+                if self.me.is_empty() {
+                    "Io"
+                } else {
+                    self.me.as_str()
+                }
+            } else if row.from.is_empty() {
+                "Lui"
+            } else {
+                row.from.as_str()
+            };
+            let label = view::msg_label(name);
             let name_style = if row.outgoing {
                 styles::OUTGOING
             } else {
@@ -1095,12 +1115,12 @@ impl App {
             };
             match &row.kind {
                 tg::RowKind::Text(text) => {
-                    let pieces = view::wrap(text, width.saturating_sub(6));
+                    let pieces = view::wrap(text, width.saturating_sub(view::LABEL_W + 3));
                     if pieces.is_empty() {
                         continue;
                     }
                     lines.push(view::HistoryLine {
-                        text: format!("{prefix} │ {}", pieces[0]),
+                        text: format!("{label}{}", pieces[0]),
                         color: name_style,
                         sticker: false,
                         animated: false,
@@ -1110,7 +1130,7 @@ impl App {
                     });
                     for piece in &pieces[1..] {
                         lines.push(view::HistoryLine {
-                            text: format!("  │ {}", piece),
+                            text: format!("{} │ {}", " ".repeat(view::LABEL_W), piece),
                             color: name_style,
                             ..view::HistoryLine::sep()
                         });
@@ -1123,7 +1143,7 @@ impl App {
                 } => {
                     lines.push(view::HistoryLine {
                         text: format!(
-                            "{prefix} │ sticker {emoji}{}",
+                            "{label}sticker {emoji}{}",
                             if *animated {
                                 " (tgs animato, non renderizzato)"
                             } else {
@@ -1158,7 +1178,7 @@ impl App {
                     };
                     lines.push(view::HistoryLine {
                         text: format!(
-                            "{prefix} │ {}{}",
+                            "{label}{}{}",
                             if *gif { "🎞 gif" } else { "📷 foto" },
                             cap_txt
                         ),
@@ -1185,13 +1205,13 @@ impl App {
                         format!(" — “{caption}”")
                     };
                     lines.push(view::HistoryLine {
-                        text: format!("{prefix} │ 📄 {name}{size_txt}{cap_txt} · Ctrl-O salva"),
+                        text: format!("{label}📄 {name}{size_txt}{cap_txt} · Ctrl-O salva"),
                         color: styles::ACCENT_DIM,
                         ..view::HistoryLine::sep()
                     });
                 }
                 tg::RowKind::Note(text) => lines.push(view::HistoryLine {
-                    text: format!("{prefix} │ 🎥 {text}"),
+                    text: format!("{label}🎥 {text}"),
                     color: styles::ACCENT_DIM,
                     ..view::HistoryLine::sep()
                 }),

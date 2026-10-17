@@ -31,6 +31,8 @@ pub struct DialogInfo {
 pub struct HistoryRow {
     pub id: i32,
     pub outgoing: bool,
+    /// nome del mittente (vuoto per i messaggi propri: si usa quello dell'utente).
+    pub from: String,
     pub kind: RowKind,
 }
 
@@ -399,6 +401,24 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
     }
 }
 
+/// Nome del mittente se risolvibile dalla cache della sessione;
+/// vuoto quando Telegram non lo fornisce nel pacchetto (fallback in vista).
+pub fn sender_name(m: &grammers_client::message::Message) -> String {
+    m.sender()
+        .and_then(|p| p.name())
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// Il nome completo dell'utente connesso (per le etichette "nome │ testo").
+pub async fn own_name(client: &Client) -> String {
+    client
+        .get_me()
+        .await
+        .map(|u| u.full_name())
+        .unwrap_or_default()
+}
+
 /// Fetch the last `limit` messages of a dialog, oldest first.
 pub async fn load_history(
     client: &Client,
@@ -410,8 +430,14 @@ pub async fn load_history(
     while let Some(m) = iter.next().await? {
         let id = m.id();
         let outgoing = m.outgoing();
+        let from = sender_name(&m);
         let kind = row_kind(m.media(), m.text().to_string());
-        rows.push(HistoryRow { id, outgoing, kind });
+        rows.push(HistoryRow {
+            id,
+            outgoing,
+            from,
+            kind,
+        });
     }
     rows.reverse();
     Ok(rows)
@@ -533,6 +559,7 @@ pub async fn delete_messages(
 pub struct SearchHit {
     pub id: i32,
     pub outgoing: bool,
+    pub from: String,
     pub date: String,
     pub snippet: String,
 }
@@ -566,6 +593,7 @@ pub async fn search_chat(
                 out.push(SearchHit {
                     id: m.id(),
                     outgoing: m.outgoing(),
+                    from: sender_name(&m),
                     date,
                     snippet,
                 });
