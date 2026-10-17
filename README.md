@@ -49,7 +49,7 @@ Dopodiché la sessione vive in `~/.local/share/rtete/rtete.db`.
 | `❯ …⏎` | invia il testo composto alla chat aperta |
 | `Tab` | apre/chiude il pannello sticker |
 | `Invio` (nel pannello) | apre il set / invia lo sticker sulla chat aperta |
-| `Esc` | indietro / chiudi pannello / svuota composizione |
+| `Esc` | a strati: chiude ricerca/pannello/modifica/cancellazione/selezione; poi **chiude la chat** e torna ai contatti |
 | `q` | esci (fuori dal pannello e senza testo in composizione) |
 | `Ctrl-C` | esci subito |
 

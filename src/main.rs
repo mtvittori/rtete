@@ -266,19 +266,22 @@ async fn handle_event(
                             app.show_sticker = false;
                             app.open_set = None;
                         }
-                    } else {
-                        if app.editing.is_some() {
-                            app.status = "modifica annullata".into();
-                        } else if app.del_arm {
-                            app.status = "cancellazione annullata".into();
-                        } else if app.msg_cursor.is_some() {
-                            app.status = "selezione chiusa".into();
-                        } else {
-                            app.status.clear();
-                        }
+                    } else if app.editing.is_some() {
+                        app.status = "modifica annullata".into();
                         app.editing = None;
+                        app.compose.clear();
+                    } else if app.del_arm {
+                        app.status = "cancellazione annullata".into();
                         app.del_arm = false;
                         app.del_id = None;
+                    } else if app.msg_cursor.is_some() {
+                        app.status = "selezione chiusa".into();
+                        app.msg_cursor = None;
+                    } else {
+                        // chiude la chat e torna alla lista contatti
+                        app.status.clear();
+                        app.open = None;
+                        app.search_results = None;
                         app.msg_cursor = None;
                         app.compose.clear();
                     }
