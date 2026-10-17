@@ -387,8 +387,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let (_session, client, updates) = tg::connect(&creds).await?;
 
-    // probe kitty graphics: prima che crossterm entri in raw mode
-    kitty::startup_detect().await;
+    // rileva il supporto kitty graphics prima che la TUI prenda stdin
+    kitty::startup_detect();
 
     println!("Verifico l'accesso al tuo account…");
     tg::sign_in(&client, &creds).await?;

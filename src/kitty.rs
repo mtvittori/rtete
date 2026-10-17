@@ -6,7 +6,6 @@
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::time::Duration;
 
 use base64::Engine as _;
 use crossterm::{cursor, execute, style::Print};
@@ -18,31 +17,6 @@ static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
 const CHUNK: usize = 4096;
 
-/// Ask the terminal `a=q` and look for the `_G` reply on stdin. Must run
-/// before crossterm's event stream owns stdin.
-async fn handshake() -> bool {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    let query = b"\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\";
-    let mut out = tokio::io::stdout();
-    if out.write_all(query).await.is_err() || out.flush().await.is_err() {
-        return false;
-    }
-
-    let mut buf = [0u8; 256];
-    let mut stdin = tokio::io::stdin();
-    let read = tokio::time::timeout(Duration::from_millis(400), stdin.read(&mut buf)).await;
-    match read {
-        Ok(Ok(n)) => {
-            let hay = String::from_utf8_lossy(&buf[..n]);
-            // A graphics-capable terminal echoes `i=31;…`; an erroring reply
-            // (`i=31;error…`) means the sequence was understood but Gina failed.
-            hay.contains("\x1b_G") && hay.contains("i=31;")
-        }
-        _ => false,
-    }
-}
-
 fn env_terminal_supports() -> bool {
     let term = std::env::var("TERM").unwrap_or_default();
     let term_program = std::env::var("TERM_PROGRAM").unwrap_or_default();
@@ -52,12 +26,17 @@ fn env_terminal_supports() -> bool {
         || term_program.eq_ignore_ascii_case("WezTerm")
         || std::env::var("GHOSTTY_RESOURCES_DIR").is_ok()
         || std::env::var("WEZTERM_PANE").is_ok()
+        || std::env::var("RTETE_FORCE_KITTY").is_ok()
 }
 
-/// Probe the terminal once. Call at startup, before raw mode.
-pub async fn startup_detect() {
-    let ok = handshake().await;
-    SUPPORT.store(ok || env_terminal_supports(), Ordering::Relaxed);
+/// Rileva il supporto una volta sola tramite variabili d'ambiente.
+///
+/// Volutamente SENZA probe con risposta su stdin: la query `a=q` andrebbe a
+/// fine-filone di una lettura bloccante "orfana" che divorerebbe la prima
+/// riga digitata dall'utente (es. il telefono al login). Il wrapper lancia
+/// RTete in Kitty/ghostty/wezterm, che dichiarano già le variabili giuste.
+pub fn startup_detect() {
+    SUPPORT.store(env_terminal_supports(), Ordering::Relaxed);
 }
 
 pub fn supported() -> bool {

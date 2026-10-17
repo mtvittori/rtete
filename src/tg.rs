@@ -189,17 +189,28 @@ pub async fn sign_in(
     if client.is_authorized().await? {
         return Ok(());
     }
-    let _ = write!(std::io::stdout(), "Numero di telefono (+39…): ");
-    let _ = std::io::stdout().flush();
-    let mut phone = String::new();
-    std::io::stdin().read_line(&mut phone)?;
-    let phone = normalize_phone(&phone);
-    // log mascherato per diagnosi: niente numero completo su disco
-    let shown = &phone[..phone.len().min(4)];
-    eprintln!(
-        "[rtete] tel normalizzato: {shown}… ({} cifre)",
-        phone.len() - 1
-    );
+    let phone = loop {
+        let _ = write!(std::io::stdout(), "Numero di telefono (+39…): ");
+        let _ = std::io::stdout().flush();
+        let mut phone = String::new();
+        if std::io::stdin().read_line(&mut phone)? == 0 {
+            return Err("input chiuso".into());
+        }
+        let phone = normalize_phone(&phone);
+        // log mascherato per diagnosi: niente numero completo su disco
+        let shown = &phone[..phone.len().min(4)];
+        eprintln!(
+            "[rtete] tel normalizzato: {shown}… ({} cifre)",
+            phone.len() - 1
+        );
+        // "+39" da solo o righe spurie: richiedi invece di chiamare Telegram
+        if phone.len() >= 7 {
+            break phone;
+        }
+        println!(
+            "Numero troppo corto. Usa il solo mobile (es. 3391234567) o il formato +39 completo."
+        );
+    };
     let token = client.request_login_code(&phone, &creds.api_hash).await?;
     let _ = write!(std::io::stdout(), "Codice ricevuto: ");
     let _ = std::io::stdout().flush();
