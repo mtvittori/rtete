@@ -162,6 +162,25 @@ pub async fn connect(
     Ok((session, client, updates))
 }
 
+/// Normalizza un numero di telefono all'unico formato che Telegram accetta:
+/// solo cifre con `+` davanti. Accetta spazi/trattini/parentesi, `00…` al
+/// posto di `+`, o il numero nudo da mobile italiano (prepend `+39`).
+fn normalize_phone(raw: &str) -> String {
+    let t = raw.trim();
+    let has_plus = t.starts_with('+');
+    let mut digits: String = t.chars().filter(|c| c.is_ascii_digit()).collect();
+    if !has_plus && digits.starts_with("00") {
+        digits = digits[2..].to_string();
+    }
+    if has_plus {
+        format!("+{digits}")
+    } else if digits.starts_with("39") && digits.len() >= 11 {
+        format!("+{digits}")
+    } else {
+        format!("+39{digits}")
+    }
+}
+
 /// Interactive sign-in; runs before the TUI starts.
 pub async fn sign_in(
     client: &Client,
@@ -174,9 +193,14 @@ pub async fn sign_in(
     let _ = std::io::stdout().flush();
     let mut phone = String::new();
     std::io::stdin().read_line(&mut phone)?;
-    let token = client
-        .request_login_code(phone.trim(), &creds.api_hash)
-        .await?;
+    let phone = normalize_phone(&phone);
+    // log mascherato per diagnosi: niente numero completo su disco
+    let shown = &phone[..phone.len().min(4)];
+    eprintln!(
+        "[rtete] tel normalizzato: {shown}… ({} cifre)",
+        phone.len() - 1
+    );
+    let token = client.request_login_code(&phone, &creds.api_hash).await?;
     let _ = write!(std::io::stdout(), "Codice ricevuto: ");
     let _ = std::io::stdout().flush();
     let mut code = String::new();
