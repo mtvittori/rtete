@@ -86,6 +86,11 @@ impl App {
 
     fn push_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
         let ring = self.histories.entry(peer_id).or_default();
+        // dedup: uno stesso messaggio arriva sia dalla conferma dell'invio
+        // sia dalle notifiche live di Telegram (anche dai nostri stessi invii)
+        if ring.iter().any(|r| r.id == row.id) {
+            return;
+        }
         ring.push_back(row);
         while ring.len() > MAX_HISTORY {
             ring.pop_front();
@@ -94,7 +99,12 @@ impl App {
 
     fn push_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) {
         let ring = self.histories.entry(peer_id).or_default();
-        ring.extend(rows);
+        for row in rows {
+            if ring.iter().any(|r| r.id == row.id) {
+                continue;
+            }
+            ring.push_back(row);
+        }
         while ring.len() > MAX_HISTORY {
             ring.pop_front();
         }
