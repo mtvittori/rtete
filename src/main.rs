@@ -190,6 +190,7 @@ async fn handle_event(
     del_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId, i32)>,
     search_tx: &mpsc::UnboundedSender<(PeerRefT, String)>,
     save_tx: &mpsc::UnboundedSender<(Media, String)>,
+    play_tx: &mpsc::UnboundedSender<(Media, String, String)>,
 ) {
     match ev {
         Event::Resize(_, _) => {}
@@ -208,6 +209,8 @@ async fn handle_event(
                         'd' => ctrl_delete(app),
                         // salva l'ultimo documento ricevuto in ~/Downloads
                         'o' => ctrl_save(app, save_tx),
+                        // riproduce l'ultimo audio (vocale o brano)
+                        'p' => ctrl_play(app, play_tx),
                         // ricerca nella chat aperta
                         'f' if app.current_chat().is_some() => {
                             app.show_search = true;
@@ -371,6 +374,48 @@ fn ctrl_delete(app: &mut App) {
     app.del_arm = true;
     app.editing = None;
     app.status = format!("⚠️ Invio = cancella il tuo messaggio #{last_own} (Esc per annullare)");
+}
+
+/// Riproduce l'ultimo audio (vocale o brano) della chat aperta.
+fn ctrl_play(app: &mut App, play_tx: &mpsc::UnboundedSender<(Media, String, String)>) {
+    app.status.clear();
+    if app.show_search || app.show_sticker {
+        return;
+    }
+    let Some(chat) = app.current_chat() else {
+        app.status = "apri prima una chat".into();
+        return;
+    };
+    let Some(ring) = app.histories.get(&chat.peer_id) else {
+        app.status = "cronologia non ancora caricata".into();
+        return;
+    };
+    let found = ring.iter().rev().find_map(|r| match &r.kind {
+        tg::RowKind::Audio {
+            media, name, voice, ..
+        } => {
+            let label = if *voice {
+                "voce".to_string()
+            } else {
+                name.clone()
+            };
+            // i vocali salvarli sempre ogg; i brani col nome così com'è
+            let fname = if *voice {
+                format!("voce-{}.ogg", tg::media_key(media))
+            } else {
+                name.replace('/', "_").replace("..", "_")
+            };
+            Some((media.clone(), fname, label))
+        }
+        _ => None,
+    });
+    match found {
+        Some((media, fname, label)) => {
+            app.status = format!("scarico «{label}» e la riproduco…");
+            let _ = play_tx.send((media, fname, label));
+        }
+        None => app.status = "nessun audio nella cronologia caricata".into(),
+    }
 }
 
 /// Salva su disco l'ultimo documento (o foto) della chat aperta.
@@ -676,6 +721,15 @@ enum LoopEvent {
     Deleted(Result<(), String>),
     Searched(Result<Vec<tg::SearchHit>, String>),
     Saved(Result<String, String>),
+    Played(Result<String, String>),
+}
+
+/// Individua un comando nel PATH senza dipendenze esterne.
+fn which(cmd: &str) -> bool {
+    std::env::var("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .any(|d| std::path::Path::new(d).join(cmd).exists())
 }
 
 /// Primo servizio che risponde tra i canali.
@@ -689,6 +743,7 @@ async fn waiting_pick(
     deleted_rx: &mut mpsc::UnboundedReceiver<Result<(), String>>,
     searched_rx: &mut mpsc::UnboundedReceiver<Result<Vec<tg::SearchHit>, String>>,
     saved_rx: &mut mpsc::UnboundedReceiver<Result<String, String>>,
+    played_rx: &mut mpsc::UnboundedReceiver<Result<String, String>>,
 ) -> LoopEvent {
     tokio::select! {
         v = hist_rx.recv() => LoopEvent::History(v.expect("servizio cronologia chiuso")),
@@ -699,6 +754,7 @@ async fn waiting_pick(
         v = deleted_rx.recv() => LoopEvent::Deleted(v.expect("servizio cancellazioni chiuso")),
         v = searched_rx.recv() => LoopEvent::Searched(v.expect("servizio ricerche chiuso")),
         v = saved_rx.recv() => LoopEvent::Saved(v.expect("servizio salvataggi chiuso")),
+        v = played_rx.recv() => LoopEvent::Played(v.expect("servizio riproduzioni chiuso")),
     }
 }
 
@@ -770,6 +826,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mpsc::unbounded_channel::<Result<Vec<tg::SearchHit>, String>>();
     let (save_tx, mut save_req) = mpsc::unbounded_channel::<(Media, String)>();
     let (saved_tx, mut saved_rx) = mpsc::unbounded_channel::<Result<String, String>>();
+    let (play_tx, mut play_req) = mpsc::unbounded_channel::<(Media, String, String)>();
+    let (played_tx, mut played_rx) = mpsc::unbounded_channel::<Result<String, String>>();
 
     // cronologia: richiesta → risultato
     {
@@ -919,6 +977,86 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // riproduzione audio: scarica in tmp, lancia mpv/ffplay e pulisce dopo
+    {
+        let cl = client.clone();
+        let out = played_tx;
+        tokio::spawn(async move {
+            // pid del player in corso: un nuovo Ctrl-P lo sostituisce
+            let current = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+            while let Some((media, fname, label)) = play_req.recv().await {
+                // ferma il player già in corsa, se c'è
+                let old = current.load(std::sync::atomic::Ordering::Relaxed);
+                if old != 0 {
+                    let _ = std::process::Command::new("kill")
+                        .args(["-TERM", &old.to_string()])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status();
+                    current.store(0, std::sync::atomic::Ordering::Relaxed);
+                }
+                let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+                let dir = std::path::PathBuf::from(home).join(".local/share/rtete/tmp");
+                let target = dir.join(&fname);
+                let dl = tg::download_media_to(&cl, &media, target.clone()).await;
+                match dl {
+                    Ok(()) => {
+                        let player = std::env::var("RTETE_PLAYER").ok().or_else(|| {
+                            ["mpv", "ffplay"]
+                                .iter()
+                                .find(|p| which(p))
+                                .map(|p| p.to_string())
+                        });
+                        match player {
+                            Some(p) => {
+                                let out2 = out.clone();
+                                let cur = current.clone();
+                                let label2 = label.clone();
+                                std::thread::spawn(move || {
+                                    let is_mpv = std::path::Path::new(&p)
+                                        .file_name()
+                                        .map(|f| f == std::ffi::OsStr::new("mpv"))
+                                        .unwrap_or(false);
+                                    let mut cmd = std::process::Command::new(p);
+                                    if is_mpv {
+                                        cmd.args(["--no-video", "--no-terminal", "--really-quiet"]);
+                                    } else {
+                                        cmd.args(["-nodisp", "-autoexit", "-loglevel", "quiet"]);
+                                    }
+                                    cmd.arg(&target);
+                                    cmd.stdout(std::process::Stdio::null());
+                                    cmd.stderr(std::process::Stdio::null());
+                                    match cmd.spawn() {
+                                        Ok(mut child) => {
+                                            cur.store(
+                                                child.id(),
+                                                std::sync::atomic::Ordering::Relaxed,
+                                            );
+                                            let _ = child.wait();
+                                            let _ = std::fs::remove_file(&target);
+                                            let _ = out2.send(Ok(label2));
+                                        }
+                                        Err(e) => {
+                                            let _ = out2.send(Err(format!("player: {e}")));
+                                        }
+                                    }
+                                });
+                                let _ = out.send(Ok(format!("▶ {label}")));
+                            }
+                            None => {
+                                let _ =
+                                    out.send(Err("nessun player: installa mpv o ffplay".into()));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = out.send(Err(e));
+                    }
+                }
+            }
+        });
+    }
+
     // stream aggiornamenti live
     let cfg = grammers_client::sender::UpdatesConfiguration { catch_up: false };
     let mut update_stream = client
@@ -978,7 +1116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(Ok(e)) => {
                     handle_event(
                         &mut app, e, &hist_tx, &send_tx, &sets_tx, &set_req_tx, &conv_tx,
-                        &del_tx, &search_tx, &save_tx,
+                        &del_tx, &search_tx, &save_tx, &play_tx,
                     ).await
                 }
                 Some(Err(_)) => {}
@@ -997,6 +1135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &mut deleted_rx,
                 &mut searched_rx,
                 &mut saved_rx,
+                &mut played_rx,
             ) => match done {
                 LoopEvent::History((peer_id, rows)) => {
                     app.push_rows(peer_id, rows);
@@ -1074,6 +1213,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 LoopEvent::Saved(res) => match res {
                     Ok(path) => app.status = format!("salvato in {path}"),
                     Err(err) => app.status = format!("salvataggio: {err}"),
+                },
+                LoopEvent::Played(res) => match res {
+                    Ok(label) => app.status = label,
+                    Err(err) => app.status = format!("riproduzione: {err}"),
                 },
             }
         }
@@ -1206,6 +1349,29 @@ impl App {
                     };
                     lines.push(view::HistoryLine {
                         text: format!("{label}📄 {name}{size_txt}{cap_txt} · Ctrl-O salva"),
+                        color: styles::ACCENT_DIM,
+                        ..view::HistoryLine::sep()
+                    });
+                }
+                tg::RowKind::Audio {
+                    name,
+                    seconds,
+                    caption,
+                    voice,
+                    ..
+                } => {
+                    let main = if *voice {
+                        format!("🎙 vocale {}", tg::fmt_secs(*seconds))
+                    } else {
+                        format!("🎧 {}", name)
+                    };
+                    let cap_txt = if caption.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" — “{caption}”")
+                    };
+                    lines.push(view::HistoryLine {
+                        text: format!("{label}{main}{cap_txt} · Ctrl-P riproduce"),
                         color: styles::ACCENT_DIM,
                         ..view::HistoryLine::sep()
                     });

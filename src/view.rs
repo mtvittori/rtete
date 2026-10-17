@@ -314,6 +314,7 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
         ("invia", "Invio"),
         ("edita", "Ctrl-E"),
         ("canc", "Ctrl-D"),
+        ("audio", "Ctrl-P"),
         ("sticker", "Tab"),
         ("ricerca", "Ctrl-F"),
     ]);
@@ -337,52 +338,7 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
     } else {
         (FAINT, None)
     };
-    let mut cblock = Block::bordered()
-        .border_set(border::ROUNDED)
-        .border_style(Style::new().fg(c_border));
-    if let Some(t) = c_title {
-        cblock = cblock
-            .title_top(Line::from(t).left_aligned())
-            .title_style(Style::new().fg(c_border));
-    }
-    let cinner = cblock.inner(body[1]);
-    f.render_widget(cblock, body[1]);
-
-    // testo composto: avvolto sulle righe disponibili, mostra la coda
-    let c_wrapped = wrap(&app.compose, cinner.width.saturating_sub(1) as usize);
-    let skip = c_wrapped.len().saturating_sub(comp_lines as usize);
-    let last = c_wrapped.len().saturating_sub(1);
-    let mut c_rows: Vec<Line> = Vec::new();
-    for (i, piece) in c_wrapped.iter().skip(skip).enumerate() {
-        let lead = if skip > 0 && i == 0 {
-            "\u{2026} "
-        } else if i == 0 {
-            "\u{276f} "
-        } else {
-            "  "
-        };
-        if i + skip == last {
-            c_rows.push(Line::from(vec![
-                Span::styled(format!("{lead}{piece}"), Style::new().fg(FG)),
-                Span::styled(
-                    "\u{25ae}",
-                    Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
-                ),
-            ]));
-        } else {
-            c_rows.push(Line::from(Span::styled(
-                format!("{lead}{piece}"),
-                Style::new().fg(FG),
-            )));
-        }
-    }
-    if c_rows.is_empty() {
-        c_rows.push(Line::from(Span::styled(
-            "\u{276f} ",
-            Style::new().fg(FAINT),
-        )));
-    }
-    f.render_widget(Paragraph::new(c_rows), cinner);
+    draw_input_box(f, body[1], &app.compose, c_title, c_border);
 
     let width = msgs.width.saturating_sub(1) as usize;
     let lines = app.history_lines(width);
@@ -476,31 +432,104 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
 }
 
 /// Pannello dei risultati di ricerca nella chat aperta (Ctrl-F).
-fn draw_search(f: &mut Frame, app: &crate::App, area: Rect) {
-    let bottom: Line<'static> = if app.search_results.is_none() {
-        Line::from(vec![
-            Span::styled(" cerca ", Style::new().fg(BG).bg(SELECT)),
-            Span::styled(
-                format!(" {}", app.search_q),
-                Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" ⏎", Style::new().fg(FAINT)),
-        ])
-        .left_aligned()
-    } else {
-        Line::from(vec![
-            Span::styled(
-                format!(" «{}» {} risultati — ", app.search_q, app.search_cursor + 1),
-                Style::new().fg(ACCENT),
-            ),
-            Span::styled(" esci ", Style::new().fg(BG).bg(SELECT)),
-            Span::styled("<Esc>", Style::new().fg(ACCENT)),
-        ])
-        .left_aligned()
-    };
-    let block = pane("Ricerca", true).title_bottom(bottom);
+/// Disegna il riquadro multifila di input: bordo tondo arrotondato con
+/// titolo opzionale, testo avvolto su quante righe ha l'area e cursore
+/// blocco ambra alla fine dell'ultima riga visibile.
+/// `area` comprende i bordi.
+fn draw_input_box(f: &mut Frame, area: Rect, text: &str, title: Option<String>, border: Color) {
+    let mut block = Block::bordered()
+        .border_set(border::ROUNDED)
+        .border_style(Style::new().fg(border));
+    if let Some(t) = title {
+        block = block
+            .title_top(Line::from(t).left_aligned())
+            .title_style(Style::new().fg(border));
+    }
     let inner = block.inner(area);
     f.render_widget(block, area);
+
+    let wrapped = wrap(text, inner.width.saturating_sub(1) as usize);
+    let skip = wrapped.len().saturating_sub(inner.height as usize);
+    let last = wrapped.len().saturating_sub(1);
+    let mut rows: Vec<Line> = Vec::new();
+    for (i, piece) in wrapped.iter().skip(skip).enumerate() {
+        let lead = if skip > 0 && i == 0 {
+            "\u{2026} "
+        } else if i == 0 {
+            "\u{276f} "
+        } else {
+            "  "
+        };
+        if i + skip == last {
+            rows.push(Line::from(vec![
+                Span::styled(format!("{lead}{piece}"), Style::new().fg(FG)),
+                Span::styled(
+                    "\u{25ae}",
+                    Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        } else {
+            rows.push(Line::from(Span::styled(
+                format!("{lead}{piece}"),
+                Style::new().fg(FG),
+            )));
+        }
+    }
+    if rows.is_empty() {
+        rows.push(Line::from(Span::styled(
+            "\u{276f} ",
+            Style::new().fg(FAINT),
+        )));
+    }
+    f.render_widget(Paragraph::new(rows), inner);
+}
+
+/// Pannello dei risultati di ricerca nella chat aperta (Ctrl-F):
+/// lista dei colpi sopra e riquadro multifila con la query sotto.
+fn draw_search(f: &mut Frame, app: &crate::App, area: Rect) {
+    // riquadro query multifila in basso (1..5 righe)
+    let inner_w = area.width.saturating_sub(2) as usize;
+    let q_lines = (wrap(&app.search_q, inner_w.saturating_sub(2)).len() as u16).clamp(1, 5);
+    let body = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(q_lines + 2)])
+        .split(area);
+
+    let (res_part, bag_part) = (body[0], body[1]);
+    let bottom: Line<'static> = match app.search_results.as_ref() {
+        None => Line::from(Span::styled(
+            " scrivi la frase, Invio la cerca sul server",
+            Style::new().fg(FAINT),
+        ))
+        .left_aligned(),
+        Some(hits) => Line::from(vec![
+            Span::styled(
+                format!(
+                    " {} risultati · cursore {} ",
+                    hits.len(),
+                    app.search_cursor + 1
+                ),
+                Style::new().fg(ACCENT),
+            ),
+            Span::styled("esci ", Style::new().fg(BG).bg(SELECT)),
+            Span::styled("<Esc>", Style::new().fg(ACCENT)),
+        ])
+        .left_aligned(),
+    };
+    let block = pane("Ricerca", true).title_bottom(bottom);
+    let inner = block.inner(res_part);
+    f.render_widget(block, res_part);
+
+    // riquadro della query
+    let (q_border, q_title): (Color, Option<String>) = if app.search_q.is_empty() {
+        (
+            FAINT,
+            Some(" \u{270e} query — Invio cerca \u{b7} Esc chiude ".into()),
+        )
+    } else {
+        (ACCENT, None)
+    };
+    draw_input_box(f, bag_part, &app.search_q, q_title, q_border);
 
     let Some(hits) = app.search_results.as_ref() else {
         if inner.height > 1 {
@@ -561,7 +590,7 @@ fn draw_search(f: &mut Frame, app: &crate::App, area: Rect) {
     let mut state = ListState::default();
     state.select(Some(app.search_cursor));
     f.render_stateful_widget(list, inner, &mut state);
-    rail(f, area, hits.len(), app.search_cursor);
+    rail(f, res_part, hits.len(), app.search_cursor);
 }
 
 /// la prima riga utile di un testo lungo (per gli snippet)

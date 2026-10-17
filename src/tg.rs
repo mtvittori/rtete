@@ -56,6 +56,16 @@ pub enum RowKind {
         size: Option<usize>,
         caption: String,
     },
+    /// audio riproducibile (messaggio vocale o brano): Ctrl-P lo riproduce.
+    Audio {
+        media: Media,
+        /// nome per i music/documenti; vuoto per i vocali.
+        name: String,
+        seconds: u32,
+        caption: String,
+        /// true: vocale (ogg opus senza nome).
+        voice: bool,
+    },
     /// etichetta informativa: video, vocale, contatti, sondaggi…
     Note(String),
     Service(String),
@@ -88,6 +98,18 @@ pub fn fmt_size(mut bytes: f64) -> String {
         format!("{bytes} B")
     } else {
         format!("{bytes:.1} {}", UNITS[unit])
+    }
+}
+
+/// durata in "m:ss" (o "h:mm:ss")
+pub fn fmt_secs(seconds: u32) -> String {
+    let h = seconds / 3600;
+    let m = (seconds % 3600) / 60;
+    let s = seconds % 60;
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
     }
 }
 
@@ -372,8 +394,17 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
                     gif: false,
                 };
             }
-            if mime.starts_with("video/") || mime.starts_with("audio/") {
+            if mime.starts_with("video/") {
                 return RowKind::Note(media_note(&doc, &text));
+            }
+            if mime.starts_with("audio/") {
+                return RowKind::Audio {
+                    media: media.unwrap(),
+                    name,
+                    seconds: doc.duration().unwrap_or(0.0) as u32,
+                    caption: cap,
+                    voice: doc.name().is_none(),
+                };
             }
             RowKind::Doc {
                 media: media.unwrap(),
