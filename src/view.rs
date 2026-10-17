@@ -145,7 +145,7 @@ fn draw_sidebar(f: &mut Frame, app: &crate::App, area: Rect) {
 fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crate::Cmd>) {
     let Some(chat) = app.current_chat() else {
         f.render_widget(
-            Paragraph::new("⏎ Invio su una conversazione per aprirla · `s` sticker · `q` esci")
+            Paragraph::new("↑↓ naviga · ⏎ apri una conversazione · Tab sticker · q esci")
                 .style(Style::default().bg(BG).fg(INCOMING))
                 .alignment(ratatui::layout::Alignment::Center),
             area,
@@ -281,7 +281,7 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
         .borders(Borders::ALL)
         .style(Style::default().bg(PANEL))
         .title(Span::styled(
-            " Sticker · h indietro · l apri/avanza · ⏎ invia ".to_string(),
+            " Sticker · Tab chiude · ↑↓←→ o h/l · ⏎ invia ".to_string(),
             Style::default().fg(ACCENT),
         ));
     let inner = block.inner(area);
@@ -406,7 +406,7 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
 
 fn draw_status(f: &mut Frame, app: &crate::App, area: Rect) {
     let text = if app.status.is_empty() {
-        "j/k naviga · ⏎ apri/invia · s pannello sticker · q esci".to_string()
+        "↑↓←→ o j/k naviga · ⏎ apri/invia · Tab pannello sticker · Esc azzera · q esci".to_string()
     } else {
         app.status.clone()
     };

@@ -42,16 +42,19 @@ Dopodiché la sessione vive in `~/.local/share/rtete/rtete.db`.
 
 | Tasto | Azione |
 | --- | --- |
-| `j` / `k` | giù / su |
+| `↑`/`↓` (o `j`/`k` senza chat aperta) | giù / su |
+| `→`/`←` (o `l`/`h` nel pannello) | entra/esce nel set, sinistra/destra nella griglia |
 | `Invio` | apre la chat selezionata (la prima volta carica la cronologia) |
 | `❯ …⏎` | invia il testo composto alla chat aperta |
-| `s` | apre il pannello sticker |
-| `l` | entra nel set / naviga a destra nella griglia |
-| `h` | torna indietro / naviga a sinistra |
-| `Invio` (nel set) | invia lo sticker selezionato alla chat aperta |
+| `Tab` | apre/chiude il pannello sticker |
+| `Invio` (nel pannello) | apre il set / invia lo sticker sulla chat aperta |
 | `Esc` | indietro / chiudi pannello / svuota composizione |
 | `q` | esci (fuori dal pannello e senza testo in composizione) |
 | `Ctrl-C` | esci subito |
+
+> Nota: quando una chat è aperta tutte le lettere (inclusi `j`, `k`, `h`,
+> `l`, `s`) finiscono nel testo del messaggio; i tasti vim navigano solo con
+> la composizione vuota, e il pannello sticker si apre/chiude con `Tab`.
 
 ## Limitazioni note
 

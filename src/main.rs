@@ -152,16 +152,12 @@ async fn handle_event(
                 KeyCode::Char('q') if !app.show_sticker && app.compose.is_empty() => {
                     app.quit = true
                 }
-                KeyCode::Char('j') => move_down(app),
-                KeyCode::Char('k') => move_up(app),
-                KeyCode::Char('s') if !app.show_sticker => {
-                    app.show_sticker = true;
-                    app.set_level = false;
-                    if app.sets.is_none() {
-                        app.status = "scarico i set di sticker…".into();
-                        let _ = sets_tx.send(());
-                    }
-                }
+                // verticale: frecce sempre; j/k solo dove non si scrive
+                // (pannello sticker o lista chat senza messaggio aperto)
+                KeyCode::Up => move_up(app),
+                KeyCode::Down => move_down(app),
+                KeyCode::Char('j') if app.show_sticker || app.open.is_none() => move_down(app),
+                KeyCode::Char('k') if app.show_sticker || app.open.is_none() => move_up(app),
                 KeyCode::Esc => {
                     if app.show_sticker {
                         if app.set_level {
@@ -176,45 +172,28 @@ async fn handle_event(
                     }
                     app.status = String::new();
                 }
-                // navigazione orizzontale
-                KeyCode::Char('h') => {
-                    if app.show_sticker && app.set_level {
-                        let col = app.sticker_cursor % STICKER_COLS;
-                        if col == 0 {
-                            app.set_level = false;
-                            app.sticker_cursor = 0;
-                        } else {
-                            app.sticker_cursor -= 1;
-                        }
-                    }
-                    app.status = String::new();
-                }
-                KeyCode::Char('l') => {
+                // orizzontale: solo nel pannello sticker (→ = l, ← = h)
+                KeyCode::Right if app.show_sticker => grid_right(app, set_req_tx),
+                KeyCode::Left if app.show_sticker => grid_left(app),
+                KeyCode::Char('h') if app.show_sticker => grid_left(app),
+                KeyCode::Char('l') if app.show_sticker => grid_right(app, set_req_tx),
+                // Tab apre/chiude il pannello sticker: 's' torna una lettera
+                KeyCode::Tab => {
+                    app.show_sticker = !app.show_sticker;
+                    app.set_level = false;
                     if app.show_sticker {
-                        if !app.set_level {
-                            if let Some(sets) = app.sets.as_ref() {
-                                if let Some(set) = sets.get(app.set_cursor) {
-                                    app.set_level = true;
-                                    app.open_set = Some(set.set_id);
-                                    app.sticker_cursor = 0;
-                                    if !app.set_docs.contains_key(&set.set_id) {
-                                        app.status = format!("scarico il set {}…", set.title);
-                                        let _ =
-                                            set_req_tx.send((set.set_id, set.short_name.clone()));
-                                    }
-                                }
-                            }
-                        } else {
-                            app.sticker_cursor = (app.sticker_cursor + 1).min(grid_max(app));
+                        app.sticker_cursor = 0;
+                        if app.sets.is_none() {
+                            app.status = "scarico i set di sticker…".into();
+                            let _ = sets_tx.send(());
                         }
                     }
-                    app.status = String::new();
                 }
                 KeyCode::Enter => on_enter(app, hist_tx, send_tx, set_req_tx, conv_tx).await,
                 KeyCode::Backspace => {
                     app.compose.pop();
                 }
-                KeyCode::Char(c) => app.compose.push(c),
+                KeyCode::Char(c) if !app.show_sticker => app.compose.push(c),
                 _ => {}
             }
         }
@@ -256,6 +235,40 @@ fn move_down(app: &mut App) {
     } else {
         let max = app.contacts.len().saturating_sub(1);
         app.contact_cursor = (app.contact_cursor + 1).min(max);
+    }
+}
+
+/// Dentro il pannello: sinistra nella griglia, o ritorno alla lista set.
+fn grid_left(app: &mut App) {
+    app.status.clear();
+    if app.set_level {
+        let col = app.sticker_cursor % STICKER_COLS;
+        if col == 0 {
+            app.set_level = false;
+            app.sticker_cursor = 0;
+        } else {
+            app.sticker_cursor -= 1;
+        }
+    }
+}
+
+/// Dentro il pannello: destra nella griglia, o ingresso nel set sotto il cursore.
+fn grid_right(app: &mut App, set_req_tx: &mpsc::UnboundedSender<(i64, String)>) {
+    app.status.clear();
+    if !app.set_level {
+        if let Some(sets) = app.sets.as_ref() {
+            if let Some(set) = sets.get(app.set_cursor) {
+                app.set_level = true;
+                app.open_set = Some(set.set_id);
+                app.sticker_cursor = 0;
+                if !app.set_docs.contains_key(&set.set_id) {
+                    app.status = format!("scarico il set {}…", set.title);
+                    let _ = set_req_tx.send((set.set_id, set.short_name.clone()));
+                }
+            }
+        }
+    } else {
+        app.sticker_cursor = (app.sticker_cursor + 1).min(grid_max(app));
     }
 }
 
@@ -400,7 +413,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         open: None,
         histories: HashMap::new(),
         compose: String::new(),
-        status: "j/k = naviga · Invio = apri/invia · s = sticker · q = esci".into(),
+        status: "↑↓←→ o j/k naviga · ⏎ apri/invia · Tab pannello sticker · q esci".into(),
         show_sticker: false,
         set_level: false,
         set_cursor: 0,

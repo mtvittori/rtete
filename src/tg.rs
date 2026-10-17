@@ -172,9 +172,7 @@ fn normalize_phone(raw: &str) -> String {
     if !has_plus && digits.starts_with("00") {
         digits = digits[2..].to_string();
     }
-    if has_plus {
-        format!("+{digits}")
-    } else if digits.starts_with("39") && digits.len() >= 11 {
+    if has_plus || (digits.starts_with("39") && digits.len() >= 11) {
         format!("+{digits}")
     } else {
         format!("+39{digits}")
