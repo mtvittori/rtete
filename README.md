@@ -42,7 +42,8 @@ Dopodiché la sessione vive in `~/.local/share/rtete/rtete.db`.
 
 | Tasto | Azione |
 | --- | --- |
-| `↑`/`↓` (o `j`/`k` senza chat aperta) | giù / su |
+| `↑`/`↓` (o `j`/`k` senza chat aperta) | contatti; **dentro una chat**: seleziona i messaggi (nuovo: `↓` oltre l'ultimo esce dalla selezione) |
+| `ruota`/`trackpad` | scorre: sui contatti in sinistra, sui messaggi a destra (selezione) |
 | `→`/`←` (o `l`/`h` nel pannello) | entra/esce nel set, sinistra/destra nella griglia |
 | `Invio` | apre la chat selezionata (la prima volta carica la cronologia) |
 | `❯ …⏎` | invia il testo composto alla chat aperta |
@@ -68,25 +69,27 @@ destra come il volume di jellyfin-tui.
 
 ## Comandi extra
 
+Il cursore va sopra un messaggio con `↑/↓` (o la ruota nella zona messaggi):
+il blocco viene evidenziato con la barra scura e porta in mezzo il messaggio
+nella vista; `Esc` esce dalla selezione. `Ctrl-E/O/D/P` agiscono allora sul
+messaggio selezionato invece che sull'ultimo.
+
 | Tasto | Azione |
 | --- | --- |
-| `Ctrl-E` | modifica l'ultimo tuo messaggio di testo (il testo va in composizione, `Invio` conferma) |
-| `Ctrl-D` | arma la cancellazione dell'ultimo tuo messaggio, `Invio` conferma (Esc annulla) |
-| `Ctrl-O` | scarica l'ultimo documento della chat in `~/Downloads/` |
-| `Ctrl-F` | ricerca server-side nella chat aperta (frase esatta, fino a 40 risultati) |
+| `Ctrl-E` | modifica un tuo messaggio di testo (selezionato o, in mancanza, l'ultimo; il testo va in composizione, `Invio` conferma) |
+| `Ctrl-D` | arma la cancellazione di un tuo messaggio (selezionato o l'ultimo), `Invio` conferma (Esc annulla) |
+| `Ctrl-O` | salva un documento (`~/Downloads`): selezionato o l'ultimo della chat |
+| `Ctrl-P` | riproduce audio selezionato/ultimo: `🎙 vocali` e brani tra i documenti; mpv/ffplay (`RTETE_PLAYER` sovrascrive) |
+| `Ctrl-F` | ricerca server-side nella chat aperta: la query si scrive nel riquadro in fondo (multifila, `Invio` cerca) |
 
-## E media
+## Media e audio
 
 - **Foto Telegram, allegati immagini e GIF**: renderizzati in terminale con il kitty graphics protocol; le GIF e gli sticker APNG **animano da sole (kitty anima gli APNG nati come GIF: l'animazione gira sul terminale).
 - **Documenti**: riga con nome e dimensione; `Ctrl-O` li salva in `~/Downloads`
-- **Video/vocali**: etichetta informativa (durata/caption), non renderizzati.
-- **Grandezza immagini**: variabile d'ambiente `RTETE_SCALE` (0.5–4) moltiplica sticker/foto/nella griglia e messaggi. Il rapporto celle si regola con `RTETE_CELL_W`/`RTETE_CELL_H` (pixel per cella del terminale).
-
-## Limitazioni note
-
-
-- Gli sticker **TGS** (Lottie) e i **video-sticker webm** restano etichetta emoji: renderizzarli servirebbero librerie C pesanti (rlottie/libvpx), in contrasto con la filosofia "poco RAM, build semplice".
-- I **video** (mp4) sono solo etichetta informativa (servirebbe un decodificatore video).
+- **Audio (vocali `🎙 m:ss` e brani tra i documenti `🎧`)**: `Ctrl-P` scarica e suona con un player esterno (mpv se presente, altrimenti ffplay; env `RTETE_PLAYER` per un binario specifico). Nessuna libreria audio: 0 RAM extra, il player gira in un processo separato e un nuovo `Ctrl-P` lo termina.
+- **Grandezza immagini**: variabile d'ambiente `RTETE_SCALE` (0.5–4) moltiplica sticker/foto nella griglia e messaggi. Il rapporto celle si regola con `RTETE_CELL_W`/`RTETE_CELL_H` (pixel per cella del terminale).
+- **Video (mp4)**: etichetta informativa (durata/caption), non renderizzati.
+- Gli sticker TGS (Lottie) e i video-sticker webm restano etichetta emoji: renderizzarli servirebbero librerie C pesanti (rlottie/libvpx), in contrasto con la filosofia "poco RAM, build semplice".
 - Nessun supporto a survey di reazioni o reazioni mobili (stanti, per ora).
 - Il terminale non compatibile con il *kitty graphics protocol* mostra solo le etichette; ghostty/wezterm possono mostrare APNG/GIF statici.
 

@@ -74,6 +74,10 @@ pub struct App {
     pub pending: HashSet<String>,
     /// il nome dell'utente connesso (etichette "Nome │ testo").
     pub me: String,
+    /// messaggio selezionato con ↑/↓ nella chat (id); None = vista "live".
+    pub msg_cursor: Option<i32>,
+    /// id del messaggio che Ctrl-D ha scelto da cancellare (conferma Invio).
+    pub del_id: Option<i32>,
     /// id del messaggio che stiamo modificando (Ctrl-E).
     pub editing: Option<i32>,
     /// eliminazione armata da Ctrl-D: il prossimo Invio la conferma.
@@ -267,11 +271,15 @@ async fn handle_event(
                             app.status = "modifica annullata".into();
                         } else if app.del_arm {
                             app.status = "cancellazione annullata".into();
+                        } else if app.msg_cursor.is_some() {
+                            app.status = "selezione chiusa".into();
                         } else {
                             app.status.clear();
                         }
                         app.editing = None;
                         app.del_arm = false;
+                        app.del_id = None;
+                        app.msg_cursor = None;
                         app.compose.clear();
                     }
                 }
@@ -302,6 +310,7 @@ async fn handle_event(
                 }
                 KeyCode::Backspace => {
                     app.del_arm = false;
+                    app.del_id = None;
                     if app.show_search {
                         app.search_q.pop();
                     } else {
@@ -310,6 +319,7 @@ async fn handle_event(
                 }
                 KeyCode::Char(c) if !app.show_sticker => {
                     app.del_arm = false;
+                    app.del_id = None;
                     if app.show_search {
                         app.search_q.push(c);
                     } else {
@@ -319,7 +329,45 @@ async fn handle_event(
                 _ => {}
             }
         }
+        Event::Mouse(m) => {
+            use crossterm::event::MouseEventKind;
+            match m.kind {
+                MouseEventKind::ScrollUp => key_updown_mouse(app, m, false),
+                MouseEventKind::ScrollDown => key_updown_mouse(app, m, true),
+                _ => {}
+            }
+        }
         _ => {}
+    }
+}
+
+/// Ruota/trackpad: nel pannello ricerca scorre i risultati; nella chat,
+/// a sinistra scorre i contatti, a destra usa il cursore di selezione;
+/// nel pannello sticker naviga il grigliato come le frecce.
+fn key_updown_mouse(app: &mut App, m: crossterm::event::MouseEvent, down: bool) {
+    if app.show_search {
+        move_search(app, down);
+        return;
+    }
+    if app.show_sticker {
+        if down {
+            move_down(app);
+        } else {
+            move_up(app);
+        }
+        return;
+    }
+    // nella vista chat: la colonna dei contatti è a sinistra
+    let term_w = crossterm::terminal::size().map(|(w, _)| w).unwrap_or(80);
+    let side = view::side_w(term_w);
+    if m.column < side {
+        if down {
+            move_down(app);
+        } else {
+            move_up(app);
+        }
+    } else {
+        move_msg_cursor(app, down);
     }
 }
 
@@ -338,10 +386,25 @@ fn ctrl_edit(app: &mut App) {
         app.status = "cronologia non ancora caricata".into();
         return;
     };
-    let found = ring.iter().rev().find_map(|r| match &r.kind {
-        tg::RowKind::Text(text) if r.outgoing => Some(r.id).map(|id| (id, text.clone())),
-        _ => None,
+    // se c'è un cursore e punta a un tuo messaggio di testo, usa quello
+    let chosen = app.msg_cursor.and_then(|cid| {
+        ring.iter()
+            .rev()
+            .find(|r| r.id == cid && r.outgoing && matches!(r.kind, tg::RowKind::Text(_)))
     });
+    let found = match chosen {
+        Some(r) => Some((
+            r.id,
+            match &r.kind {
+                tg::RowKind::Text(t) => t.clone(),
+                _ => String::new(),
+            },
+        )),
+        None => ring.iter().rev().find_map(|r| match &r.kind {
+            tg::RowKind::Text(text) if r.outgoing => Some(r.id).map(|id| (id, text.clone())),
+            _ => None,
+        }),
+    };
     match found {
         Some((id, text)) => {
             app.editing = Some(id);
@@ -367,11 +430,24 @@ fn ctrl_delete(app: &mut App) {
         app.status = "cronologia non ancora caricata".into();
         return;
     };
-    let Some(last_own) = ring.iter().rev().find(|r| r.outgoing).map(|r| r.id) else {
+    // cursore attivo? cancella QUEL messaggio (solo se tuo: outgoing)
+    let target = match app
+        .msg_cursor
+        .and_then(|cid| ring.iter().find(|r| r.id == cid))
+    {
+        Some(r) if r.outgoing => Some(r.id),
+        Some(_) => {
+            app.status = "puoi cancellare solo messaggi tuoi".into();
+            return;
+        }
+        None => ring.iter().rev().find(|r| r.outgoing).map(|r| r.id),
+    };
+    let Some(last_own) = target else {
         app.status = "nessun tuo messaggio da cancellare".into();
         return;
     };
     app.del_arm = true;
+    app.del_id = Some(last_own);
     app.editing = None;
     app.status = format!("⚠️ Invio = cancella il tuo messaggio #{last_own} (Esc per annullare)");
 }
@@ -390,7 +466,13 @@ fn ctrl_play(app: &mut App, play_tx: &mpsc::UnboundedSender<(Media, String, Stri
         app.status = "cronologia non ancora caricata".into();
         return;
     };
-    let found = ring.iter().rev().find_map(|r| match &r.kind {
+    // cursore attivo? riproduci QUEL audio; altrimenti l'ultimo
+    let chosen = app.msg_cursor.and_then(|cid| {
+        ring.iter()
+            .rev()
+            .find(|r| r.id == cid && matches!(r.kind, tg::RowKind::Audio { .. }))
+    });
+    let to_job = |r: &tg::HistoryRow| match &r.kind {
         tg::RowKind::Audio {
             media, name, voice, ..
         } => {
@@ -408,7 +490,10 @@ fn ctrl_play(app: &mut App, play_tx: &mpsc::UnboundedSender<(Media, String, Stri
             Some((media.clone(), fname, label))
         }
         _ => None,
-    });
+    };
+    let found = chosen
+        .and_then(to_job)
+        .or_else(|| ring.iter().rev().find_map(to_job));
     match found {
         Some((media, fname, label)) => {
             app.status = format!("scarico «{label}» e la riproduco…");
@@ -433,10 +518,22 @@ fn ctrl_save(app: &mut App, save_tx: &mpsc::UnboundedSender<(Media, String)>) {
         app.status = "cronologia non ancora caricata".into();
         return;
     };
-    let found = ring.iter().rev().find_map(|r| match &r.kind {
-        tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
-        _ => None,
+    // cursore attivo? salva QUEL documento; altrimenti l'ultimo della cronologia
+    let chosen = app.msg_cursor.and_then(|cid| {
+        ring.iter()
+            .rev()
+            .find(|r| r.id == cid && matches!(r.kind, tg::RowKind::Doc { .. }))
     });
+    let found = match chosen {
+        Some(r) => match &r.kind {
+            tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
+            _ => None,
+        },
+        None => ring.iter().rev().find_map(|r| match &r.kind {
+            tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
+            _ => None,
+        }),
+    };
     match found {
         Some((media, name)) => {
             let safe = name.replace('/', "_").replace("..", "_");
@@ -478,11 +575,15 @@ fn move_up(app: &mut App) {
         } else {
             app.sticker_cursor = app.sticker_cursor.saturating_sub(STICKER_COLS);
         }
+    } else if app.open.is_some() {
+        // dentro una chat: selettore dei messaggi
+        move_msg_cursor(app, false);
     } else {
         app.contact_cursor = app.contact_cursor.saturating_sub(1);
     }
 }
 
+/// Un passo in giù: cursore messaggi se una chat è aperta, contatti altrimenti.
 fn move_down(app: &mut App) {
     app.status.clear();
     if app.show_sticker {
@@ -492,9 +593,53 @@ fn move_down(app: &mut App) {
         } else {
             app.sticker_cursor = (app.sticker_cursor + STICKER_COLS).min(grid_max(app));
         }
+    } else if app.open.is_some() {
+        move_msg_cursor(app, true);
     } else {
         let max = app.contacts.len().saturating_sub(1);
         app.contact_cursor = (app.contact_cursor + 1).min(max);
+    }
+}
+
+/// Sposta il cursore dei messaggi (↑/↓ o rotella nella zona messaggi).
+/// ↓ oltre l'ultimo = esce dalla selezione (torna alla vista "live").
+fn move_msg_cursor(app: &mut App, down: bool) {
+    let ids: Vec<i32> = app
+        .current_chat()
+        .and_then(|c| app.histories.get(&c.peer_id))
+        .map(|d| d.iter().map(|r| r.id).collect())
+        .unwrap_or_default();
+    if ids.is_empty() {
+        app.msg_cursor = None;
+        return;
+    }
+    let next = match app.msg_cursor {
+        None => {
+            if down {
+                None // è già in cima alla vista (ultimo messaggio)
+            } else {
+                ids.last().copied()
+            }
+        }
+        Some(cur) => {
+            let pos = ids.iter().position(|i| *i == cur);
+            match pos {
+                Some(p) if down => ids.get(p + 1).copied(),
+                Some(p) if p > 0 => Some(ids[p - 1]),
+                _ => {
+                    if down {
+                        None
+                    } else {
+                        Some(ids[0])
+                    }
+                }
+            }
+        }
+    };
+    app.msg_cursor = next;
+    match next {
+        Some(id) => app.status = format!("selezionato #{id} — Esc per uscire"),
+        None => app.status.clear(),
     }
 }
 
@@ -584,6 +729,8 @@ async fn on_enter(
             app.status = "carico la cronologia…".into();
             app.editing = None;
             app.del_arm = false;
+            app.del_id = None;
+            app.msg_cursor = None;
             app.show_search = false;
             app.search_results = None;
             app.search_q.clear();
@@ -595,13 +742,18 @@ async fn on_enter(
     if app.del_arm {
         app.del_arm = false;
         if let Some(chat) = app.current_chat() {
-            let target = app
-                .histories
-                .get(&chat.peer_id)
-                .and_then(|ring| ring.iter().rev().find(|r| r.outgoing).map(|r| r.id));
+            let (peer_ref, pid) = (chat.peer_ref, chat.peer_id);
+            let target = app.del_id.take().or_else(|| {
+                app.histories
+                    .get(&pid)
+                    .and_then(|ring| ring.iter().rev().find(|r| r.outgoing).map(|r| r.id))
+            });
             if let Some(id) = target {
-                let _ = del_tx.send((chat.peer_ref, chat.peer_id, id));
+                let _ = del_tx.send((peer_ref, pid, id));
                 app.status = format!("cancello il messaggio #{id}…");
+                if app.msg_cursor == Some(id) {
+                    app.msg_cursor = None;
+                }
             } else {
                 app.status = "niente da cancellare".into();
             }
@@ -799,6 +951,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         previews: HashMap::new(),
         pending: HashSet::new(),
         me: tg::own_name(&client).await,
+        msg_cursor: None,
+        del_id: None,
         editing: None,
         del_arm: false,
         show_search: false,
@@ -1069,6 +1223,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
     terminal.hide_cursor()?;
+    // trackpad/rotella: invii di scorrimento verso il cursore selezione
+    execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
 
     let mut events = EventStream::new();
     let mut frame_had_images = false;
@@ -1225,6 +1381,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ---------------- chiusura -----------------------------------------
     kitty::clear_all();
     terminal.show_cursor()?;
+    execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
     crossterm::terminal::disable_raw_mode()?;
     execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
     Ok(())
@@ -1270,6 +1427,7 @@ impl App {
                         sticker_media: None,
                         rows: 1,
                         frac: 0,
+                        id: row.id,
                     });
                     for piece in &pieces[1..] {
                         lines.push(view::HistoryLine {
@@ -1277,6 +1435,9 @@ impl App {
                             color: name_style,
                             ..view::HistoryLine::sep()
                         });
+                        if let Some(last) = lines.last_mut() {
+                            last.id = row.id;
+                        }
                     }
                 }
                 tg::RowKind::Sticker {
@@ -1307,6 +1468,7 @@ impl App {
                             view::band_rows(false) + 1
                         },
                         frac: 50,
+                        id: row.id,
                     });
                 }
                 tg::RowKind::Photo {
@@ -1331,6 +1493,7 @@ impl App {
                         sticker_media: Some(media.clone()),
                         rows: view::band_rows(true) + 1,
                         frac: 66,
+                        id: row.id,
                     });
                 }
                 tg::RowKind::Doc {
@@ -1352,6 +1515,9 @@ impl App {
                         color: styles::ACCENT_DIM,
                         ..view::HistoryLine::sep()
                     });
+                    if let Some(last) = lines.last_mut() {
+                        last.id = row.id;
+                    }
                 }
                 tg::RowKind::Audio {
                     name,
@@ -1376,16 +1542,26 @@ impl App {
                         ..view::HistoryLine::sep()
                     });
                 }
-                tg::RowKind::Note(text) => lines.push(view::HistoryLine {
-                    text: format!("{label}🎥 {text}"),
-                    color: styles::ACCENT_DIM,
-                    ..view::HistoryLine::sep()
-                }),
-                tg::RowKind::Service(text) => lines.push(view::HistoryLine {
-                    text: format!("· {text}"),
-                    color: styles::INCOMING,
-                    ..view::HistoryLine::sep()
-                }),
+                tg::RowKind::Note(text) => {
+                    lines.push(view::HistoryLine {
+                        text: format!("{label}🎥 {text}"),
+                        color: styles::ACCENT_DIM,
+                        ..view::HistoryLine::sep()
+                    });
+                    if let Some(last) = lines.last_mut() {
+                        last.id = row.id;
+                    }
+                }
+                tg::RowKind::Service(text) => {
+                    lines.push(view::HistoryLine {
+                        text: format!("· {text}"),
+                        color: styles::INCOMING,
+                        ..view::HistoryLine::sep()
+                    });
+                    if let Some(last) = lines.last_mut() {
+                        last.id = row.id;
+                    }
+                }
             }
             lines.push(view::HistoryLine::sep());
         }

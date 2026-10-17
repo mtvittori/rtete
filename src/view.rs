@@ -57,6 +57,9 @@ pub struct HistoryLine {
     pub rows: u16,
     /// larghezza immagine in % della larghezza del pannello.
     pub frac: u16,
+    /// id del messaggio di origine (0 = riga di servizio/continuazione
+    /// priva di selezione).
+    pub id: i32,
 }
 
 impl HistoryLine {
@@ -69,7 +72,20 @@ impl HistoryLine {
             sticker_media: None,
             rows: 1,
             frac: 0,
+            id: 0,
         }
+    }
+}
+
+/// larghezza della colonna contatti in base alla larghezza dello schermo
+/// (condivisa dal disegno e dallo routing della rotella).
+pub fn side_w(width: u16) -> u16 {
+    if width > 90 {
+        28
+    } else if width > 60 {
+        22
+    } else {
+        16
     }
 }
 
@@ -343,19 +359,40 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
     let width = msgs.width.saturating_sub(1) as usize;
     let lines = app.history_lines(width);
 
-    // scegli le righe che entrano da quelle più recenti verso le vecchie
+    // scegli le righe che entrano: col cursore sul messaggio selezionato,
+    // altrimenti auto-scroll dal basso come prima
     let avail = msgs.height as usize;
-    let mut used = 0usize;
-    let mut start = lines.len();
-    for (i, line) in lines.iter().enumerate().rev() {
-        let h = if line.sticker { line.rows } else { 1 } as usize;
-        if used + h > avail {
-            start = i + 1;
-            break;
+    let sel = app.msg_cursor;
+    let start = match sel.and_then(|sid| lines.iter().position(|l| l.id == sid)) {
+        Some(fi) => {
+            // piazza il messaggio selezionato circa a 1/3 dall'alto
+            let mut budget = avail * 4 / 10;
+            let mut s = fi;
+            for (i, l) in lines.iter().enumerate().take(fi).rev() {
+                let h = if l.sticker { l.rows } else { 1 } as usize;
+                if budget < h {
+                    break;
+                }
+                budget -= h;
+                s = i;
+            }
+            s
         }
-        used += h;
-        start = i;
-    }
+        None => {
+            let mut used = 0usize;
+            let mut start = lines.len();
+            for (i, line) in lines.iter().enumerate().rev() {
+                let h = if line.sticker { line.rows } else { 1 } as usize;
+                if used + h > avail {
+                    start = i + 1;
+                    break;
+                }
+                used += h;
+                start = i;
+            }
+            start.min(lines.len())
+        }
+    };
     let start = start.min(lines.len());
 
     let mut y = msgs.y;
@@ -364,12 +401,19 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
         if y >= y_end {
             break;
         }
+        // il messaggio sotto il cursore prende una barra di selezione scura
+        let picked = line.id != 0 && app.msg_cursor == Some(line.id);
+        let (fgc, bgc) = if picked {
+            (ON_SELECT, SELECT)
+        } else {
+            (line.color, BG)
+        };
         if line.sticker {
             // etichetta nella prima riga riservata
             f.render_widget(
                 Paragraph::new(Span::styled(
                     line.text.clone(),
-                    Style::new().fg(line.color).bg(BG),
+                    Style::new().fg(fgc).bg(bgc),
                 )),
                 Rect {
                     x: msgs.x,
@@ -400,7 +444,9 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
                     f.render_widget(
                         Paragraph::new(Span::styled(
                             "(in arrivo…)".to_string(),
-                            Style::new().fg(INCOMING).bg(BG),
+                            Style::new()
+                                .fg(if picked { ON_SELECT } else { INCOMING })
+                                .bg(if picked { SELECT } else { BG }),
                         )),
                         Rect {
                             x: msgs.x,
@@ -413,11 +459,15 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
             }
             y += line.rows.saturating_sub(1);
         } else {
+            // colora anche le righe vuote della barra per un blocco continuo
+            let width_fix = line.text.chars().count().max(msgs.width as usize);
+            let padded = format!(
+                "{:<width_fix$}",
+                line.text,
+                width_fix = width_fix.min(msgs.width as usize + 1)
+            );
             f.render_widget(
-                Paragraph::new(Span::styled(
-                    line.text.clone(),
-                    Style::new().fg(line.color).bg(BG),
-                )),
+                Paragraph::new(Span::styled(padded, Style::new().fg(fgc).bg(bgc))),
                 Rect {
                     x: msgs.x,
                     y,
@@ -428,7 +478,7 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
             y += 1;
         }
     }
-    rail(f, area, lines.len(), start);
+    rail(f, body[0], lines.len(), start);
 }
 
 /// Pannello dei risultati di ricerca nella chat aperta (Ctrl-F).
