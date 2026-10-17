@@ -1,6 +1,7 @@
 //! Telegram backend: grammers 0.11 (MTProto client in pure Rust, no TDLib).
 
 use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -115,10 +116,13 @@ pub async fn prompt_credentials() -> Result<Credentials, Box<dyn std::error::Err
         api_hash: hash.trim().to_string(),
     };
     std::fs::create_dir_all(config_dir())?;
-    std::fs::write(
-        config_dir().join(CONFIG_FILE),
-        format!("{} {}\n", creds.api_id, creds.api_hash),
-    )?;
+    let cred_path = config_dir().join(CONFIG_FILE);
+    std::fs::write(&cred_path, format!("{} {}\n", creds.api_id, creds.api_hash))?;
+    // il file contiene l'api_hash: visibile solo all'utente
+    if let Ok(mut perms) = std::fs::metadata(&cred_path).map(|m| m.permissions()) {
+        perms.set_mode(0o600);
+        let _ = std::fs::set_permissions(&cred_path, perms);
+    }
     Ok(creds)
 }
 
@@ -136,6 +140,11 @@ pub async fn connect(
 > {
     std::fs::create_dir_all(data_dir())?;
     let session = Arc::new(SqliteSession::open(data_dir().join("rtete.db")).await?);
+    // la sessione contiene le chiavi di autorizzazione: solo l'utente
+    if let Ok(mut perms) = std::fs::metadata(data_dir().join("rtete.db")).map(|m| m.permissions()) {
+        perms.set_mode(0o600);
+        let _ = std::fs::set_permissions(data_dir().join("rtete.db"), perms);
+    }
     let pool = SenderPool::new(Arc::clone(&session), creds.api_id);
     let SenderPool {
         runner,
