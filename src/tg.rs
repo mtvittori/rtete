@@ -57,27 +57,33 @@ pub struct Credentials {
 }
 
 fn config_dir() -> PathBuf {
-    std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
+    // specifica XDG: la dir specifica dell'app è base + "/rtete".
+    // Le var XDG contano solo se assolute, altrimenti si riparte da HOME.
+    let base = match std::env::var("XDG_CONFIG_HOME")
         .ok()
-        .or_else(|| {
-            std::env::var("HOME")
-                .ok()
-                .map(|h| PathBuf::from(h).join(".config").join("rtete"))
-        })
-        .unwrap_or_else(|| PathBuf::from("."))
+        .filter(|p| std::path::Path::new(p).is_absolute())
+    {
+        Some(p) if !p.is_empty() => PathBuf::from(p),
+        _ => std::env::var("HOME")
+            .ok()
+            .map(|h| PathBuf::from(h).join(".config"))
+            .unwrap_or_else(|| PathBuf::from(".")),
+    };
+    base.join("rtete")
 }
 
 fn data_dir() -> PathBuf {
-    std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
+    let base = match std::env::var("XDG_DATA_HOME")
         .ok()
-        .or_else(|| {
-            std::env::var("HOME")
-                .ok()
-                .map(|h| PathBuf::from(h).join(".local/share/rtete"))
-        })
-        .unwrap_or_else(|| PathBuf::from("."))
+        .filter(|p| std::path::Path::new(p).is_absolute())
+    {
+        Some(p) if !p.is_empty() => PathBuf::from(p),
+        _ => std::env::var("HOME")
+            .ok()
+            .map(|h| PathBuf::from(h).join(".local/share"))
+            .unwrap_or_else(|| PathBuf::from(".")),
+    };
+    base.join("rtete")
 }
 
 pub fn stickers_dir() -> PathBuf {
