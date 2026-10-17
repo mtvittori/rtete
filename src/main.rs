@@ -204,6 +204,28 @@ async fn handle_event(
             if k.kind == KeyEventKind::Release {
                 return;
             }
+            // cmd+c/cmd+v: col protocollo tastiera kitty SUPER arriva pulito;
+            // nei terminali legacy un super degrada a ALT → medesima azione.
+            // AltGr (CTRL|ALT) resta digitazione con accentate: non intercetto.
+            let alt_only = k.modifiers.contains(KeyModifiers::ALT)
+                && !k.modifiers.contains(KeyModifiers::CONTROL);
+            if k.modifiers.contains(KeyModifiers::SUPER) || alt_only {
+                if let KeyCode::Char(c) = k.code {
+                    match c {
+                        'c' => {
+                            ctrl_copy(app);
+                            return;
+                        }
+                        'v' => {
+                            ctrl_paste(app);
+                            return;
+                        }
+                        _ => {} // altre lettere col super: al flusso normale
+                    }
+                } else {
+                    return;
+                }
+            }
             // combo Ctrl: non toccano il testo composto
             if k.modifiers.contains(KeyModifiers::CONTROL) {
                 if let KeyCode::Char(c) = k.code {
@@ -626,9 +648,9 @@ fn pick_caption<'a>(caption: &'a str, name: &'a str) -> &'a str {
     }
 }
 
-/// Ctrl-Y: copia negli appunti il messaggio selezionato (o senza selezione,
-/// l'ultimo messaggio con testo della chat). wl-copy si serve da sé
-/// in background: nessuna libreria in-process.
+/// Super/Ctrl-Y: copia negli appunti il messaggio selezionato (o senza
+/// selezione, l'ultimo messaggio con testo della chat). wl-copy si serve
+/// da sé in background: nessuna libreria in-process.
 fn ctrl_copy(app: &mut App) {
     app.status.clear();
     if app.show_search || app.show_sticker {
@@ -658,6 +680,49 @@ fn ctrl_copy(app: &mut App) {
             eprintln!("[rtete] wl-copy non trovato (installa wl-clipboard)");
         }
     });
+}
+
+/// cmd+V: incolla dagli appunti (via wl-paste, esterno e momentaneo).
+/// Nel compose il testo multi-riga resta intatto; nella ricerca gli
+/// accapo diventano spazi e il cap limita i caratteri.
+fn ctrl_paste(app: &mut App) {
+    if app.show_search {
+        app.del_arm = false;
+        app.del_id = None;
+        let text = clipboard_text();
+        if text.is_empty() {
+            app.status = "appunti vuoti (serve wl-clipboard)".into();
+            return;
+        }
+        let clean = paste_text(&text, false, 200);
+        app.search_q.push_str(&clean);
+    } else if app.open.is_some() {
+        app.del_arm = false;
+        app.del_id = None;
+        let text = clipboard_text();
+        if text.is_empty() {
+            app.status = "appunti vuoti (serve wl-clipboard)".into();
+            return;
+        }
+        let cap = 4000usize.saturating_sub(app.compose.chars().count());
+        let clean = paste_text(&text, true, cap.min(4000));
+        app.compose.push_str(&clean);
+    }
+}
+
+/// testo degli appunti via wl-paste (legge i byte UTF-8; se non c'è, vuoto).
+fn clipboard_text() -> String {
+    match std::process::Command::new("wl-paste")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(ch) => ch
+            .wait_with_output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default(),
+        Err(_) => String::new(),
+    }
 }
 
 /// Pulisce il testo incollato: via i caratteri di controllo, le nuove
@@ -1372,6 +1437,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
     // il terminale avvolge gli incolla: niente Invio involontari multipli
     execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste)?;
+    // kitty keyboard protocol: cmd+lettera arriva come SUPER pulito
+    execute!(
+        std::io::stdout(),
+        crossterm::event::PushKeyboardEnhancementFlags(
+            crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        )
+    )?;
 
     let mut events = EventStream::new();
     let mut frame_had_images = false;
@@ -1528,6 +1600,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ---------------- chiusura -----------------------------------------
     kitty::clear_all();
     terminal.show_cursor()?;
+    execute!(
+        std::io::stdout(),
+        crossterm::event::PopKeyboardEnhancementFlags
+    )?;
     execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
     execute!(std::io::stdout(), crossterm::event::DisableBracketedPaste)?;
     crossterm::terminal::disable_raw_mode()?;

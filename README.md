@@ -81,6 +81,7 @@ messaggio selezionato invece che sull'ultimo.
 | `Ctrl-O` | salva un documento (`~/Downloads`): selezionato o l'ultimo della chat |
 | `Ctrl-P` | riproduce audio selezionato/ultimo: `🎙 vocali` e brani tra i documenti; mpv/ffplay (`RTETE_PLAYER` sovrascrive) |
 | `Ctrl-Y` | copia negli appunti il messaggio selezionato (senza selezione: l'ultimo con testo) via `wl-copy` |
+| `Cmd+C` / `Cmd+V` | come `Ctrl-Y`: copia il messaggio selezionato e incolla negli appunti (`Alt+C/V` da ripiego nei terminali legacy) |
 | `Ctrl-F` | ricerca server-side nella chat aperta: la query si scrive nel riquadro in fondo (multifila, `Invio` cerca) |
 | `click` su un messaggio | lo seleziona (come ↑/↓); sulla colonna contatti non fa nulla |
 
