@@ -135,7 +135,7 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
     out
 }
 
-pub fn draw(f: &mut Frame, app: &crate::App, cmds: &mut Vec<crate::Cmd>) {
+pub fn draw(f: &mut Frame, app: &mut crate::App, cmds: &mut Vec<crate::Cmd>) {
     let area = f.area();
     // carta crema su tutto lo schermo
     f.render_widget(Block::new().style(Style::new().bg(BG)), area);
@@ -299,8 +299,9 @@ fn draw_sidebar(f: &mut Frame, app: &crate::App, area: Rect) {
 }
 
 /// Disegna la cronologia della chat aperta (o un pannello vuoto).
-fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crate::Cmd>) {
+fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<crate::Cmd>) {
     let Some(chat) = app.current_chat() else {
+        app.mouse_map.clear();
         let hints = hints_line(&[("apri", "Invio"), ("sticker", "Tab"), ("esci", "q")]);
         let block = pane("RTete", true).title_bottom(hints);
         let inner = block.inner(area);
@@ -330,6 +331,7 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
         ("invia", "Invio"),
         ("edita", "Ctrl-E"),
         ("canc", "Ctrl-D"),
+        ("copia", "Ctrl-Y"),
         ("audio", "Ctrl-P"),
         ("sticker", "Tab"),
         ("ricerca", "Ctrl-F"),
@@ -395,6 +397,9 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
     };
     let start = start.min(lines.len());
 
+    // mappa delle righe a schermo per il click del mouse → selezione
+    app.mouse_map.clear();
+
     let mut y = msgs.y;
     let y_end = msgs.y + avail as u16;
     for line in &lines[start..] {
@@ -457,6 +462,11 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
                     );
                 }
             }
+            // etichetta + banda immagine: click → selezione unica del blocco
+            app.mouse_map.push((y - 1, line.id));
+            for k in 0..line.rows.saturating_sub(1) {
+                app.mouse_map.push((y + k, line.id));
+            }
             y += line.rows.saturating_sub(1);
         } else {
             // colora anche le righe vuote della barra per un blocco continuo
@@ -475,6 +485,7 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
                     height: 1,
                 },
             );
+            app.mouse_map.push((y, line.id));
             y += 1;
         }
     }

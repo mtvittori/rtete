@@ -88,6 +88,8 @@ pub struct App {
     pub search_cursor: usize,
     /// None: ricerca ancora da lanciare; Some: risultati già ricevuti.
     pub search_results: Option<Vec<tg::SearchHit>>,
+    /// righe (y schermo, id messaggio) dell'ultimo frame: click → selezione.
+    pub mouse_map: Vec<(u16, i32)>,
     pub quit: bool,
 }
 
@@ -215,6 +217,8 @@ async fn handle_event(
                         'o' => ctrl_save(app, save_tx),
                         // riproduce l'ultimo audio (vocale o brano)
                         'p' => ctrl_play(app, play_tx),
+                        // copia il messaggio selezionato negli appunti
+                        'y' => ctrl_copy(app),
                         // ricerca nella chat aperta
                         'f' if app.current_chat().is_some() => {
                             app.show_search = true;
@@ -333,11 +337,24 @@ async fn handle_event(
             }
         }
         Event::Mouse(m) => {
-            use crossterm::event::MouseEventKind;
+            use crossterm::event::{MouseButton, MouseEventKind};
             match m.kind {
                 MouseEventKind::ScrollUp => key_updown_mouse(app, m, false),
                 MouseEventKind::ScrollDown => key_updown_mouse(app, m, true),
+                MouseEventKind::Down(MouseButton::Left) => click_select(app, m),
                 _ => {}
+            }
+        }
+        Event::Paste(text) => {
+            app.del_arm = false;
+            app.del_id = None;
+            if app.show_search {
+                let clean = paste_text(&text, false, 200);
+                app.search_q.push_str(&clean);
+            } else if app.open.is_some() {
+                let cap = 4000usize.saturating_sub(app.compose.chars().count());
+                let clean = paste_text(&text, true, cap.min(4000));
+                app.compose.push_str(&clean);
             }
         }
         _ => {}
@@ -544,6 +561,130 @@ fn ctrl_save(app: &mut App, save_tx: &mpsc::UnboundedSender<(Media, String)>) {
             let _ = save_tx.send((media, safe));
         }
         None => app.status = "nessun documento da salvare nella cronologia caricata".into(),
+    }
+}
+
+/// Click sinistro su una riga del pannello messaggi: seleziona quel
+/// messaggio (stessa cosa di ↑/↓).
+fn click_select(app: &mut App, m: crossterm::event::MouseEvent) {
+    if app.show_search || app.show_sticker || app.open.is_none() {
+        return;
+    }
+    let term_w = crossterm::terminal::size().map(|(w, _)| w).unwrap_or(80);
+    if m.column < view::side_w(term_w) {
+        return; // colonna contatti: lì non seleziono messaggi
+    }
+    let hit = app
+        .mouse_map
+        .iter()
+        .find(|(y, _)| *y == m.row)
+        .map(|(_, id)| *id);
+    match hit {
+        Some(id) if id != 0 => {
+            app.msg_cursor = Some(id);
+            app.status = format!("selezionato #{id} — Esc esce");
+        }
+        _ => {}
+    }
+}
+
+/// Testo "copiabile" di una riga: testo, caption (foto/doc/audio), emoji
+/// degli sticker, note di servizio. None se la riga non ha testo.
+fn copy_text(r: &tg::HistoryRow) -> Option<String> {
+    match &r.kind {
+        tg::RowKind::Text(t) => Some(t.clone()),
+        tg::RowKind::Note(t) | tg::RowKind::Service(t) => {
+            let t = t.trim();
+            (!t.is_empty()).then(|| t.to_string())
+        }
+        tg::RowKind::Sticker { emoji, .. } => {
+            let t = emoji.trim();
+            (!t.is_empty()).then(|| t.to_string())
+        }
+        tg::RowKind::Photo { caption, .. } => {
+            let t = caption.trim();
+            (!t.is_empty()).then(|| t.to_string())
+        }
+        tg::RowKind::Doc { name, caption, .. } => {
+            let t = pick_caption(caption, name);
+            (!t.is_empty()).then(|| t.to_string())
+        }
+        tg::RowKind::Audio { name, caption, .. } => {
+            let t = pick_caption(caption, name);
+            (!t.is_empty()).then(|| t.to_string())
+        }
+    }
+}
+
+/// preferisce la caption; in mancanza il nome (per gli allegati).
+fn pick_caption<'a>(caption: &'a str, name: &'a str) -> &'a str {
+    let c = caption.trim();
+    if c.is_empty() {
+        name.trim()
+    } else {
+        c
+    }
+}
+
+/// Ctrl-Y: copia negli appunti il messaggio selezionato (o senza selezione,
+/// l'ultimo messaggio con testo della chat). wl-copy si serve da sé
+/// in background: nessuna libreria in-process.
+fn ctrl_copy(app: &mut App) {
+    app.status.clear();
+    if app.show_search || app.show_sticker {
+        return;
+    }
+    let Some(chat) = app.current_chat() else {
+        app.status = "apri prima una chat".into();
+        return;
+    };
+    let ring = app.histories.get(&chat.peer_id);
+    let picked = match (ring, app.msg_cursor) {
+        (Some(ring), Some(id)) => ring.iter().rev().find(|r| r.id == id).and_then(copy_text),
+        (Some(ring), None) => ring.iter().rev().find_map(copy_text),
+        (None, _) => None,
+    };
+    let Some(text) = picked else {
+        app.status = "niente testo da copiare in questo messaggio".into();
+        return;
+    };
+    let head: String = text.chars().take(24).collect();
+    app.status = format!("copiato negli appunti: «{head}…»");
+    std::thread::spawn(move || {
+        // wl-copy esce subito (fork in background) e il figlio serve i clic
+        if let Ok(mut ch) = std::process::Command::new("wl-copy").arg(text).spawn() {
+            let _ = ch.wait();
+        } else {
+            eprintln!("[rtete] wl-copy non trovato (installa wl-clipboard)");
+        }
+    });
+}
+
+/// Pulisce il testo incollato: via i caratteri di controllo, le nuove
+/// righe restano nel compose (messaggi multi-riga) e diventano spazi
+/// nella ricerca. `cap` limita i caratteri (Telegram: 4096).
+fn paste_text(raw: &str, keep_nl: bool, cap: usize) -> String {
+    let mut out = String::new();
+    for ch in raw.chars() {
+        if out.chars().count() >= cap {
+            break;
+        }
+        match ch {
+            '\r' => {}
+            '\n' if keep_nl => out.push('\n'),
+            '\n' => out.push(' '),
+            '\t' => out.push(' '),
+            c if c.is_control() => {}
+            c => out.push(c),
+        }
+    }
+    if keep_nl {
+        out.trim_end().to_string()
+    } else {
+        while out.contains("  ") {
+            out = out.replace("  ", " ");
+        }
+        out.trim().to_string()
     }
 }
 
@@ -962,6 +1103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         search_q: String::new(),
         search_cursor: 0,
         search_results: None,
+        mouse_map: Vec::new(),
         quit: false,
     };
 
@@ -1228,6 +1370,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.hide_cursor()?;
     // trackpad/rotella: invii di scorrimento verso il cursore selezione
     execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
+    // il terminale avvolge gli incolla: niente Invio involontari multipli
+    execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste)?;
 
     let mut events = EventStream::new();
     let mut frame_had_images = false;
@@ -1385,6 +1529,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     kitty::clear_all();
     terminal.show_cursor()?;
     execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
+    execute!(std::io::stdout(), crossterm::event::DisableBracketedPaste)?;
     crossterm::terminal::disable_raw_mode()?;
     execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
     Ok(())

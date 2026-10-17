@@ -80,7 +80,17 @@ messaggio selezionato invece che sull'ultimo.
 | `Ctrl-D` | arma la cancellazione di un tuo messaggio (selezionato o l'ultimo), `Invio` conferma (Esc annulla) |
 | `Ctrl-O` | salva un documento (`~/Downloads`): selezionato o l'ultimo della chat |
 | `Ctrl-P` | riproduce audio selezionato/ultimo: `🎙 vocali` e brani tra i documenti; mpv/ffplay (`RTETE_PLAYER` sovrascrive) |
+| `Ctrl-Y` | copia negli appunti il messaggio selezionato (senza selezione: l'ultimo con testo) via `wl-copy` |
 | `Ctrl-F` | ricerca server-side nella chat aperta: la query si scrive nel riquadro in fondo (multifila, `Invio` cerca) |
+| `click` su un messaggio | lo seleziona (come ↑/↓); sulla colonna contatti non fa nulla |
+
+**Incollare**: il terminale avvolge il paste (`bracketed paste`): il testo con
+accapo incollato nel compose resta un solo messaggio multi-riga (niente invii
+a raffica); incollato nel riquadro di ricerca, gli accapo diventano spazi.
+
+**Copiare col terminale**: con la rotella/trackpad catturata dallo scorrimento,
+kitty permette comunque di selezionare testo **tenendo premuto Shift** +
+`Ctrl-Shift-C` per copiarlo negli appunti.
 
 ## Media e audio
 
