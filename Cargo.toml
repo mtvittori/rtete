@@ -1,0 +1,22 @@
+[package]
+name = "rtete"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+grammers-client = "0.11.0"
+grammers-session = { version = "0.11.0", default-features = false, features = ["sqlite-storage"] }
+futures-util = "0.3"
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-util", "io-std", "net", "sync", "time", "fs"] }
+image = { version = "0.25", default-features = false, features = ["webp", "png"] }
+base64 = "0.22"
+md5 = "0.8"
+
+[profile.release]
+opt-level = 2
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
