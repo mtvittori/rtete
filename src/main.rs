@@ -230,7 +230,17 @@ async fn handle_event(
             if k.modifiers.contains(KeyModifiers::CONTROL) {
                 if let KeyCode::Char(c) = k.code {
                     match c {
-                        'c' => app.quit = true,
+                        // ctrl/cmd+C: copia il messaggio selezionato; senza
+                        // selezione chiude (copy_or_interrupt, come in kitty)
+                        'c' => {
+                            if app.msg_cursor.is_some() {
+                                ctrl_copy(app)
+                            } else {
+                                app.quit = true
+                            }
+                        }
+                        // ctrl/cmd+V: incolla dagli appunti (via wl-paste)
+                        'v' => ctrl_paste(app),
                         // modifica l'ultimo tuo messaggio di testo
                         'e' => ctrl_edit(app),
                         // arma la cancellazione dell'ultimo tuo messaggio
