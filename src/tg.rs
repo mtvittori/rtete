@@ -189,6 +189,9 @@ pub async fn sign_in(
     if client.is_authorized().await? {
         return Ok(());
     }
+    println!();
+    println!("⚠️  Digita ogni dato SOLO quando compare la domanda, poi conferma con Invio.");
+    println!("    (Se scrivi prima che la richiesta appaia, l'input va perso.)");
     let phone = loop {
         let _ = write!(std::io::stdout(), "Numero di telefono (+39…): ");
         let _ = std::io::stdout().flush();
