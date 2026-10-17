@@ -56,6 +56,16 @@ Dopodiché la sessione vive in `~/.local/share/rtete/rtete.db`.
 > `l`, `s`) finiscono nel testo del messaggio; i tasti vim navigano solo con
 > la composizione vuota, e il pannello sticker si apre/chiude con `Tab`.
 
+## Tema
+
+Interfaccia ispirata a **jellyfin-tui**: carta crema, cornici arrotondate col
+titolo incastonato nella riga superiore, conteggio sull'estremo destro della
+cornice, barra di selezione scura con `▶`, cornice ambra sul pannello attivo,
+suggerimenti dei tasti (`nome <tasto>`) nella cornice inferiore e rail di
+scorrimento con frecce sul bordo destro. La composizione del messaggio vive
+nella cornice in basso (`❯ testo`), gli avvisi transitori appaiono in alto a
+destra come il volume di jellyfin-tui.
+
 ## Limitazioni note
 
 - Solo sticker **statici** (WebP): i TGS animati vengono mostrati come etichetta emoji.

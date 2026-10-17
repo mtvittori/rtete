@@ -1,15 +1,18 @@
-//! Shared TUI palette.
+//! Palette chiara in stile jellyfin-tui: carta crema, inchiostro scuro e
+//! Ambra (arancio fuoco) come colore d'accento dei pannelli attivi.
 
 pub mod palette {
-    pub const BG: ratatui::style::Color = ratatui::style::Color::Rgb(24, 24, 32);
-    pub const FG: ratatui::style::Color = ratatui::style::Color::Rgb(220, 220, 228);
-    pub const ACCENT: ratatui::style::Color = ratatui::style::Color::Rgb(120, 220, 180);
-    pub const ACCENT_DIM: ratatui::style::Color = ratatui::style::Color::Rgb(70, 130, 110);
-    pub const PANEL: ratatui::style::Color = ratatui::style::Color::Rgb(30, 30, 40);
-    pub const PANEL_HI: ratatui::style::Color = ratatui::style::Color::Rgb(40, 42, 54);
-    pub const OUTGOING: ratatui::style::Color = ratatui::style::Color::Rgb(132, 156, 222);
-    pub const INCOMING: ratatui::style::Color = ratatui::style::Color::Rgb(96, 98, 110);
-    pub const WARNING: ratatui::style::Color = ratatui::style::Color::Rgb(250, 160, 90);
+    pub const BG: ratatui::style::Color = ratatui::style::Color::Rgb(252, 247, 235);
+    pub const FG: ratatui::style::Color = ratatui::style::Color::Rgb(58, 51, 42);
+    pub const FAINT: ratatui::style::Color = ratatui::style::Color::Rgb(158, 150, 133);
+    pub const ACCENT: ratatui::style::Color = ratatui::style::Color::Rgb(226, 92, 42);
+    pub const ACCENT_DIM: ratatui::style::Color = ratatui::style::Color::Rgb(208, 140, 98);
+    pub const SELECT: ratatui::style::Color = ratatui::style::Color::Rgb(46, 40, 32);
+    /// testo sopra la barra di selezione scura
+    pub const ON_SELECT: ratatui::style::Color = ratatui::style::Color::Rgb(252, 247, 235);
+    pub const OUTGOING: ratatui::style::Color = ACCENT;
+    pub const INCOMING: ratatui::style::Color = FAINT;
+    pub const WARNING: ratatui::style::Color = ratatui::style::Color::Rgb(186, 60, 50);
 }
 
 pub use palette::*;

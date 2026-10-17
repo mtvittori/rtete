@@ -423,7 +423,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         open: None,
         histories: HashMap::new(),
         compose: String::new(),
-        status: "↑↓←→ o j/k naviga · ⏎ apri/invia · Tab pannello sticker · q esci".into(),
+        status: String::new(),
         show_sticker: false,
         set_level: false,
         set_cursor: 0,
