@@ -41,13 +41,79 @@ pub enum RowKind {
         emoji: String,
         animated: bool,
     },
+    /// foto Telegram, allegato immagine o gif: renderizzabili in kitty.
     Photo {
         media: Media,
+        caption: String,
+        gif: bool,
     },
+    /// documento scaricabile (Invio = salva in ~/Downloads).
     Doc {
+        media: Media,
         name: String,
+        size: Option<usize>,
+        caption: String,
     },
+    /// etichetta informativa: video, vocale, contatti, sondaggi…
+    Note(String),
     Service(String),
+}
+
+/// Caption ripulita: righe collassate, tagliata a lunghezza ragionevole.
+fn caption(text: &str) -> String {
+    let one_line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    const MAX: usize = 48;
+    let mut cut = String::new();
+    for ch in one_line.chars() {
+        if cut.chars().count() >= MAX {
+            cut.push('…');
+            break;
+        }
+        cut.push(ch);
+    }
+    cut
+}
+
+/// Dimensioni umane: 342 kB, 1,2 MB…
+pub fn fmt_size(mut bytes: f64) -> String {
+    const UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
+    let mut unit = 0;
+    while bytes >= 1024.0 && unit + 1 < UNITS.len() {
+        bytes /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{bytes:.1} {}", UNITS[unit])
+    }
+}
+
+/// Etichetta breve per i media che non renderizziamo (video, vocale…).
+fn media_note(doc: &grammers_client::media::Document, text: &str) -> String {
+    let mime = doc.mime_type().unwrap_or("");
+    let secs = doc.duration().map(|d| d as i64).unwrap_or(0);
+    let caption = caption(text);
+    let base = if mime.starts_with("video/") {
+        "video"
+    } else if secs > 0 && doc.name().is_none() && mime.contains("ogg") {
+        "messaggio vocale"
+    } else if mime.starts_with("audio/") {
+        "audio"
+    } else {
+        "media non supportato"
+    };
+    let time = if secs > 0 {
+        format!(" {secs}s")
+    } else {
+        String::new()
+    };
+    let extra = if caption.is_empty() {
+        String::new()
+    } else {
+        format!(" — “{caption}”")
+    };
+    format!("{base}{time}{extra}")
 }
 
 /// Connection credentials for my.telegram.org apps.
@@ -86,8 +152,8 @@ fn data_dir() -> PathBuf {
     base.join("rtete")
 }
 
-pub fn stickers_dir() -> PathBuf {
-    data_dir().join("stickers")
+pub fn media_dir() -> PathBuf {
+    data_dir().join("assets")
 }
 
 const CONFIG_FILE: &str = "credentials";
@@ -263,8 +329,9 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
     Ok(out)
 }
 
-/// Parse into a projected row: sticker / photo / file / text / service.
+/// Parse into a projected row: sticker / foto / gif / file / nota / testo.
 pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
+    let cap = caption(&text);
     match media.clone() {
         Some(Media::Sticker(sticker)) => {
             let emoji = sticker.emoji().to_string();
@@ -277,15 +344,57 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
         }
         Some(Media::Photo(_)) => RowKind::Photo {
             media: media.unwrap(),
+            caption: cap,
+            gif: false,
         },
         Some(Media::Document(doc)) => {
+            let mime = doc.mime_type().unwrap_or("").to_string();
             let name = doc
                 .name()
                 .map(str::to_string)
                 .unwrap_or_else(|| "file".into());
-            RowKind::Doc { name }
+            let size = doc.size();
+            if mime == "image/gif" {
+                return RowKind::Photo {
+                    media: media.unwrap(),
+                    caption: cap,
+                    gif: true,
+                };
+            }
+            if matches!(mime.as_str(), "image/webp" | "image/png" | "image/apng")
+                || mime.starts_with("image/jpeg")
+            {
+                return RowKind::Photo {
+                    media: media.unwrap(),
+                    caption: cap,
+                    gif: false,
+                };
+            }
+            if mime.starts_with("video/") || mime.starts_with("audio/") {
+                return RowKind::Note(media_note(&doc, &text));
+            }
+            RowKind::Doc {
+                media: media.unwrap(),
+                name,
+                size,
+                caption: cap,
+            }
         }
-        Some(other) => RowKind::Service(format!("{other:?}")),
+        // anteprime dei link: conta solo il testo del messaggio
+        Some(Media::WebPage(_)) => RowKind::Text(text),
+        Some(other) => RowKind::Note(match other {
+            Media::Contact(c) => format!("📇 contatto: {} {}", c.first_name(), c.last_name()),
+            Media::Poll(p) => match p.question() {
+                tl::enums::TextWithEntities::Entities(t) => {
+                    format!("📊 sondaggio: {}", t.text)
+                }
+            },
+            Media::Geo(_) | Media::GeoLive(_) => "📍 posizione".to_string(),
+            Media::Venue(_) => "🗺 luogo".to_string(),
+            Media::Dice(d) => format!("🎲 {} ({})", d.emoji(), d.value()),
+            _ => format!("{other:?}"),
+        }),
+        None if text.is_empty() => RowKind::Service(String::new()),
         None => RowKind::Text(text),
     }
 }
@@ -398,21 +507,107 @@ pub async fn send_sticker(
         .await
 }
 
-/// Stable per-cache file name from document identity.
+/// Modifica in place un testo già inviato (restituito id invariato).
+pub async fn edit_text(
+    client: &Client,
+    peer_ref: ChatRef,
+    message_id: i32,
+    new_text: &str,
+) -> Result<(), InvocationError> {
+    client
+        .edit_message(peer_ref, message_id, InputMessage::new().text(new_text))
+        .await
+}
+
+/// Elimina definitivamente (revoke) gli id passati della chat.
+pub async fn delete_messages(
+    client: &Client,
+    peer_ref: ChatRef,
+    ids: &[i32],
+) -> Result<(), InvocationError> {
+    client.delete_messages(peer_ref, ids).await?;
+    Ok(())
+}
+
+/// Un colpo da ricerca: id, data, autore e testo potentemente tagsliato.
+pub struct SearchHit {
+    pub id: i32,
+    pub outgoing: bool,
+    pub date: String,
+    pub snippet: String,
+}
+
+/// Server-side search inside a peer (text query, no filters).
+pub async fn search_chat(
+    client: &Client,
+    peer_ref: ChatRef,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<SearchHit>, InvocationError> {
+    let mut out = Vec::new();
+    if query.trim().is_empty() {
+        return Ok(out);
+    }
+    let mut iter = client.search_messages(peer_ref).query(query);
+    while out.len() < limit {
+        match iter.next().await? {
+            Some(m) => {
+                let text = m.text().to_string();
+                let snippet = if text.is_empty() {
+                    match m.media() {
+                        Some(_) => "(media)".into(),
+                        None => continue,
+                    }
+                } else {
+                    caption(&text)
+                };
+                let date = m.date().to_string();
+                let date = date.replace('T', " ").chars().take(16).collect::<String>();
+                out.push(SearchHit {
+                    id: m.id(),
+                    outgoing: m.outgoing(),
+                    date,
+                    snippet,
+                });
+            }
+            None => break,
+        }
+    }
+    Ok(out)
+}
+
+/// Scarica un documento (o una foto full) dentro `dest`.
+pub async fn download_media_to(
+    client: &Client,
+    media: &Media,
+    dest: PathBuf,
+) -> Result<(), String> {
+    std::fs::create_dir_all(
+        dest.parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from(".")),
+    )
+    .map_err(|e| e.to_string())?;
+    client
+        .download_media(media, dest.clone())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Stable per-cache file name from media identity (foto e documenti).
 pub fn media_key(media: &Media) -> String {
-    let id = sticker_document_id(media);
+    let id = media_id(media);
     format!("{:x}", md5::compute(id.to_be_bytes()))
 }
 
-/// helper to reuse sticker document Id as image id label.
-pub fn sticker_document_id(media: &Media) -> i64 {
-    if let Media::Sticker(st) = media {
-        return st.document.id();
+/// Unice id server-side dalla media (foto, documenti, sticker).
+pub fn media_id(media: &Media) -> i64 {
+    match media {
+        Media::Sticker(st) => st.document.id(),
+        Media::Document(doc) => doc.id(),
+        Media::Photo(photo) => photo.id(),
+        _ => -1,
     }
-    if let Media::Document(doc) = media {
-        return doc.id();
-    }
-    -1
 }
 
 /// Convert a message Media into the (possibly) re-sent sticker set entry.

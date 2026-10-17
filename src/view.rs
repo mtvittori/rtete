@@ -19,11 +19,32 @@ use crate::styles::*;
 use crate::tg;
 use crate::STICKER_COLS;
 
-/// Righe verticali riservate a una immagine sticker.
-pub const STICKER_ROWS: u16 = 5;
-
 /// Altezza del riquadro «in evidenza» sotto la griglia sticker.
 const CARD_H: u16 = 10;
+
+/// RTETE_SCALE (0.5–4): moltiplicatore della grandezza delle immagini
+/// (sticker nella griglia e nel messaggio, foto, gif). 1.0 di default.
+fn scale() -> f32 {
+    static S: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+    *S.get_or_init(|| {
+        std::env::var("RTETE_SCALE")
+            .ok()
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| (0.5..=4.0).contains(v))
+            .unwrap_or(1.0)
+    })
+}
+
+/// righe dedicate all'immagine nel messaggio: sticker (false) o foto/gif (true)
+pub fn band_rows(photo: bool) -> u16 {
+    let base: f32 = if photo { 8.0 } else { 5.0 };
+    ((base * scale()).round() as u16).clamp(2, 18)
+}
+
+/// altezza (in righe) di una cella della griglia sticker
+fn cell_h() -> u16 {
+    ((6.0 * scale()).round() as u16).clamp(4, 16)
+}
 
 /// Una riga di cronologia già proiettata per il rendering.
 pub struct HistoryLine {
@@ -32,8 +53,10 @@ pub struct HistoryLine {
     pub sticker: bool,
     pub animated: bool,
     pub sticker_media: Option<grammers_client::media::Media>,
-    /// quante righe occupa nel terminale (più di 1 solo per gli sticker).
+    /// quante righe occupa nel terminale (più di 1 solo per le immagini).
     pub rows: u16,
+    /// larghezza immagine in % della larghezza del pannello.
+    pub frac: u16,
 }
 
 impl HistoryLine {
@@ -45,6 +68,7 @@ impl HistoryLine {
             animated: false,
             sticker_media: None,
             rows: 1,
+            frac: 0,
         }
     }
 }
@@ -92,7 +116,9 @@ pub fn draw(f: &mut Frame, app: &crate::App, cmds: &mut Vec<crate::Cmd>) {
         .constraints([Constraint::Length(side_w), Constraint::Min(20)])
         .split(rows[1]);
     draw_sidebar(f, app, body[0]);
-    if app.show_sticker {
+    if app.show_search {
+        draw_search(f, app, body[1]);
+    } else if app.show_sticker {
         draw_stickers(f, app, body[1], cmds);
     } else {
         draw_history(f, app, body[1], cmds);
@@ -111,6 +137,8 @@ fn draw_breadcrumb(f: &mut Frame, app: &crate::App, area: Rect) {
         ));
         if app.show_sticker {
             spans.push(Span::styled(" › sticker", Style::new().fg(FAINT)));
+        } else if app.show_search {
+            spans.push(Span::styled(" › ricerca", Style::new().fg(FAINT)));
         }
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
@@ -249,9 +277,32 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
         }
         return;
     };
-    // composizione e suggerimenti vivono nella cornice inferiore
-    let bottom: Line<'static> = if app.compose.is_empty() {
-        hints_line(&[("invia", "Invio"), ("sticker", "Tab"), ("esci", "q")])
+    // composizione, modifica, cancellazione, ricerca: nella cornice inferiore
+    let bottom: Line<'static> = if app.del_arm {
+        Line::from(Span::styled(
+            " ⚠️ Invio = cancella l'ultimo tuo messaggio · Esc scelta saggia",
+            Style::new().fg(WARNING),
+        ))
+        .left_aligned()
+    } else if let Some(id) = app.editing {
+        Line::from(Span::styled(
+            format!(" ✎ #{id} {}", app.compose),
+            Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+        ))
+        .left_aligned()
+    } else if app.compose.is_empty() {
+        Line::from(vec![
+            Span::styled(" scrivi ", Style::new().fg(BG).bg(SELECT)),
+            Span::styled("<testo>", Style::new().fg(ACCENT)),
+            Span::styled(" ", Style::new().fg(FAINT)),
+            Span::styled(" invia ", Style::new().fg(BG).bg(SELECT)),
+            Span::styled("<Invio>", Style::new().fg(ACCENT)),
+            Span::styled(" edita ", Style::new().fg(BG).bg(SELECT)),
+            Span::styled("<Ctrl-E>", Style::new().fg(ACCENT)),
+            Span::styled(" sticker ", Style::new().fg(BG).bg(SELECT)),
+            Span::styled("<Tab>", Style::new().fg(ACCENT)),
+        ])
+        .centered()
     } else {
         Line::from(Span::styled(
             format!(" ❯ {}", app.compose),
@@ -272,7 +323,7 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
     let mut used = 0usize;
     let mut start = lines.len();
     for (i, line) in lines.iter().enumerate().rev() {
-        let h = if line.sticker { STICKER_ROWS + 1 } else { 1 } as usize;
+        let h = if line.sticker { line.rows } else { 1 } as usize;
         if used + h > avail {
             start = i + 1;
             break;
@@ -303,24 +354,24 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
                 },
             );
             y += 1;
-            // immagine sticker (se convertita) nelle righe successive
+            // immagine (se convertita) nelle righe successive
             if let Some(media) = &line.sticker_media {
                 let key = tg::media_key(media);
                 if let Some(path) = app.previews.get(&key) {
-                    let (w, h) = kitty::square_fit((msgs.width / 2) as u32, STICKER_ROWS as u32);
-                    let w = w.max(1) as u16;
-                    let h = h.max(1) as u16;
+                    let band = line.rows.saturating_sub(1);
+                    let w = msgs.width.saturating_sub(1) * line.frac.max(1) / 100;
+                    let (fw, fh) = kitty::square_fit(w.max(2) as u32, band as u32);
                     let rect = Rect {
                         x: msgs.x,
                         y,
-                        width: w.min(msgs.width),
-                        height: h.min(y_end.saturating_sub(y)),
+                        width: (fw.max(1) as u16).min(msgs.width),
+                        height: (fh.max(1) as u16).min(y_end.saturating_sub(y)).min(band),
                     };
                     cmds.push(crate::Cmd::Place {
                         rect,
                         path: path.clone(),
                     });
-                } else {
+                } else if !app.pending.is_empty() && !line.animated {
                     f.render_widget(
                         Paragraph::new(Span::styled(
                             "(in arrivo…)".to_string(),
@@ -335,7 +386,7 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
                     );
                 }
             }
-            y += STICKER_ROWS;
+            y += line.rows.saturating_sub(1);
         } else {
             f.render_widget(
                 Paragraph::new(Span::styled(
@@ -355,7 +406,93 @@ fn draw_history(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crat
     rail(f, area, lines.len(), start);
 }
 
-const CELL_H: u16 = 6; // righe per cella della griglia sticker
+/// Pannello dei risultati di ricerca nella chat aperta (Ctrl-F).
+fn draw_search(f: &mut Frame, app: &crate::App, area: Rect) {
+    let bottom: Line<'static> = if app.search_results.is_none() {
+        Line::from(vec![
+            Span::styled(" cerca ", Style::new().fg(BG).bg(SELECT)),
+            Span::styled(
+                format!(" {}", app.search_q),
+                Style::new().fg(ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" ⏎", Style::new().fg(FAINT)),
+        ])
+        .left_aligned()
+    } else {
+        Line::from(vec![
+            Span::styled(
+                format!(" «{}» {} risultati — ", app.search_q, app.search_cursor + 1),
+                Style::new().fg(ACCENT),
+            ),
+            Span::styled(" esci ", Style::new().fg(BG).bg(SELECT)),
+            Span::styled("<Esc>", Style::new().fg(ACCENT)),
+        ])
+        .left_aligned()
+    };
+    let block = pane("Ricerca", true).title_bottom(bottom);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let Some(hits) = app.search_results.as_ref() else {
+        if inner.height > 1 {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    "scrivi la frase da cercare e premi Invio",
+                    Style::new().fg(FAINT),
+                ))
+                .alignment(Alignment::Center),
+                inner,
+            );
+        }
+        return;
+    };
+    if hits.is_empty() {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "nessun risultato",
+                Style::new().fg(INCOMING).bg(BG),
+            )),
+            inner,
+        );
+        return;
+    }
+    let items: Vec<ListItem> = hits
+        .iter()
+        .enumerate()
+        .map(|(i, h)| {
+            let who = if h.outgoing { "Io" } else { "Lui" };
+            let mut spans = vec![
+                Span::styled(
+                    format!("{:>3} {} {} · ", i + 1, h.date, who),
+                    Style::new().fg(FAINT),
+                ),
+                Span::styled(
+                    view_wrap_first(&h.snippet, 60),
+                    Style::new().fg(if h.outgoing { ACCENT } else { FG }),
+                ),
+            ];
+            if i == app.search_cursor {
+                spans.insert(
+                    0,
+                    Span::styled("▶ ", Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)),
+                );
+            }
+            ListItem::new(Line::from(spans))
+        })
+        .collect();
+    let list = List::new(items)
+        .style(Style::new().bg(BG))
+        .highlight_style(Style::new().bg(SELECT).fg(ON_SELECT));
+    let mut state = ListState::default();
+    state.select(Some(app.search_cursor));
+    f.render_stateful_widget(list, inner, &mut state);
+    rail(f, area, hits.len(), app.search_cursor);
+}
+
+/// la prima riga utile di un testo lungo (per gli snippet)
+fn view_wrap_first(text: &str, max: usize) -> String {
+    text.chars().take(max).collect::<String>()
+}
 
 fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crate::Cmd>) {
     if !app.set_level {
@@ -441,7 +578,7 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
     let cols = STICKER_COLS;
     let per_row = STICKER_COLS as u16;
     let cell_w = cells[0].width.max(per_row) / per_row;
-    let grid_rows = (cells[0].height / CELL_H) as usize;
+    let grid_rows = (cells[0].height / cell_h()) as usize;
     let total_rows = docs.len().div_ceil(cols);
     let rows_shown = grid_rows.min(total_rows);
     // allinea la vista alla riga che contiene il cursore
@@ -450,6 +587,7 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
         .saturating_sub(rows_shown.saturating_sub(1))
         .min(total_rows - rows_shown);
 
+    let ch = cell_h();
     let sel_title = app
         .sets
         .as_ref()
@@ -470,7 +608,7 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
 
     for r in 0..rows_shown {
         let row_idx = first_row + r;
-        let y = inner.y + (r as u16) * CELL_H;
+        let y = inner.y + (r as u16) * ch;
         for c in 0..cols {
             let idx = row_idx * cols + c;
             let x = inner.x + (c as u16) * cell_w;
@@ -502,7 +640,7 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
                 Paragraph::new(Line::from(spans)),
                 Rect {
                     x,
-                    y: y + CELL_H - 1,
+                    y: y + ch - 1,
                     width: cell_w,
                     height: 1,
                 },
@@ -510,13 +648,12 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
             // anteprima immagine (kitty) sulle righe sopra la cella
             let key = tg::media_key(media);
             if let Some(path) = app.previews.get(&key) {
-                let (w, h) =
-                    kitty::square_fit((cell_w.saturating_sub(1)) as u32, (CELL_H - 1) as u32);
+                let (w, h) = kitty::square_fit((cell_w.saturating_sub(1)) as u32, (ch - 1) as u32);
                 let rect = Rect {
                     x: x + 1,
                     y,
                     width: (w.max(1) as u16).min(cell_w.saturating_sub(1)),
-                    height: (h.max(1) as u16).min(CELL_H - 1),
+                    height: (h.max(1) as u16).min(ch - 1),
                 };
                 cmds.push(crate::Cmd::Place {
                     rect,

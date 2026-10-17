@@ -1,24 +1,24 @@
-//! Filesystem helpers: sticker cache + webp→png conversion.
+//! Filesystem helpers: asset cache (sticker/foto/gif) + conversioni.
 //!
 //! Obiettivo: non trattenere mai frame in heap più a lungo di una conversione;
-//! ogni sticker finisce come PNG su disco così kitty non dovrà ri-decodificarlo.
+//! ogni asset finisce come PNG (statico o APNG) su disco così kitty lo
+//! decodifica solo quando lo piazza.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::tg::stickers_dir;
+use crate::tg::media_dir;
 
 /// Cache path for a given media key.
 pub fn cache_png(key: &str) -> PathBuf {
-    stickers_dir().join(format!("{key}.png"))
+    media_dir().join(format!("{key}.png"))
 }
 
-/// Cache path for the original raw bytes (debug + convert once only).
-pub fn cache_raw(key: &str) -> PathBuf {
-    stickers_dir().join(format!("{key}.webp"))
+/// Cache path for the original raw bytes (convert once only).
+fn cache_raw(key: &str, ext: &str) -> PathBuf {
+    media_dir().join(format!("{key}.{ext}"))
 }
 
-/// Download + convert a sticker into a PNG we can draw with kitty. Returns
-/// the png path when ready. Downgrades animated webp to its first frame.
+/// Scarica (se manca) e converte in PNG/APNG pronto per kitty.
 pub async fn convert_to_png(
     client: grammers_client::Client,
     media: &grammers_client::media::Media,
@@ -28,16 +28,7 @@ pub async fn convert_to_png(
     if png_path.exists() {
         return Ok(png_path);
     }
-    let raw_path = cache_raw(&key);
-    if !raw_path.exists() {
-        tokio::fs::create_dir_all(stickers_dir())
-            .await
-            .map_err(|e| format!("cache dir: {e}"))?;
-        client
-            .download_media(media, raw_path.clone())
-            .await
-            .map_err(|e| format!("download: {e}"))?;
-    }
+    let raw_path = raw_source(&client, media).await?;
     let src = raw_path.clone();
     let dst = png_path.clone();
     let converted = tokio::task::spawn_blocking(move || convert_sync(&src, &dst))
@@ -50,20 +41,187 @@ pub async fn convert_to_png(
     Ok(png_path)
 }
 
-fn convert_sync(src: &PathBuf, dst: &PathBuf) -> Result<bool, String> {
-    use image::ImageEncoder;
+/// Scarica l'originale nella cache (se assente) e preleva il percorso con
+/// l'estensione reale.
+async fn raw_source(
+    client: &grammers_client::Client,
+    media: &grammers_client::media::Media,
+) -> Result<PathBuf, String> {
+    let key = crate::tg::media_key(media);
+    let ext = match media {
+        grammers_client::media::Media::Photo(_) => "jpg",
+        grammers_client::media::Media::Document(doc) => match doc.mime_type().unwrap_or("") {
+            "image/gif" => "gif",
+            "image/png" | "image/apng" => "png",
+            "image/webp" => "webp",
+            m if m.starts_with("image/jpeg") => "jpg",
+            _ => "bin",
+        },
+        _ => "bin",
+    };
+    let raw_path = cache_raw(&key, ext);
+    if !raw_path.exists() {
+        tokio::fs::create_dir_all(media_dir())
+            .await
+            .map_err(|e| format!("cache dir: {e}"))?;
+        client
+            .download_media(media, raw_path.clone())
+            .await
+            .map_err(|e| format!("download: {e}"))?;
+    }
+    Ok(raw_path)
+}
+
+/// Rileva il formato dal magic header.
+fn sniff(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
+        "png"
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        "jpeg"
+    } else if bytes.starts_with(b"GIF8") {
+        "gif"
+    } else if bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        "webp"
+    } else {
+        ""
+    }
+}
+
+/// APNG? (chunk `acTL` nei primi 1 kB).
+fn is_apng(bytes: &[u8]) -> bool {
+    let head = bytes.get(..1024.min(bytes.len()));
+    head.is_some_and(|h| h.windows(4).any(|w| w == b"acTL"))
+}
+
+/// Dimensioni dichiarate nell'header PNG (IHDR): nessuna decodifica necessaria.
+fn png_dims(bytes: &[u8]) -> Option<(u32, u32)> {
+    let b = bytes.get(16..24)?;
+    Some((
+        u32::from_be_bytes(b[0..4].try_into().ok()?),
+        u32::from_be_bytes(b[4..8].try_into().ok()?),
+    ))
+}
+
+/// Dimensioni logiche dal GIF header (LE dopo la firma di 6 byte).
+fn gif_dims(bytes: &[u8]) -> Option<(u32, u32)> {
+    let b = bytes.get(6..10)?;
+    Some((
+        u16::from_le_bytes(b[0..2].try_into().ok()?) as u32,
+        u16::from_le_bytes(b[2..4].try_into().ok()?) as u32,
+    ))
+}
+
+fn convert_sync(src: &Path, dst: &Path) -> Result<bool, String> {
     let bytes = std::fs::read(src).map_err(|e| format!("read: {e}"))?;
-    let img = image::load_from_memory(&bytes).map_err(|e| format!("decode: {e}"))?;
-    let rgba = img.to_rgba8();
+    match (sniff(&bytes), is_apng(&bytes)) {
+        // APNG: byte intatti, kitty anima in autonomia.
+        ("png", true) => {
+            std::fs::write(dst, &bytes).map_err(|e| format!("write: {e}"))?;
+        }
+        // PNG statico: se già piccolo, copia; se enorme, riscalalo.
+        ("png", false) => {
+            let (w, h) = png_dims(&bytes).unwrap_or((0, 0));
+            if w > 0 && w.max(h) <= 1000 {
+                std::fs::write(dst, &bytes).map_err(|e| format!("write: {e}"))?;
+            } else {
+                let img = decode_cap(&bytes)?;
+                encode_png(&img, dst)?;
+            }
+        }
+        // GIF: anima APNG solo se piccola; altrimenti primo frame riscalato.
+        ("gif", _) => {
+            let (w, h) = gif_dims(&bytes).unwrap_or((0, 0));
+            if w > 0 && w.max(h) <= 700 {
+                gif_to_apng(src, dst, 80)?;
+            } else {
+                let img = decode_cap(&bytes)?;
+                encode_png(&img, dst)?;
+            }
+        }
+        // tutto il resto: decodifica compatta → png
+        _ => {
+            let img = decode_cap(&bytes)?;
+            encode_png(&img, dst)?;
+        }
+    }
+    Ok(true)
+}
+
+/// Decodifica con lato massimo limitato (bassa RAM; le foto di Telegram
+/// rendono bene fino a ~900px).
+fn decode_cap(bytes: &[u8]) -> Result<image::RgbaImage, String> {
+    let img = image::load_from_memory(bytes).map_err(|e| format!("decode: {e}"))?;
+    const MAX_SIDE: u32 = 1000;
+    let img = if img.width().max(img.height()) > MAX_SIDE {
+        img.thumbnail(MAX_SIDE, MAX_SIDE)
+    } else {
+        img
+    };
+    Ok(img.to_rgba8())
+}
+
+fn encode_png(img: &image::RgbaImage, dst: &Path) -> Result<(), String> {
+    use image::ImageEncoder;
     let file = std::fs::File::create(dst).map_err(|e| format!("create: {e}"))?;
     let encoder = image::codecs::png::PngEncoder::new(std::io::BufWriter::new(file));
     encoder
         .write_image(
-            rgba.as_raw(),
-            rgba.width(),
-            rgba.height(),
+            img.as_raw(),
+            img.width(),
+            img.height(),
             image::ExtendedColorType::Rgba8,
         )
         .map_err(|e| format!("encode: {e}"))?;
-    Ok(true)
+    Ok(())
+}
+
+/// Ricodifica una GIF in APNG (kitty anima gli APNG da solo).
+/// Frame cap e delay per frame; da chiamare solo su gif ≤ 700px.
+pub fn gif_to_apng(src: &Path, dst: &Path, max_frames: usize) -> Result<(), String> {
+    use image::AnimationDecoder;
+    use png::{BitDepth, ColorType, Encoder as PngEnc};
+    let file = std::fs::File::open(src).map_err(|e| format!("open: {e}"))?;
+    let decoder = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file))
+        .map_err(|e| format!("gif: {e}"))?;
+    let mut frames = decoder.into_frames();
+    // (rgba, delay_ms); le dimensioni sono comuni a tutti i frame gif
+    let mut shots: Vec<(Vec<u8>, u16)> = Vec::new();
+    let (mut w, mut h) = (0u32, 0u32);
+    for item in frames.by_ref() {
+        if shots.len() >= max_frames {
+            break;
+        }
+        let frame = item.map_err(|e| format!("frame: {e}"))?;
+        let (num, denom) = frame.delay().numer_denom_ms();
+        let delay_ms = (num.max(1) / denom.max(1)).clamp(20, 600) as u16;
+        if w == 0 {
+            w = frame.buffer().width();
+            h = frame.buffer().height();
+        }
+        shots.push((frame.buffer().clone().into_raw(), delay_ms));
+    }
+    let Some((first_rgba, _)) = shots.first() else {
+        return Err("gif vuota".into());
+    };
+    let file = std::fs::File::create(dst).map_err(|e| format!("create: {e}"))?;
+    let mut enc = PngEnc::new(std::io::BufWriter::new(file), w, h);
+    enc.set_color(ColorType::Rgba);
+    enc.set_depth(BitDepth::Eight);
+    enc.set_animated(shots.len() as u32, 0)
+        .map_err(|e| e.to_string())?;
+    let mut writer = enc.write_header().map_err(|e| e.to_string())?;
+    writer
+        .write_image_data(first_rgba)
+        .map_err(|e| format!("write f0: {e}"))?;
+    // dal secondo frame in poi: delay esplicito per APNG
+    shots.remove(0);
+    for (rgba, delay_ms) in shots {
+        writer
+            .set_frame_delay(delay_ms, 1000)
+            .map_err(|e| e.to_string())?;
+        writer
+            .write_image_data(&rgba)
+            .map_err(|e| format!("write f: {e}"))?;
+    }
+    Ok(())
 }

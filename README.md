@@ -66,16 +66,34 @@ scorrimento con frecce sul bordo destro. La composizione del messaggio vive
 nella cornice in basso (`❯ testo`), gli avvisi transitori appaiono in alto a
 destra come il volume di jellyfin-tui.
 
+## Comandi extra
+
+| Tasto | Azione |
+| --- | --- |
+| `Ctrl-E` | modifica l'ultimo tuo messaggio di testo (il testo va in composizione, `Invio` conferma) |
+| `Ctrl-D` | arma la cancellazione dell'ultimo tuo messaggio, `Invio` conferma (Esc annulla) |
+| `Ctrl-O` | scarica l'ultimo documento della chat in `~/Downloads/` |
+| `Ctrl-F` | ricerca server-side nella chat aperta (frase esatta, fino a 40 risultati) |
+
+## E media
+
+- **Foto Telegram, allegati immagini e GIF**: renderizzati in terminale con il kitty graphics protocol; le GIF e gli sticker APNG **animano da sole (kitty anima gli APNG nati come GIF: l'animazione gira sul terminale).
+- **Documenti**: riga con nome e dimensione; `Ctrl-O` li salva in `~/Downloads`
+- **Video/vocali**: etichetta informativa (durata/caption), non renderizzati.
+- **Grandezza immagini**: variabile d'ambiente `RTETE_SCALE` (0.5–4) moltiplica sticker/foto/nella griglia e messaggi. Il rapporto celle si regola con `RTETE_CELL_W`/`RTETE_CELL_H` (pixel per cella del terminale).
+
 ## Limitazioni note
 
-- Solo sticker **statici** (WebP): i TGS animati vengono mostrati come etichetta emoji.
-- GIF/video/documenti/elenco di reazioni non gestiti (mostrati come segnaposto).
-- Nessun supporto a segnalazione, modifica/cancellazione messaggi o ricerca.
-- Il terminale non compatibile con il *kitty graphics protocol* mostra solo l'etichetta emoji.
+
+- Gli sticker **TGS** (Lottie) e i **video-sticker webm** restano etichetta emoji: renderizzarli servirebbero librerie C pesanti (rlottie/libvpx), in contrasto con la filosofia "poco RAM, build semplice".
+- I **video** (mp4) sono solo etichetta informativa (servirebbe un decodificatore video).
+- Nessun supporto a survey di reazioni o reazioni mobili (stanti, per ora).
+- Il terminale non compatibile con il *kitty graphics protocol* mostra solo le etichette; ghostty/wezterm possono mostrare APNG/GIF statici.
 
 ## RAM
 
-Nessuna cache in memoria: ogni sticker scaricato viene subito convertito e buttato
-su disco (`~/.local/share/rtete/stickers/<md5>.png`); la cronologia in RAM è
-limitata a 60 messaggi per chat aperta. `smem`/`ps` per verificare: il RSS tipico
-sta nelle decine di MB, non centinaia.
+Nessuna cache in memoria: ogni media scaricato viene subito convertito/compresso e buttato
+su disco (`~/.local/share/rtete/assets/<md5>.png`, cache condivisa per tutti i tipi);
+la cronologia in RAM è limitata a 60 messaggi per chat aperta, le conversioni girano
+in spawn_blocking e NESSUN frame completo resta a lungo nello heap. `smem`/`ps` per
+verificare: il RSS tipico sta nelle decine di MB, non centinaia.
