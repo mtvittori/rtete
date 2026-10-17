@@ -204,10 +204,15 @@ fn draw_sidebar(f: &mut Frame, app: &crate::App, area: Rect) {
             } else {
                 String::new()
             };
+            // segnali tui in stile IRC: # gruppo, @ chat privata
             let mut spans = vec![Span::styled(
-                format!("{} {}", if d.is_group { "👥" } else { "👤" }, d.name),
-                Style::new().fg(if d.unread > 0 { ACCENT } else { FG }),
+                if d.is_group { "#" } else { "@" },
+                Style::new().fg(if d.is_group { ACCENT_DIM } else { FAINT }),
             )];
+            spans.push(Span::styled(
+                format!(" {}", d.name),
+                Style::new().fg(if d.unread > 0 { ACCENT } else { FG }),
+            ));
             if d.unread > 0 {
                 spans.push(Span::styled(badge, Style::new().fg(FAINT)));
             }
