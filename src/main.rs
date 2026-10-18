@@ -271,7 +271,10 @@ async fn handle_event(
             }
             match k.code {
                 KeyCode::Char('q')
-                    if !app.show_sticker && !app.show_search && app.compose.is_empty() =>
+                    if app.open.is_none()
+                        && !app.show_sticker
+                        && !app.show_search
+                        && app.compose.is_empty() =>
                 {
                     app.quit = true
                 }
@@ -1128,6 +1131,20 @@ async fn on_enter(
 
 async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
     use grammers_client::update::Update;
+
+    /// il nome del dialogo (come in sidebar) quando il mittente non è
+    /// risolvibile dal raw update (mappa peers mancante in grammers).
+    fn dialog_or(app: &App, pid: PeerId, fallback: String) -> String {
+        if !fallback.is_empty() {
+            return fallback;
+        }
+        app.contacts
+            .iter()
+            .find(|d| tg::same_peer(d.peer_id, pid))
+            .map(|d| d.name.clone())
+            .unwrap_or(fallback)
+    }
+
     match update {
         Update::NewMessage(m) => {
             let peer_id = m.peer_id();
@@ -1135,7 +1152,7 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
             let row = tg::HistoryRow {
                 id: m.id(),
                 outgoing,
-                from: tg::sender_name(&m),
+                from: dialog_or(app, peer_id, tg::sender_name(&m)),
                 kind: tg::row_kind(m.media(), m.text().to_string()),
             };
             let open_id = app.current_chat().map(|c| c.peer_id);
@@ -1155,7 +1172,7 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
             let row = tg::HistoryRow {
                 id: m.id(),
                 outgoing: m.outgoing(),
-                from: tg::sender_name(&m),
+                from: dialog_or(app, peer_id, tg::sender_name(&m)),
                 kind: tg::row_kind(m.media(), m.text().to_string()),
             };
             app.replace_row(peer_id, row);

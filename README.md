@@ -50,7 +50,7 @@ Dopodiché la sessione vive in `~/.local/share/rtete/rtete.db`.
 | `Tab` | apre/chiude il pannello sticker |
 | `Invio` (nel pannello) | apre il set / invia lo sticker sulla chat aperta |
 | `Esc` | a strati: chiude ricerca/pannello/modifica/cancellazione/selezione; poi **chiude la chat** e torna ai contatti |
-| `q` | esci (fuori dal pannello e senza testo in composizione) |
+| `q` | esci dalla lista contatti (prima `Esc` chiude la chat) |
 | `Ctrl-C` | esci subito |
 
 > Nota: quando una chat è aperta tutte le lettere (inclusi `j`, `k`, `h`,
