@@ -547,8 +547,10 @@ async fn handle_event(
                     }
                 }
                 KeyCode::Char(c) if app.react_open && c.is_ascii_digit() => {
-                    let n = c as usize - '1' as usize + 1;
-                    if n >= 1 && n <= tg::QUICK_REACTIONS.len() {
+                    // to_digit, non `c - '1'` su usize: con '0' la
+                    // sottrazione underflowerava e passava la guardia
+                    let n = c.to_digit(10).unwrap_or(0) as usize;
+                    if (1..=tg::QUICK_REACTIONS.len()).contains(&n) {
                         app.react_idx = n - 1;
                         app.status = format!("reazioni: {} (Invio per applicare)", tg::QUICK_REACTIONS[n - 1]);
                     }

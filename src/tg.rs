@@ -144,7 +144,12 @@ pub fn fmt_size(mut bytes: f64) -> String {
     if unit == 0 {
         format!("{bytes} B")
     } else {
-        format!("{bytes:.1} {}", UNITS[unit])
+        // "1,2 MB" col separatore decimale italiano: format! non arriva
+        // (sempre punto), quindi arrotondo alla prima decimale a mano
+        let round10 = (bytes * 10.0).round();
+        let whole = (round10 / 10.0).trunc() as u64;
+        let frac = round10 as i64 % 10;
+        format!("{whole},{frac} {}", UNITS[unit])
     }
 }
 
@@ -383,8 +388,11 @@ pub async fn connect(
 }
 
 /// Normalizza un numero di telefono all'unico formato che Telegram accetta:
-/// solo cifre con `+` davanti. Accetta spazi/trattini/parentesi, `00…` al
-/// posto di `+`, o il numero nudo da mobile italiano (prepend `+39`).
+/// solo cifre con `+` davanti. Accetta spazi/trattini/parentesi e `00…` al
+/// posto di `+`. Il numero nudo si legge come mobile italiano (3XXXXXXXXX)
+/// solo se ha quella forma: prima QUALSIASI numero nudo diventava +39… e
+/// un numero di un altro paese (es. "491512345678" tedesco) finiva
+/// sbagliato. Per gli altri paesi serve il prefisso internazionale.
 fn normalize_phone(raw: &str) -> String {
     let t = raw.trim();
     let has_plus = t.starts_with('+');
@@ -392,10 +400,12 @@ fn normalize_phone(raw: &str) -> String {
     if !has_plus && digits.starts_with("00") {
         digits = digits[2..].to_string();
     }
-    if has_plus || (digits.starts_with("39") && digits.len() >= 11) {
+    if has_plus {
         format!("+{digits}")
-    } else {
+    } else if digits.starts_with('3') && digits.len() == 10 {
         format!("+39{digits}")
+    } else {
+        format!("+{digits}")
     }
 }
 
@@ -855,4 +865,103 @@ pub fn sticker_emoji(media: &Media) -> String {
 /// Confronto peer (PeerId value equality).
 pub fn same_peer(a: PeerId, b: PeerId) -> bool {
     a == b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------- normalize_phone ----------
+    #[test]
+    fn phone_with_plus() {
+        assert_eq!(normalize_phone("+39 339 123 4567"), "+393391234567");
+        assert_eq!(normalize_phone("+1 202 555 0100"), "+12025550100");
+        assert_eq!(normalize_phone("+44 7700 900123"), "+447700900123");
+    }
+
+    #[test]
+    fn phone_00_prefix() {
+        assert_eq!(normalize_phone("0039 339 123 4567"), "+393391234567");
+        assert_eq!(normalize_phone("0044 7700 900123"), "+447700900123");
+    }
+
+    #[test]
+    fn phone_bare_italian_mobile() {
+        assert_eq!(normalize_phone("339 123 4567"), "+393391234567");
+        // col prefisso nazionale senza +: forma non nuda, ma le cifre
+        // sono già le giuste → +39…
+        assert_eq!(normalize_phone("39 339 123 4567"), "+393391234567");
+    }
+
+    #[test]
+    fn phone_bare_foreign() {
+        // tedesco: prima diventava +3949… (sbagliato)
+        assert_eq!(normalize_phone("49 151 234 5678"), "+491512345678");
+        // statunitense
+        assert_eq!(normalize_phone("1 202 555 0100"), "+12025550100");
+        // mobile italiano con prefisso completo senza +: le cifre sono
+        // già internazionale-complete → +39…
+        assert_eq!(normalize_phone("393391234567"), "+393391234567");
+    }
+
+    #[test]
+    fn phone_garbage_chars_skipped() {
+        assert_eq!(normalize_phone(" (339) 123-4567 "), "+393391234567");
+    }
+
+    // ---------- fmt_size / fmt_secs ----------
+    #[test]
+    fn size_unit() {
+        assert_eq!(fmt_size(342.0), "342 B");
+        assert_eq!(fmt_size(1024.0), "1,0 kB");
+        assert_eq!(fmt_size(1024.0 * 1024.0 * 1.2), "1,2 MB");
+        assert_eq!(fmt_size(1024.0 * 1024.0 * 1024.0 * 15.75), "15,8 GB");
+        assert_eq!(fmt_size(0.0), "0 B");
+    }
+
+    #[test]
+    fn secs_clock() {
+        assert_eq!(fmt_secs(0), "0:00");
+        assert_eq!(fmt_secs(91), "1:31");
+        assert_eq!(fmt_secs(3800), "1:03:20");
+    }
+
+    // ---------- caption ----------
+    #[test]
+    fn caption_collapses_and_cuts() {
+        assert_eq!(caption("  a   b\t c "), "a b c");
+        let long = "x".repeat(200);
+        let cut = caption(&long);
+        assert!(cut.ends_with('…'));
+        assert!(cut.chars().count() < 200);
+    }
+
+    // ---------- sanitize_file_name ----------
+    #[test]
+    fn sanitize_bins_paths_and_dots() {
+        assert_eq!(sanitize_file_name("a/b.pdf"), Some("a_b.pdf".into()));
+        assert_eq!(sanitize_file_name("a\\b.txt"), Some("a_b.txt".into()));
+        assert_eq!(sanitize_file_name("..bad"), Some("_bad".into()));
+    }
+
+    #[test]
+    fn sanitize_rejects_empty_or_dot() {
+        assert!(sanitize_file_name("").is_none());
+        assert!(sanitize_file_name("   ").is_none());
+        assert!(sanitize_file_name(".").is_none());
+    }
+
+    // ---------- unique_save_path ----------
+    #[test]
+    fn unique_avoids_collisions() {
+        let dir = std::env::temp_dir().join(format!("rtete-uniq-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("report.pdf"), b"x").unwrap();
+        assert_eq!(
+            unique_save_path(&dir, "report.pdf"),
+            dir.join("report (1).pdf")
+        );
+        assert_eq!(unique_save_path(&dir, "altro.txt"), dir.join("altro.txt"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }
