@@ -60,6 +60,8 @@ pub struct HistoryLine {
     /// id del messaggio di origine (0 = riga di servizio/continuazione
     /// priva di selezione).
     pub id: i32,
+    /// link cliccabili sulla riga: (colonna inizio, colonna fine, url).
+    pub links: Vec<(u16, u16, String)>,
 }
 
 impl HistoryLine {
@@ -73,6 +75,7 @@ impl HistoryLine {
             rows: 1,
             frac: 0,
             id: 0,
+            links: Vec::new(),
         }
     }
 }
@@ -149,6 +152,145 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
         out.push(cur);
     }
     out
+}
+
+/// un link cliccabile su una riga: (colonna inizio, colonna fine esclusiva, url).
+pub type LinkSpan = (u16, u16, String);
+
+/// Trova gli URL in un testo: (inizio, fine esclusiva, url) come indici char.
+pub fn find_urls(text: &str) -> Vec<(usize, usize, String)> {
+    const HTTP: [char; 7] = ['h', 't', 't', 'p', ':', '/', '/'];
+    const HTTPS: [char; 8] = ['h', 't', 't', 'p', 's', ':', '/', '/'];
+    let ch: Vec<char> = text.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < ch.len() {
+        let scheme = if ch[i..].starts_with(&HTTPS) {
+            8
+        } else if ch[i..].starts_with(&HTTP) {
+            7
+        } else {
+            i += 1;
+            continue;
+        };
+        let mut j = i + scheme;
+        while j < ch.len() && !ch[j].is_whitespace() {
+            j += 1;
+        }
+        while j > i + scheme
+            && matches!(
+                ch[j - 1],
+                '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}' | '"'
+            )
+        {
+            j -= 1;
+        }
+        if j > i + scheme + 1 {
+            out.push((i, j, ch[i..j].iter().collect()));
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Link su una riga già composta (senza wrap): (col inizio, col fine, url).
+pub fn scan_links(line: &str) -> Vec<(u16, u16, String)> {
+    find_urls(line)
+        .into_iter()
+        .map(|(s, e, url)| (s as u16, e as u16, url))
+        .collect()
+}
+
+/// Come `wrap`, ma per ogni riga ritorna anche gli intervalli di colonna dei
+/// link. Un URL spezzato su più righe compare su ciascuna con l'URL completo.
+pub fn wrap_links(text: &str, width: usize) -> (Vec<String>, Vec<Vec<LinkSpan>>) {
+    let urls = find_urls(text);
+    let lines = wrap(text, width);
+    if urls.is_empty() {
+        return (lines, Vec::new());
+    }
+    // rigenera il wrap tracciando la posizione (riga, colonna) di ogni char
+    // emesso, poi proietta gli intervalli dei link su quelle colonne.
+    let ch: Vec<char> = text.chars().collect();
+    let mut at: Vec<Option<(usize, u16)>> = vec![None; ch.len()];
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut line_no = 0usize;
+    let mut ai = 0usize; // indice char assoluto nel testo originale
+    for para in text.split('\n') {
+        let pchars: Vec<char> = para.chars().collect();
+        let mut w = 0usize;
+        while w < pchars.len() {
+            if pchars[w].is_whitespace() {
+                ai += 1;
+                w += 1;
+                continue;
+            }
+            let wstart = w;
+            while w < pchars.len() && !pchars[w].is_whitespace() {
+                w += 1;
+            }
+            let wlen = w - wstart;
+            // parola sola più larga della riga: spezza char per char (come wrap)
+            if wlen > width {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                    line_no += 1;
+                }
+                for k in 0..wlen {
+                    if cur.chars().count() == width {
+                        out.push(std::mem::take(&mut cur));
+                        line_no += 1;
+                    }
+                    at[ai] = Some((line_no, cur.chars().count() as u16));
+                    cur.push(pchars[wstart + k]);
+                    ai += 1;
+                }
+                continue;
+            }
+            if cur.chars().count() + wlen + 1 > width && !cur.is_empty() {
+                out.push(std::mem::take(&mut cur));
+                line_no += 1;
+            }
+            if !cur.is_empty() {
+                cur.push(' ');
+            }
+            for k in 0..wlen {
+                at[ai] = Some((line_no, cur.chars().count() as u16));
+                cur.push(pchars[wstart + k]);
+                ai += 1;
+            }
+        }
+        out.push(std::mem::take(&mut cur));
+        line_no += 1;
+        if ai < ch.len() {
+            ai += 1; // il '\n' tra i paragrafi
+        }
+    }
+    // proietta ogni URL sulle righe che tocca
+    let mut spans: Vec<Vec<LinkSpan>> = vec![Vec::new(); out.len()];
+    for (s, e, url) in &urls {
+        let mut per_line: Vec<(usize, u16, u16)> = Vec::new();
+        for pos in &at[*s..*e] {
+            if let Some((ln, col)) = *pos {
+                match per_line.iter_mut().find(|(l, _, _)| *l == ln) {
+                    Some((_, c0, c1)) => {
+                        *c0 = (*c0).min(col);
+                        *c1 = (*c1).max(col + 1);
+                    }
+                    None => per_line.push((ln, col, col + 1)),
+                }
+            }
+        }
+        for (ln, c0, c1) in per_line {
+            if let Some(sl) = spans.get_mut(ln) {
+                sl.push((c0, c1, url.clone()));
+            }
+        }
+    }
+    (out, spans)
 }
 
 pub fn draw(f: &mut Frame, app: &mut crate::App, cmds: &mut Vec<crate::Cmd>) {
@@ -318,6 +460,7 @@ fn draw_sidebar(f: &mut Frame, app: &crate::App, area: Rect) {
 fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<crate::Cmd>) {
     let Some(chat) = app.current_chat() else {
         app.mouse_map.clear();
+        app.link_map.clear();
         let hints = hints_line(&[("apri", "Invio"), ("sticker", "Tab"), ("esci", "q")]);
         let block = pane("RTete", true).title_bottom(hints);
         let inner = block.inner(area);
@@ -436,6 +579,7 @@ fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<
 
     // mappa delle righe a schermo per il click del mouse → selezione
     app.mouse_map.clear();
+    app.link_map.clear();
 
     let mut y = msgs.y;
     let y_end = msgs.y + avail as u16;
@@ -523,6 +667,10 @@ fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<
                 },
             );
             app.mouse_map.push((y, line.id));
+            // i link della riga diventano cliccabili alle loro colonne
+            for (c0, c1, url) in &line.links {
+                app.link_map.push((y, msgs.x + c0, msgs.x + c1, url.clone()));
+            }
             y += 1;
         }
     }
@@ -983,6 +1131,28 @@ mod tests {
     fn msg_label_fits() {
         assert_eq!(msg_label("Pippo").chars().count(), LABEL_W + 3);
         assert_eq!(msg_label("NomeLunghissimo"), "NomeLung │ ");
+    }
+
+    /// Gli URL si catturano fino allo spazio, senza punteggiatura finale.
+    #[test]
+    fn find_urls_stops_at_space_and_punctuation() {
+        let u = find_urls("guarda https://esempio.it/a?b=1. e (http://x.it)");
+        assert_eq!(u.len(), 2);
+        assert_eq!(u[0].2, "https://esempio.it/a?b=1");
+        assert_eq!(u[1].2, "http://x.it");
+    }
+
+    /// Un URL spezzato su più righe resta cliccabile su ogni frammento,
+    /// sempre con l'URL completo.
+    #[test]
+    fn wrap_links_keeps_full_url_on_fragments() {
+        let (lines, spans) = wrap_links("https://lungo.example/aaaaaaaaaaaaaaaaaaaaaaaa", 10);
+        assert!(lines.len() > 1);
+        assert_eq!(spans.len(), lines.len());
+        for s in &spans {
+            assert_eq!(s.len(), 1);
+            assert_eq!(s[0].2, "https://lungo.example/aaaaaaaaaaaaaaaaaaaaaaaa");
+        }
     }
 
     /// Le parole senza spazi più larghe della riga vanno spezzate.

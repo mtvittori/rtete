@@ -91,6 +91,8 @@ pub struct App {
     pub search_results: Option<Vec<tg::SearchHit>>,
     /// righe (y schermo, id messaggio) dell'ultimo frame: click → selezione.
     pub mouse_map: Vec<(u16, i32)>,
+    /// link a schermo: (riga, x inizio, x fine, url) per il click → browser.
+    pub link_map: Vec<(u16, u16, u16, String)>,
     /// foto dagli appunti pronta da inviare (percorso del file in tmp).
     pub pending_photo: Option<String>,
     /// pannello reazioni veloci aperto sul messaggio selezionato.
@@ -708,6 +710,25 @@ fn click_select(app: &mut App, m: crossterm::event::MouseEvent) {
     let term_w = crossterm::terminal::size().map(|(w, _)| w).unwrap_or(80);
     if m.column < view::side_w(term_w) {
         return; // colonna contatti: lì non seleziono messaggi
+    }
+    // click su un link? apri il browser di default (xdg-open) e basta
+    if let Some((_, _, _, url)) = app
+        .link_map
+        .iter()
+        .find(|(y, x0, x1, _)| *y == m.row && m.column >= *x0 && m.column < *x1)
+    {
+        let url = url.clone();
+        app.status = format!("apro {url}…");
+        std::thread::spawn(move || {
+            use std::process::{Command, Stdio};
+            let _ = Command::new("xdg-open")
+                .arg(&url)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn();
+        });
+        return;
     }
     let hit = app
         .mouse_map
@@ -1423,6 +1444,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         search_cursor: 0,
         search_results: None,
         mouse_map: Vec::new(),
+        link_map: Vec::new(),
         pending_photo: None,
         react_open: false,
         react_idx: 0,
@@ -1930,10 +1952,21 @@ impl App {
             };
             match &row.kind {
                 tg::RowKind::Text(text) => {
-                    let pieces = view::wrap(text, width.saturating_sub(view::LABEL_W + 3));
+                    let (pieces, mut span_lines) =
+                        view::wrap_links(text, width.saturating_sub(view::LABEL_W + 3));
                     if pieces.is_empty() {
                         continue;
                     }
+                    // le colonne dei link slittano della larghezza dell'etichetta
+                    let shift = (view::LABEL_W + 3) as u16;
+                    let first_spans = span_lines
+                        .first_mut()
+                        .map(|v| {
+                            v.iter()
+                                .map(|(a, b, u)| (a + shift, b + shift, u.clone()))
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
                     lines.push(view::HistoryLine {
                         text: format!("{label}{}", pieces[0]),
                         color: name_style,
@@ -1943,8 +1976,17 @@ impl App {
                         rows: 1,
                         frac: 0,
                         id: row.id,
+                        links: first_spans,
                     });
-                    for piece in &pieces[1..] {
+                    for (i, piece) in pieces[1..].iter().enumerate() {
+                        let links = span_lines
+                            .get(i + 1)
+                            .map(|v| {
+                                v.iter()
+                                    .map(|(a, b, u)| (a + shift, b + shift, u.clone()))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
                         lines.push(view::HistoryLine {
                             text: format!("{} │ {}", " ".repeat(view::LABEL_W), piece),
                             color: name_style,
@@ -1952,6 +1994,7 @@ impl App {
                         });
                         if let Some(last) = lines.last_mut() {
                             last.id = row.id;
+                            last.links = links;
                         }
                     }
                 }
@@ -1984,6 +2027,7 @@ impl App {
                         },
                         frac: 50,
                         id: row.id,
+                        links: Vec::new(),
                     });
                 }
                 tg::RowKind::Photo {
@@ -1996,12 +2040,13 @@ impl App {
                     } else {
                         format!(" — “{caption}”")
                     };
+                    let line_text = format!(
+                        "{label}{}{}",
+                        if *gif { "🎞 gif" } else { "📷 foto" },
+                        cap_txt
+                    );
                     lines.push(view::HistoryLine {
-                        text: format!(
-                            "{label}{}{}",
-                            if *gif { "🎞 gif" } else { "📷 foto" },
-                            cap_txt
-                        ),
+                        text: line_text.clone(),
                         color: name_style,
                         sticker: true,
                         animated: *gif,
@@ -2009,6 +2054,7 @@ impl App {
                         rows: view::band_rows(true) + 1,
                         frac: 66,
                         id: row.id,
+                        links: view::scan_links(&line_text),
                     });
                 }
                 tg::RowKind::Doc {
@@ -2032,6 +2078,7 @@ impl App {
                     });
                     if let Some(last) = lines.last_mut() {
                         last.id = row.id;
+                        last.links = view::scan_links(&last.text);
                     }
                 }
                 tg::RowKind::Audio {
@@ -2056,6 +2103,9 @@ impl App {
                         color: styles::ACCENT_DIM,
                         ..view::HistoryLine::sep()
                     });
+                    if let Some(last) = lines.last_mut() {
+                        last.links = view::scan_links(&last.text);
+                    }
                 }
                 tg::RowKind::Note(text) => {
                     lines.push(view::HistoryLine {
@@ -2065,6 +2115,7 @@ impl App {
                     });
                     if let Some(last) = lines.last_mut() {
                         last.id = row.id;
+                        last.links = view::scan_links(&last.text);
                     }
                 }
                 tg::RowKind::Service(text) => {
@@ -2075,6 +2126,7 @@ impl App {
                     });
                     if let Some(last) = lines.last_mut() {
                         last.id = row.id;
+                        last.links = view::scan_links(&last.text);
                     }
                 }
             }
