@@ -564,6 +564,28 @@ pub async fn send_sticker(
         .await
 }
 
+/// Invia un file locale (PNG/JPEG) come foto del messaggio: upload piano,
+/// poi l'invio vero e proprio; il testo è la didascalia.
+pub async fn send_photo(
+    client: &Client,
+    peer_ref: ChatRef,
+    path: &std::path::Path,
+    caption: &str,
+) -> Result<grammers_client::message::Message, String> {
+    let uploaded = client
+        .upload_file(path)
+        .await
+        .map_err(|e| format!("upload: {e}"))?;
+    let mut msg = InputMessage::new().photo(uploaded);
+    if !caption.trim().is_empty() {
+        msg = msg.text(caption);
+    }
+    client
+        .send_message(peer_ref, msg)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Modifica in place un testo già inviato (restituito id invariato).
 pub async fn edit_text(
     client: &Client,

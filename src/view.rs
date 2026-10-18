@@ -340,11 +340,17 @@ fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<
     let msgs = block.inner(body[0]);
     f.render_widget(block, body[0]);
 
-    // riquadro di composizione: ambra in modifica, giallo se cancella
+    // riquadro di composizione: ambra in modifica, giallo se cancella,
+    // l'immagine quando c'è una foto dagli appunti da inviare
     let (c_border, c_title): (Color, Option<String>) = if app.del_arm {
         (
             WARNING,
             Some(" \u{2620} Invio = CANCELLA \u{b7} Esc annulla ".into()),
+        )
+    } else if app.pending_photo.is_some() {
+        (
+            ACCENT,
+            Some(" \u{1f5bc} foto dagli appunti · Invio invia · testo = didascalia · Esc scarta ".into()),
         )
     } else if let Some(id) = app.editing {
         (

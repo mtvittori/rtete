@@ -90,6 +90,8 @@ pub struct App {
     pub search_results: Option<Vec<tg::SearchHit>>,
     /// righe (y schermo, id messaggio) dell'ultimo frame: click → selezione.
     pub mouse_map: Vec<(u16, i32)>,
+    /// foto dagli appunti pronta da inviare (percorso del file in tmp).
+    pub pending_photo: Option<String>,
     pub quit: bool,
 }
 
@@ -177,6 +179,8 @@ enum SendDone {
 enum SendKind {
     Text(String),
     Sticker(Media),
+    /// foto dalla clipboard (file già salvato in tmp) con eventuale caption.
+    Photo { path: String, caption: String },
     /// modifica di un testo già inviato (id invariato).
     EditText {
         id: i32,
@@ -302,6 +306,12 @@ async fn handle_event(
                             app.show_sticker = false;
                             app.open_set = None;
                         }
+                    } else if app.pending_photo.is_some() {
+                        app.status = "appunti: foto scartata".into();
+                        if let Some(p) = app.pending_photo.take() {
+                            let _ = std::fs::remove_file(p);
+                        }
+                        app.compose.clear();
                     } else if app.editing.is_some() {
                         app.status = "modifica annullata".into();
                         app.editing = None;
@@ -331,6 +341,10 @@ async fn handle_event(
                 KeyCode::Tab if !app.show_search && !app.del_arm => {
                     app.editing = None;
                     app.del_arm = false;
+                    app.del_id = None;
+                    if let Some(p) = app.pending_photo.take() {
+                        let _ = std::fs::remove_file(p);
+                    }
                     app.show_sticker = !app.show_sticker;
                     app.set_level = false;
                     if app.show_sticker {
@@ -428,6 +442,10 @@ fn ctrl_edit(app: &mut App) {
     app.status.clear();
     if app.show_search || app.show_sticker {
         return;
+    }
+    // l'edit riprende il compose: scarta un'eventuale foto pendente
+    if let Some(p) = app.pending_photo.take() {
+        let _ = std::fs::remove_file(p);
     }
     let Some(chat) = app.current_chat() else {
         app.status = "apri prima una chat".into();
@@ -692,9 +710,11 @@ fn ctrl_copy(app: &mut App) {
     });
 }
 
-/// cmd+V: incolla dagli appunti (via wl-paste, esterno e momentaneo).
-/// Nel compose il testo multi-riga resta intatto; nella ricerca gli
-/// accapo diventano spazi e il cap limita i caratteri.
+/// cmd+V: incolla dagli appunti. Se il clipboard contiene un'immagine
+/// (image/png o image/jpeg) la salva in tmp e la prepara come foto da
+/// inviare; altrimenti fa il paste di testo (via wl-paste, esterno e
+/// momentaneo). Nel compose il testo multi-riga resta intatto; nella
+/// ricerca gli accapo diventano spazi e il cap limita i caratteri.
 fn ctrl_paste(app: &mut App) {
     if app.show_search {
         app.del_arm = false;
@@ -706,7 +726,18 @@ fn ctrl_paste(app: &mut App) {
         }
         let clean = paste_text(&text, false, 200);
         app.search_q.push_str(&clean);
-    } else if app.open.is_some() {
+    } else if app.open.is_some() && app.editing.is_none() {
+        // immagine negli appunti? diventa la foto da inviare
+        if let Some((path, kb)) = clipboard_image() {
+            if let Some(old) = app.pending_photo.take() {
+                let _ = std::fs::remove_file(old);
+            }
+            app.pending_photo = Some(path.display().to_string());
+            app.del_arm = false;
+            app.del_id = None;
+            app.status = format!("foto ({kb} KB) pronta — Invio invia, il testo del compose è la didascalia");
+            return;
+        }
         app.del_arm = false;
         app.del_id = None;
         let text = clipboard_text();
@@ -718,6 +749,46 @@ fn ctrl_paste(app: &mut App) {
         let clean = paste_text(&text, true, cap.min(4000));
         app.compose.push_str(&clean);
     }
+}
+
+/// Cerca un'immagine image/png|jpeg negli appunti: la butta su file in
+/// ~/.local/share/rtete/tmp/ e ritorna (percorso, KB). WL-clipboard.
+fn clipboard_image() -> Option<(std::path::PathBuf, usize)> {
+    let probe_wl = |mut cmd: std::process::Command| -> Option<Vec<u8>> {
+        cmd.stdin(std::process::Stdio::null());
+        cmd.stdout(std::process::Stdio::piped());
+        let res = cmd.output().ok()?;
+        Some(res.stdout)
+    };
+    let probe = |extra: &[&str]| -> Option<Vec<u8>> {
+        let mut cmd = std::process::Command::new("wl-paste");
+        for a in extra {
+            cmd.arg(a);
+        }
+        probe_wl(cmd)
+    };
+    let raw = probe(&["--list-types"])?;
+    let types = String::from_utf8_lossy(&raw);
+    let mime = ["image/png", "image/jpeg"].iter().copied().find(|m| {
+        types
+            .lines()
+            .any(|t| t.trim().eq_ignore_ascii_case(m))
+    })?;
+    let bytes = probe(&["--type", mime])?;
+    if bytes.is_empty() {
+        return None;
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let dir = std::path::PathBuf::from(home).join(".local/share/rtete/tmp");
+    std::fs::create_dir_all(&dir).ok()?;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let ext = if mime == "image/jpeg" { "jpg" } else { "png" };
+    let path = dir.join(format!("appunti-{ts}.{ext}"));
+    std::fs::write(&path, &bytes).ok()?;
+    Some((path, bytes.len() / 1024))
 }
 
 /// testo degli appunti via wl-paste (legge i byte UTF-8; se non c'è, vuoto).
@@ -950,6 +1021,7 @@ async fn on_enter(
             app.del_arm = false;
             app.del_id = None;
             app.msg_cursor = None;
+            app.pending_photo = None;
             app.show_search = false;
             app.search_results = None;
             app.search_q.clear();
@@ -989,6 +1061,29 @@ async fn on_enter(
             }
             let _ = search_tx.send((chat.peer_ref, app.search_q.clone()));
             app.status = format!("cerco «{}»…", app.search_q);
+        }
+        return;
+    }
+
+    // foto dagli appunti in attesa? Invio la invia (testo = didascalia)
+    if let Some(path) = app.pending_photo.take() {
+        let caption_text = app.compose.clone();
+        app.compose.clear();
+        app.editing = None;
+        if let Some(chat) = app.current_chat() {
+            let (peer_ref, pid) = (chat.peer_ref, chat.peer_id);
+            let _ = send_tx.send(SendJob {
+                peer: peer_ref,
+                peer_id: pid,
+                kind: SendKind::Photo {
+                    path,
+                    caption: caption_text,
+                },
+            });
+            app.status = "invio la foto…".into();
+        } else {
+            app.pending_photo = Some(path);
+            app.status = "apri prima una chat".into();
         }
         return;
     }
@@ -1179,6 +1274,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         search_cursor: 0,
         search_results: None,
         mouse_map: Vec::new(),
+        pending_photo: None,
         quit: false,
     };
 
@@ -1283,6 +1379,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match tg::send_sticker(&cl, job.peer, &media).await {
                             Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
                             Err(e) => Err(e.to_string()),
+                        }
+                    }
+                    SendKind::Photo { path, caption } => {
+                        match tg::send_photo(&cl, job.peer, std::path::Path::new(&path), &caption)
+                            .await
+                        {
+                            Ok(m) => {
+                                // upload conclude il compito: il file temporaneo non serve più
+                                let _ = std::fs::remove_file(&path);
+                                row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row))
+                            }
+                            Err(e) => Err(e),
                         }
                     }
                     SendKind::EditText { id, text } => {

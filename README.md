@@ -82,13 +82,17 @@ messaggio selezionato invece che sull'ultimo.
 | `Ctrl-P` | riproduce audio selezionato/ultimo: `🎙 vocali` e brani tra i documenti; mpv/ffplay (`RTETE_PLAYER` sovrascrive) |
 | `Ctrl-Y` | copia negli appunti il messaggio selezionato (senza selezione: l'ultimo con testo) via `wl-copy` |
 | `Ctrl+C` / `Cmd+C` | copia il messaggio selezionato; **senza selezione esce** (`q` per uscire sempre) |
-| `Ctrl+V` / `Cmd+V` | incolla dagli appunti via `wl-paste` (multi-riga nel compose, spazi in ricerca) |
+| `Ctrl+V` / `Cmd+V` | incolla dagli appunti via `wl-paste`: se c'è un'**immagine** (png/jpeg) la prepara in tmp → Invio la invia come foto alla chat aperta (il testo del compose è la didascalia); testo altrimenti (multi-riga nel compose, spazi in ricerca) |
 | `Ctrl-F` | ricerca server-side nella chat aperta: la query si scrive nel riquadro in fondo (multifila, `Invio` cerca) |
 | `click` su un messaggio | lo seleziona (come ↑/↓); sulla colonna contatti non fa nulla |
 
 **Incollare**: il terminale avvolge il paste (`bracketed paste`): il testo con
 accapo incollato nel compose resta un solo messaggio multi-riga (niente invii
 a raffica); incollato nel riquadro di ricerca, gli accapo diventano spazi.
+Con un'**immagine** negli appunti (`cmd+C` da browser/GIMP/screenshot),
+`cmd+V` prepara l'invio come foto: il riquadro di composizione diventa ambra
+con `🖼 foto dagli appunti`, `Invio` carica il file, lo carica su Telegram
+(`upload_file` + foto, didascalia = testo composto) e lo manda; `Esc` scarta.
 
 **Copiare col terminale**: con la rotella/trackpad catturata dallo scorrimento,
 kitty permette comunque di selezionare testo **tenendo premuto Shift** +
