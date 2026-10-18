@@ -43,6 +43,7 @@ Dopodiché la sessione vive in `~/.local/share/rtete/rtete.db`.
 | Tasto | Azione |
 | --- | --- |
 | `↑`/`↓` (o `j`/`k` senza chat aperta) | contatti; **dentro una chat**: seleziona i messaggi (nuovo: `↓` oltre l'ultimo esce dalla selezione) |
+| `↑` sulla riga più vecchia | carica altri 60 messaggi precedenti (fino a 500 in memoria per chat); `Esc`/`↓` come prima. La riga di stato mostra ora, risposta (`↩#id`), inoltro (`⤳`) e «modificato» del messaggio selezionato |
 | `ruota`/`trackpad` | scorre: sui contatti in sinistra, sui messaggi a destra (selezione) |
 | `→`/`←` (o `l`/`h` nel pannello) | entra/esce nel set, sinistra/destra nella griglia |
 | `Invio` | apre la chat selezionata (la prima volta carica la cronologia) |
@@ -86,6 +87,7 @@ messaggio selezionato invece che sull'ultimo.
 | `Ctrl+V` / `Cmd+V` | incolla dagli appunti via `wl-paste`: se c'è un'**immagine** (png/jpeg) la prepara in tmp → Invio la invia come foto alla chat aperta (il testo del compose è la didascalia); testo altrimenti (multi-riga nel compose, spazi in ricerca) |
 | `Ctrl-F` | ricerca server-side nella chat aperta: la query si scrive nel riquadro in fondo (multifila, `Invio` cerca) |
 | `click` su un messaggio | lo seleziona (come ↑/↓); sulla colonna contatti non fa nulla |
+| `click` su un link | apre il browser di default (`xdg-open`); l'URL funziona anche se spezzato su più righe |
 
 **Incollare**: il terminale avvolge il paste (`bracketed paste`): il testo con
 accapo incollato nel compose resta un solo messaggio multi-riga (niente invii

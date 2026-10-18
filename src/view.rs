@@ -92,14 +92,58 @@ pub fn side_w(width: u16) -> u16 {
     }
 }
 
-/// Larghezza della colonna autore nelle righe di storia.
-pub const LABEL_W: usize = 8;
+/// Larghezza del nome autore nelle righe di storia.
+pub const NAME_W: usize = 8;
 
-/// Colonna autore: nome troncato su 8 caratteri + separatore, es.
-/// "Pippo    │ " — le righe successive ripetono la colonna vuota.
-pub fn msg_label(name: &str) -> String {
-    let trunc: String = name.chars().take(LABEL_W).collect();
-    format!("{trunc:<LABEL_W$} │ ")
+/// Larghezza della colonna prima del separatore: "HH:MM " + nome.
+pub const LABEL_W: usize = NAME_W + 6;
+
+/// "HH:MM" nel fuso locale; `date` 0 (riga locale senza orario) → vuoto.
+pub fn fmt_hhmm(date: i64, tz: &jiff::tz::TimeZone) -> String {
+    if date == 0 {
+        return "     ".into();
+    }
+    jiff::Timestamp::from_second(date)
+        .map(|t| t.to_zoned(tz.clone()).strftime("%H:%M").to_string())
+        .unwrap_or_else(|_| "     ".into())
+}
+
+/// Colonna autore: orario, nome troncato su 8 caratteri + separatore, es.
+/// "14:32 Pippo    │ " — le righe successive ripetono la colonna vuota.
+pub fn msg_label(time: &str, name: &str) -> String {
+    let trunc: String = name.chars().take(NAME_W).collect();
+    format!("{time} {trunc:<NAME_W$} │ ")
+}
+
+/// Marcatori in testa al testo: risposta e inoltro.
+fn row_lead(row: &tg::HistoryRow) -> String {
+    let mut out = String::new();
+    if let Some(r) = row.reply_to {
+        out.push_str(&format!("↩#{r} "));
+    }
+    if let Some(f) = &row.fwd {
+        out.push_str(&format!("⤳ {f}: "));
+    }
+    out
+}
+
+/// Riga informativa mostrata alla selezione di un messaggio.
+pub fn row_meta(row: &tg::HistoryRow, tz: &jiff::tz::TimeZone) -> String {
+    let mut parts = vec![format!("#{}", row.id)];
+    if row.date != 0 {
+        parts.push(fmt_hhmm(row.date, tz));
+    }
+    if let Some(r) = row.reply_to {
+        parts.push(format!("risposta a #{r}"));
+    }
+    if let Some(f) = &row.fwd {
+        parts.push(format!("inoltrato da {f}"));
+    }
+    if row.edited {
+        parts.push("modificato".into());
+    }
+    parts.push("Esc per uscire".into());
+    parts.join(" — ")
 }
 
 /// La barra delle reazioni veloci: l'emoji scelta tra parentesi quadre.
@@ -1114,6 +1158,7 @@ impl crate::App {
             return Vec::new();
         };
         let mut lines = Vec::new();
+        let tz = jiff::tz::TimeZone::system();
         for row in rows {
             // etichetta: nome proprio per i messaggi in uscita, mittente per gli altri
             let name = if row.outgoing {
@@ -1127,7 +1172,7 @@ impl crate::App {
             } else {
                 row.from.as_str()
             };
-            let label = msg_label(name);
+            let label = msg_label(&fmt_hhmm(row.date, &tz), name);
             let name_style = if row.outgoing {
                 OUTGOING
             } else {
@@ -1135,6 +1180,11 @@ impl crate::App {
             };
             match &row.kind {
                 tg::RowKind::Text(text) => {
+                    let text = &format!(
+                        "{}{text}{}",
+                        row_lead(row),
+                        if row.edited { " (modificato)" } else { "" }
+                    );
                     let (pieces, mut span_lines) =
                         wrap_links(text, width.saturating_sub(LABEL_W + 3));
                     if pieces.is_empty() {
@@ -1365,8 +1415,8 @@ mod tests {
 
     #[test]
     fn msg_label_fits() {
-        assert_eq!(msg_label("Pippo").chars().count(), LABEL_W + 3);
-        assert_eq!(msg_label("NomeLunghissimo"), "NomeLung │ ");
+        assert_eq!(msg_label("14:32", "Pippo").chars().count(), LABEL_W + 3);
+        assert_eq!(msg_label("14:32", "NomeLunghissimo"), "14:32 NomeLung │ ");
     }
 
     /// Gli URL si catturano fino allo spazio, senza punteggiatura finale.
@@ -1402,5 +1452,35 @@ mod tests {
         for piece in &w {
             assert!(piece.chars().count() <= 12, "riga troppo lunga: {piece}");
         }
+    }
+
+    #[test]
+    fn hhmm_follows_timezone() {
+        let utc = jiff::tz::TimeZone::UTC;
+        assert_eq!(fmt_hhmm(1_700_000_000, &utc), "22:13");
+        assert_eq!(fmt_hhmm(0, &utc), "     ");
+        let rome = jiff::tz::TimeZone::get("Europe/Rome").unwrap();
+        assert_eq!(fmt_hhmm(1_700_000_000, &rome), "23:13");
+    }
+
+    #[test]
+    fn meta_lists_reply_forward_edit() {
+        let row = tg::HistoryRow {
+            id: 7,
+            outgoing: false,
+            from: String::new(),
+            kind: tg::RowKind::Text("x".into()),
+            reactions: Vec::new(),
+            date: 1_700_000_000,
+            reply_to: Some(3),
+            fwd: Some("Anna".into()),
+            edited: true,
+        };
+        let m = row_meta(&row, &jiff::tz::TimeZone::UTC);
+        assert_eq!(
+            m,
+            "#7 — 22:13 — risposta a #3 — inoltrato da Anna — modificato — Esc per uscire"
+        );
+        assert_eq!(row_lead(&row), "↩#3 ⤳ Anna: ");
     }
 }

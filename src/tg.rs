@@ -37,6 +37,34 @@ pub struct HistoryRow {
     pub kind: RowKind,
     /// reazioni visibili: emoji standard (quelle custom si scartano).
     pub reactions: Vec<ReactionItem>,
+    /// istante di invio, secondi Unix (0 = ignoto: messaggi locali).
+    pub date: i64,
+    /// id del messaggio a cui questo risponde.
+    pub reply_to: Option<i32>,
+    /// origine di un inoltro (nome dell'autore originale o "inoltrato").
+    pub fwd: Option<String>,
+    pub edited: bool,
+}
+
+impl HistoryRow {
+    /// Riga da un messaggio grammers; `from` è già risolto dal chiamante
+    /// (l'update live preferisce il nome nella lista dialoghi).
+    pub fn from_message(m: &grammers_client::message::Message, from: String) -> Self {
+        Self {
+            id: m.id(),
+            outgoing: m.outgoing(),
+            from,
+            kind: row_kind(m.media(), m.text().to_string()),
+            reactions: collect_reactions(&m.raw),
+            date: m.date().as_second(),
+            reply_to: m.reply_to_message_id(),
+            fwd: m.forward_header().map(|h| {
+                let tl::enums::MessageFwdHeader::Header(h) = h;
+                h.from_name.unwrap_or_else(|| "inoltrato".into())
+            }),
+            edited: m.edit_date().is_some() && !m.edit_hide(),
+        }
+    }
 }
 
 /// conteggio di una reazione standard sulla riga.
@@ -497,6 +525,29 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
     Ok(out)
 }
 
+/// Voce di lista per una chat che non è ancora tra i dialoghi (primo
+/// messaggio da uno sconosciuto, gruppo appena entrato): il peer arriva
+/// dalla cache dell'update o, in mancanza, da resolve_peer.
+pub async fn dialog_from_message(
+    client: &Client,
+    m: &grammers_client::message::Message,
+) -> Option<DialogInfo> {
+    let peer_ref = m.peer_ref().await.ok().flatten()?;
+    let peer = match m.peer() {
+        Some(p) => p.clone(),
+        None => client.resolve_peer(peer_ref).await.ok()?,
+    };
+    Some(DialogInfo {
+        name: peer.name().unwrap_or("senza nome").to_string(),
+        username: peer.username().map(str::to_string),
+        is_group: !matches!(peer, grammers_client::peer::Peer::User(_)),
+        peer_id: m.peer_id(),
+        peer_ref,
+        peer,
+        unread: 0,
+    })
+}
+
 /// Parse into a projected row: sticker / foto / gif / file / nota / testo.
 pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
     let cap = caption(&text);
@@ -603,18 +654,28 @@ pub async fn load_history(
     let mut rows = Vec::new();
     let mut iter = client.iter_messages(peer_ref).limit(limit);
     while let Some(m) = iter.next().await? {
-        let id = m.id();
-        let outgoing = m.outgoing();
         let from = sender_name(&m);
-        let kind = row_kind(m.media(), m.text().to_string());
-        let reactions = collect_reactions(&m.raw);
-        rows.push(HistoryRow {
-            id,
-            outgoing,
-            from,
-            kind,
-            reactions,
-        });
+        rows.push(HistoryRow::from_message(&m, from));
+    }
+    rows.reverse();
+    Ok(rows)
+}
+
+/// `limit` messaggi precedenti a `before` (id escluso), dal più vecchio.
+pub async fn load_history_before(
+    client: &Client,
+    peer_ref: ChatRef,
+    before: i32,
+    limit: usize,
+) -> Result<Vec<HistoryRow>, InvocationError> {
+    let mut rows = Vec::new();
+    let mut iter = client
+        .iter_messages(peer_ref)
+        .offset_id(before)
+        .limit(limit);
+    while let Some(m) = iter.next().await? {
+        let from = sender_name(&m);
+        rows.push(HistoryRow::from_message(&m, from));
     }
     rows.reverse();
     Ok(rows)

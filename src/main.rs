@@ -26,6 +26,10 @@ mod view;
 
 /// Messaggi tenuti in RAM per la chat aperta (guardia memoria).
 pub const MAX_HISTORY: usize = 60;
+/// righe tenute in memoria per chat (lo scorrimento all'indietro si ferma qui)
+/// messaggi per pagina nello scorrimento all'indietro
+pub const OLDER_PAGE: usize = 60;
+pub const RING_CAP: usize = 500;
 /// Colonne della griglia sticker nel pannello.
 pub const STICKER_COLS: usize = 4;
 
@@ -40,13 +44,9 @@ fn backoff_secs(prev: u32) -> Duration {
 
 fn row_from_msg(m: grammers_client::message::Message) -> Result<(PeerId, tg::HistoryRow), String> {
     let peer_id = m.peer_id();
-    let row = tg::HistoryRow {
-        id: m.id(),
-        outgoing: true,
-        from: tg::sender_name(&m),
-        kind: tg::row_kind(m.media(), m.text().to_string()),
-        reactions: tg::collect_reactions(&m.raw),
-    };
+    let from = tg::sender_name(&m);
+    let mut row = tg::HistoryRow::from_message(&m, from);
+    row.outgoing = true;
     Ok((peer_id, row))
 }
 
@@ -118,6 +118,12 @@ pub struct App {
     /// ultimo mark_as_read mandato: soglia anti-tempesta sui burst di
     /// messaggi nuovi nella chat aperta.
     pub read_mark: Option<Instant>,
+    /// chat con una richiesta di messaggi più vecchi in volo
+    pub older_busy: HashSet<PeerId>,
+    /// chat senza altro da caricare (inizio raggiunto o RING_CAP)
+    pub older_done: HashSet<PeerId>,
+    /// ↑ è arrivato alla riga più vecchia: il ciclo chiede la pagina prima
+    pub want_older: bool,
     pub quit: bool,
 }
 
@@ -126,6 +132,16 @@ impl App {
         self.open
             .as_ref()
             .and_then(|pid| self.contacts.iter().find(|c| tg::same_peer(c.peer_id, *pid)))
+    }
+
+    /// Limite di Telegram in caratteri: 4096 il testo, 1024 la didascalia
+    /// di una foto.
+    pub fn compose_cap(&self) -> usize {
+        if self.pending_photo.is_some() {
+            1024
+        } else {
+            4096
+        }
     }
 
     pub fn open_history(&self) -> Option<&VecDeque<tg::HistoryRow>> {
@@ -141,7 +157,7 @@ impl App {
             return;
         }
         ring.push_back(row);
-        while ring.len() > MAX_HISTORY {
+        while ring.len() > RING_CAP {
             ring.pop_front();
         }
     }
@@ -154,9 +170,49 @@ impl App {
             }
             ring.push_back(row);
         }
-        while ring.len() > MAX_HISTORY {
+        while ring.len() > RING_CAP {
             ring.pop_front();
         }
+    }
+
+    /// Porta la chat in cima alla lista come fa Telegram a ogni messaggio;
+    /// se è nuova la inserisce (`fresh`). Il cursore resta sulla stessa chat.
+    fn bump_chat(&mut self, peer_id: PeerId, fresh: Option<tg::DialogInfo>) {
+        let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
+        match self.contacts.iter().position(|c| tg::same_peer(c.peer_id, peer_id)) {
+            Some(0) => return,
+            Some(i) => {
+                let c = self.contacts.remove(i);
+                self.contacts.insert(0, c);
+            }
+            None => match fresh {
+                Some(d) => self.contacts.insert(0, d),
+                None => return,
+            },
+        }
+        if let Some(i) =
+            sel.and_then(|s| self.contacts.iter().position(|c| tg::same_peer(c.peer_id, s)))
+        {
+            self.contact_cursor = i;
+        }
+    }
+
+    /// Messaggi più vecchi caricati con lo scorrimento all'indietro (oldest
+    /// first): vanno in testa al ring, senza superare RING_CAP. Ritorna
+    /// quante righe sono entrate davvero.
+    fn prepend_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) -> usize {
+        let ring = self.histories.entry(peer_id).or_default();
+        let room = RING_CAP.saturating_sub(ring.len());
+        let fresh: Vec<tg::HistoryRow> = rows
+            .into_iter()
+            .filter(|r| !ring.iter().any(|x| x.id == r.id))
+            .collect();
+        let skip = fresh.len().saturating_sub(room);
+        let n = fresh.len() - skip;
+        for row in fresh.into_iter().skip(skip).rev() {
+            ring.push_front(row);
+        }
+        n
     }
 
     /// Sostituisce (o inserisce in coda) una riga stessa-id: usato per gli
@@ -164,10 +220,18 @@ impl App {
     fn replace_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
         let ring = self.histories.entry(peer_id).or_default();
         if let Some(old) = ring.iter_mut().find(|r| r.id == row.id) {
+            let mut row = row;
+            // la riga locale di un edit non porta orario né contesto
+            if row.date == 0 {
+                row.date = old.date;
+                row.reply_to = old.reply_to;
+                row.fwd = old.fwd.take();
+                row.reactions = std::mem::take(&mut old.reactions);
+            }
             *old = row;
         } else {
             ring.push_back(row);
-            while ring.len() > MAX_HISTORY {
+            while ring.len() > RING_CAP {
                 ring.pop_front();
             }
         }
@@ -348,6 +412,12 @@ enum Request {
         peer_ref: PeerRefT,
         peer: PeerId,
     },
+    /// pagina precedente: messaggi prima di `before`
+    HistOlder {
+        peer_ref: PeerRefT,
+        peer: PeerId,
+        before: i32,
+    },
     Sets,
     SetDocs {
         set_id: i64,
@@ -387,6 +457,10 @@ enum Request {
 #[allow(clippy::large_enum_variant)]
 enum Response {
     Hist {
+        peer: PeerId,
+        rows: Result<Vec<tg::HistoryRow>, String>,
+    },
+    HistOlder {
         peer: PeerId,
         rows: Result<Vec<tg::HistoryRow>, String>,
     },
@@ -625,8 +699,10 @@ async fn handle_event(
                     app.del_id = None;
                     if app.show_search {
                         app.search_q.push(c);
-                    } else {
+                    } else if app.compose.chars().count() < app.compose_cap() {
                         app.compose.push(c);
+                    } else {
+                        app.status = format!("limite di {} caratteri", app.compose_cap());
                     }
                 }
                 _ => {}
@@ -648,8 +724,8 @@ async fn handle_event(
                 let clean = paste_text(&text, false, 200);
                 app.search_q.push_str(&clean);
             } else if app.open.is_some() {
-                let cap = 4000usize.saturating_sub(app.compose.chars().count());
-                let clean = paste_text(&text, true, cap.min(4000));
+                let cap = app.compose_cap().saturating_sub(app.compose.chars().count());
+                let clean = paste_text(&text, true, cap);
                 app.compose.push_str(&clean);
             }
         }
@@ -1103,6 +1179,11 @@ fn move_msg_cursor(app: &mut App, down: bool) {
             match pos {
                 Some(p) if down => ids.get(p + 1).copied(),
                 Some(p) if p > 0 => Some(ids[p - 1]),
+                Some(_) => {
+                    // già sulla riga più vecchia: chiedi la pagina prima
+                    app.want_older = true;
+                    Some(cur)
+                }
                 _ => {
                     if down {
                         None
@@ -1114,10 +1195,11 @@ fn move_msg_cursor(app: &mut App, down: bool) {
         }
     };
     app.msg_cursor = next;
-    match next {
-        Some(id) => app.status = format!("selezionato #{id} — Esc per uscire"),
-        None => app.status.clear(),
-    }
+    let tz = jiff::tz::TimeZone::system();
+    app.status = match next.and_then(|id| app.open_history()?.iter().find(|r| r.id == id)) {
+        Some(row) => view::row_meta(row, &tz),
+        None => String::new(),
+    };
 }
 
 /// Dentro il pannello: sinistra nella griglia, o ritorno alla lista set.
@@ -1380,13 +1462,13 @@ async fn handle_update(
             let m = m.into_inner();
             let peer_id = m.peer_id();
             let outgoing = m.outgoing();
-            let row = tg::HistoryRow {
-                id: m.id(),
-                outgoing,
-                from: dialog_or(app, peer_id, tg::sender_name(&m)),
-                kind: tg::row_kind(m.media(), m.text().to_string()),
-                reactions: tg::collect_reactions(&m.raw),
+            let fresh = if app.contacts.iter().any(|d| tg::same_peer(d.peer_id, peer_id)) {
+                None
+            } else {
+                tg::dialog_from_message(client, &m).await
             };
+            app.bump_chat(peer_id, fresh);
+            let row = tg::HistoryRow::from_message(&m, dialog_or(app, peer_id, tg::sender_name(&m)));
             let open_id = app.current_chat().map(|c| c.peer_id);
             if Some(peer_id) == open_id {
                 app.push_row(peer_id, row);
@@ -1413,13 +1495,7 @@ async fn handle_update(
         Update::MessageEdited(m) => {
             let m = m.into_inner();
             let peer_id = m.peer_id();
-            let row = tg::HistoryRow {
-                id: m.id(),
-                outgoing: m.outgoing(),
-                from: dialog_or(app, peer_id, tg::sender_name(&m)),
-                kind: tg::row_kind(m.media(), m.text().to_string()),
-                reactions: tg::collect_reactions(&m.raw),
-            };
+            let row = tg::HistoryRow::from_message(&m, dialog_or(app, peer_id, tg::sender_name(&m)));
             app.replace_row(peer_id, row);
             if app.editing == Some(m.id()) {
                 app.editing = None;
@@ -1507,6 +1583,10 @@ async fn send_job(
                         from: String::new(),
                         kind: tg::RowKind::Text(text),
                         reactions: Vec::new(),
+                        date: 0,
+                        reply_to: None,
+                        fwd: None,
+                        edited: true,
                     },
                 )),
                 Err(e) => Err(e.to_string()),
@@ -1675,6 +1755,30 @@ async fn handle_response(
                 app.ensure_previews(req, medias.iter());
             }
         }
+        Response::HistOlder { peer, rows } => {
+            app.older_busy.remove(&peer);
+            let is_open = app.current_chat().map(|c| c.peer_id) == Some(peer);
+            match rows {
+                Ok(rows) => {
+                    let got = rows.len();
+                    let entered = app.prepend_rows(peer, rows);
+                    // pagina corta = inizio della chat; ring pieno = tetto
+                    if got < OLDER_PAGE || entered < got {
+                        app.older_done.insert(peer);
+                        if is_open {
+                            app.status = "inizio della cronologia".into();
+                        }
+                    } else if is_open {
+                        app.status.clear();
+                    }
+                }
+                Err(e) => {
+                    if is_open {
+                        app.status = format!("cronologia precedente: {e}");
+                    }
+                }
+            }
+        }
         Response::Sets(res) => match res {
             Ok(sets) => {
                 let had_none = app.sets.is_none();
@@ -1779,8 +1883,8 @@ fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
                 app.search_q.push_str(&clean);
                 app.status = "appunti incollati nella ricerca".into();
             } else if app.open.is_some() && app.editing.is_none() {
-                let cap = 4000usize.saturating_sub(app.compose.chars().count());
-                let clean = paste_text(&text, true, cap.min(4000));
+                let cap = app.compose_cap().saturating_sub(app.compose.chars().count());
+                let clean = paste_text(&text, true, cap);
                 app.compose.push_str(&clean);
                 app.del_arm = false;
                 app.del_id = None;
@@ -1978,6 +2082,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         react_open: false,
         react_idx: 0,
         read_mark: None,
+        older_busy: HashSet::new(),
+        older_done: HashSet::new(),
+        want_older: false,
         quit: false,
     };
 
@@ -2018,6 +2125,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .await
                             .map_err(|e| e.to_string());
                         let _ = out.send(Response::Hist { peer, rows });
+                    }),
+                    Request::HistOlder { peer_ref, peer, before } => tokio::spawn(async move {
+                        let rows = tg::load_history_before(&cl, peer_ref, before, OLDER_PAGE)
+                            .await
+                            .map_err(|e| e.to_string());
+                        let _ = out.send(Response::HistOlder { peer, rows });
                     }),
                     Request::Sets => tokio::spawn(async move {
                         // se fallisce resta None: riaprire con Tab ritenta,
@@ -2136,6 +2249,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if sig != frame_sig {
             app.refresh_preview_queue(&req_tx);
         }
+        app.request_older(&req_tx);
 
         // immagini: a=p a ogni frame; il dato dell'immagine entra UNA volta
         // sola per path (t=f: il terminale legge il file da solo) e a fine
@@ -2175,6 +2289,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 impl App {
+    /// Se ↑ ha toccato il fondo della storia in memoria, chiede la pagina
+    /// precedente (una per volta, mai oltre l'inizio o RING_CAP).
+    fn request_older(&mut self, req: &mpsc::UnboundedSender<Request>) {
+        if !std::mem::take(&mut self.want_older) {
+            return;
+        }
+        let Some(chat) = self.current_chat() else {
+            return;
+        };
+        let (peer_ref, peer) = (chat.peer_ref, chat.peer_id);
+        if self.older_busy.contains(&peer) || self.older_done.contains(&peer) {
+            return;
+        }
+        let Some(ring) = self.histories.get(&peer) else {
+            return;
+        };
+        if ring.len() >= RING_CAP {
+            self.older_done.insert(peer);
+            self.status = format!("limite di {RING_CAP} messaggi in memoria");
+            return;
+        }
+        let Some(before) = ring.front().map(|r| r.id) else {
+            return;
+        };
+        self.older_busy.insert(peer);
+        self.status = "carico messaggi precedenti…".into();
+        let _ = req.send(Request::HistOlder { peer_ref, peer, before });
+    }
+
     fn refresh_preview_queue(&mut self, req: &mpsc::UnboundedSender<Request>) {
         let mut medias: Vec<Media> = Vec::new();
         if let Some(ring) = self.open_history() {

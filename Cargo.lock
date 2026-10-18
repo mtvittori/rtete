@@ -1549,6 +1549,7 @@ dependencies = [
  "grammers-client",
  "grammers-session",
  "image",
+ "jiff",
  "md5",
  "png",
  "ratatui",
