@@ -61,8 +61,7 @@ async fn raw_source(
     };
     let raw_path = cache_raw(&key, ext);
     if !raw_path.exists() {
-        tokio::fs::create_dir_all(media_dir())
-            .await
+        crate::tg::ensure_private_dir(&media_dir())
             .map_err(|e| format!("cache dir: {e}"))?;
         client
             .download_media(media, raw_path.clone())

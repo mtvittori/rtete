@@ -3,14 +3,17 @@
 //! kitty graphics protocol per mostrare gli sticker.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use futures_util::StreamExt;
 use grammers_client::media::Media;
-use grammers_client::session::types::PeerId;
+use grammers_client::session::types::{PeerId, PeerKind};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use tokio::sync::mpsc;
@@ -73,6 +76,10 @@ pub struct App {
     pub previews: HashMap<String, PathBuf>,
     /// conversioni in volo.
     pub pending: HashSet<String>,
+    /// asset falliti: chiave → (prossimo tentativo, quante volte). Il
+    /// backoff evita il loop infinito download/converti di
+    /// refresh_preview_queue su un asset irrimediabile.
+    pub failed: HashMap<String, (Instant, u32)>,
     /// il nome dell'utente connesso (etichette "Nome │ testo").
     pub me: String,
     /// messaggio selezionato con ↑/↓ nella chat (id); None = vista "live".
@@ -99,6 +106,9 @@ pub struct App {
     pub react_open: bool,
     /// indice nella lista tg::QUICK_REACTIONS.
     pub react_idx: usize,
+    /// ultimo mark_as_read mandato: soglia anti-tempesta sui burst di
+    /// messaggi nuovi nella chat aperta.
+    pub read_mark: Option<Instant>,
     pub quit: bool,
 }
 
@@ -198,7 +208,8 @@ impl App {
         }
     }
 
-    /// Coda le conversioni degli sticker visibili non in cache.
+    /// Coda le conversioni degli sticker visibili non in cache. Un asset
+    /// appena fallito non parte di nuovo finché il backoff non scade.
     fn ensure_previews<'a>(
         &mut self,
         conv_tx: &mpsc::UnboundedSender<Media>,
@@ -206,11 +217,46 @@ impl App {
     ) {
         for media in medias {
             let key = tg::media_key(media);
-            if self.previews.contains_key(&key) || !self.pending.insert(key.clone()) {
+            if self.previews.contains_key(&key) || self.pending.contains(&key) {
                 continue;
             }
-            let _ = conv_tx.send(media.clone());
+            if let Some(&(until, _)) = self.failed.get(&key) {
+                if Instant::now() < until {
+                    continue;
+                }
+            }
+            if self.pending.insert(key) {
+                let _ = conv_tx.send(media.clone());
+            }
         }
+    }
+
+    /// Registra un asset fallito e fissa il prossimo tentativo col backoff
+    /// esponenziale: 1s, 2s, 4s… fino a 60s. refresh_preview_queue gira a
+    /// ogni cambio di layout: senza questo un singolo download guasto (rete
+    /// assente, webp corrotto) verrebbe rilanciato all'infinito.
+    fn conversion_failed(&mut self, key: String) {
+        let prev = self.failed.remove(&key).map(|(_, n)| n).unwrap_or(0);
+        let secs = 1u64 << prev.min(6); // 1, 2, 4 … 64 (u64: nessun overflow)
+        self.failed.insert(
+            key,
+            (Instant::now() + Duration::from_secs(secs.min(60)), prev + 1),
+        );
+    }
+
+    /// true una volta ogni READ_MARK_GAP (o alla prima richiesta): limita i
+    /// mark_as_read quando nella chat aperta arrivano raffiche di messaggi.
+    fn read_mark_due(&mut self) -> bool {
+        const READ_MARK_GAP: Duration = Duration::from_secs(2);
+        let now = Instant::now();
+        let due = self
+            .read_mark
+            .map(|t| now.duration_since(t) >= READ_MARK_GAP)
+            .unwrap_or(true);
+        if due {
+            self.read_mark = Some(now);
+        }
+        due
     }
 }
 
@@ -807,11 +853,24 @@ fn ctrl_copy(app: &mut App) {
     let head: String = text.chars().take(24).collect();
     app.status = format!("copiato negli appunti: «{head}…»");
     std::thread::spawn(move || {
-        // wl-copy esce subito (fork in background) e il figlio serve i clic
-        if let Ok(mut ch) = std::process::Command::new("wl-copy").arg(text).spawn() {
-            let _ = ch.wait();
-        } else {
-            eprintln!("[rtete] wl-copy non trovato (installa wl-clipboard)");
+        // il testo va su stdin: come argomento, un messaggio che inizia
+        // per "-" ("Adesso -n ciao") veniva preso per una opzione wl-copy
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let spawned = Command::new("wl-copy")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        match spawned {
+            Ok(mut ch) => {
+                if let Some(mut si) = ch.stdin.take() {
+                    let _ = si.write_all(text.as_bytes());
+                } // drop → EOF: wl-copy legge il contenuto e resta a servire
+                  // i paste finché il clipboard non viene rimpiazzato
+                let _ = ch.wait();
+            }
+            Err(_) => eprintln!("[rtete] wl-copy non trovato (installa wl-clipboard)"),
         }
     });
 }
@@ -860,6 +919,7 @@ fn ctrl_paste(app: &mut App) {
 /// Cerca un'immagine image/png|jpeg negli appunti: la butta su file in
 /// ~/.local/share/rtete/tmp/ e ritorna (percorso, KB). WL-clipboard.
 fn clipboard_image() -> Option<(std::path::PathBuf, usize)> {
+    use std::io::Write as _;
     let probe_wl = |mut cmd: std::process::Command| -> Option<Vec<u8>> {
         cmd.stdin(std::process::Stdio::null());
         cmd.stdout(std::process::Stdio::piped());
@@ -884,16 +944,25 @@ fn clipboard_image() -> Option<(std::path::PathBuf, usize)> {
     if bytes.is_empty() {
         return None;
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    let dir = std::path::PathBuf::from(home).join(".local/share/rtete/tmp");
-    std::fs::create_dir_all(&dir).ok()?;
+    // tmp sta dentro data_dir (0700): uno screenshot non resta leggibile
+    // dagli altri utenti come farebbe un 644
+    let dir = tg::tmp_dir();
+    tg::ensure_private_dir(&dir).ok()?;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let ext = if mime == "image/jpeg" { "jpg" } else { "png" };
     let path = dir.join(format!("appunti-{ts}.{ext}"));
-    std::fs::write(&path, &bytes).ok()?;
+    // 0600 sin dalla creazione, non scritto con la umask e poi sistemato
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)
+        .and_then(|mut f| f.write_all(&bytes))
+        .ok()?;
     Some((path, bytes.len() / 1024))
 }
 
@@ -1267,7 +1336,11 @@ async fn on_enter(
     }
 }
 
-async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
+async fn handle_update(
+    app: &mut App,
+    client: &grammers_client::Client,
+    update: grammers_client::update::Update,
+) {
     use grammers_client::update::Update;
 
     /// il nome del dialogo (come in sidebar) quando il mittente non è
@@ -1298,6 +1371,17 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
             let open_id = app.current_chat().map(|c| c.peer_id);
             if Some(peer_id) == open_id {
                 app.push_row(peer_id, row);
+                if !outgoing && app.read_mark_due() {
+                    // la chat aperta è a fuoco: i nuovi arrivati sono letti
+                    // (prima mark_as_read partiva solo al load della storia)
+                    if let Some(chat) = app.current_chat() {
+                        let peer_ref = chat.peer_ref;
+                        let cl = client.clone();
+                        tokio::spawn(async move {
+                            let _ = cl.mark_as_read(peer_ref).await;
+                        });
+                    }
+                }
             } else if !outgoing {
                 for d in app.contacts.iter_mut() {
                     if tg::same_peer(d.peer_id, peer_id) {
@@ -1325,8 +1409,25 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
         }
         Update::MessageDeleted(deletion) => {
             let ids: Vec<i32> = deletion.messages().to_vec();
-            for ring in app.histories.values_mut() {
-                ring.retain(|r| !ids.contains(&r.id));
+            // Gli id dei messaggi nei canali/supergroup sono per-canale e
+            // collidono con quelli delle chat personali: il retain su tutte
+            // le cronologie rimuoveva righe della chat sbagliata.
+            match deletion.channel_id().and_then(PeerId::channel) {
+                Some(pid) => {
+                    if let Some(ring) = app.histories.get_mut(&pid) {
+                        ring.retain(|r| !ids.contains(&r.id));
+                    }
+                }
+                None => {
+                    // personali e piccoli gruppi: id unici per account, il
+                    // retain su quelle cronologie è corretto; i canali no
+                    for (pid, ring) in app.histories.iter_mut() {
+                        if pid.kind() == PeerKind::Channel {
+                            continue;
+                        }
+                        ring.retain(|r| !ids.contains(&r.id));
+                    }
+                }
             }
             if !ids.is_empty() {
                 app.status = format!("· {} messaggi cancellati in chat", ids.len());
@@ -1394,6 +1495,48 @@ async fn waiting_pick(
     }
 }
 
+/// La TUI sta a schermo; consumata una volta sola dal panic hook o dal
+/// Drop della guard, così non si ripristina due volte la stessa cosa.
+static TUI_UP: AtomicBool = AtomicBool::new(false);
+
+/// Ripristina raw mode, schermo alternativo, mouse e keyboard protocol.
+/// Ogni istruzione è eseguita con `let _`: se una fallisce, le altre
+/// partono comunque.
+fn restore_terminal() {
+    kitty::clear_all();
+    let mut out = std::io::stdout();
+    let _ = execute!(out, crossterm::cursor::Show);
+    let _ = execute!(out, crossterm::event::PopKeyboardEnhancementFlags);
+    let _ = execute!(out, crossterm::event::DisableMouseCapture);
+    let _ = execute!(out, crossterm::event::DisableBracketedPaste);
+    let _ = crossterm::terminal::disable_raw_mode();
+    let _ = execute!(out, crossterm::terminal::LeaveAlternateScreen);
+}
+
+/// Uscita pulita dal terminale per qualunque ritorno: con `Ok`, con `?`
+/// o con panic. In release `panic = "abort"` lascia il terminale in
+/// raw mode (il Drop della guard non viene eseguito), quindi serve
+/// anche un hook — che invece gira sempre.
+struct TermGuard;
+
+impl Drop for TermGuard {
+    fn drop(&mut self) {
+        if TUI_UP.swap(false, Ordering::SeqCst) {
+            restore_terminal();
+        }
+    }
+}
+
+fn panic_hook() {
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if TUI_UP.swap(false, Ordering::SeqCst) {
+            restore_terminal();
+        }
+        prev(info);
+    }));
+}
+
 async fn render(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     app: &mut App,
@@ -1434,6 +1577,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         open_set: None,
         previews: HashMap::new(),
         pending: HashSet::new(),
+        failed: HashMap::new(),
         me: tg::own_name(&client).await,
         msg_cursor: None,
         del_id: None,
@@ -1448,6 +1592,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pending_photo: None,
         react_open: false,
         react_idx: 0,
+        read_mark: None,
         quit: false,
     };
 
@@ -1667,8 +1812,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .status();
                     current.store(0, std::sync::atomic::Ordering::Relaxed);
                 }
-                let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-                let dir = std::path::PathBuf::from(home).join(".local/share/rtete/tmp");
+                let dir = tg::tmp_dir();
                 let target = dir.join(&fname);
                 let dl = tg::download_media_to(&cl, &media, target.clone()).await;
                 match dl {
@@ -1737,7 +1881,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| e.to_string())?;
 
     // ---------------- TUI ----------------------------------------------
+    panic_hook();
     crossterm::terminal::enable_raw_mode()?;
+    // da qui ogni uscita ripristina il terminale: guard per i `?` e per il
+    // return, hook per i panic (con panic = "abort" il Drop non viene eseguito)
+    let _guard = TermGuard;
+    TUI_UP.store(true, Ordering::SeqCst);
     execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
     terminal.hide_cursor()?;
@@ -1806,7 +1955,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None => break,
             },
             upd = update_stream.next() => match upd {
-                Ok(u) => handle_update(&mut app, u).await,
+                Ok(u) => handle_update(&mut app, &client, u).await,
                 Err(e) => app.status = format!("rete: {e}"),
             },
             done = waiting_pick(
@@ -1826,6 +1975,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let is_open = app.current_chat().map(|c| c.peer_id) == Some(peer_id);
                     if is_open {
                         app.status = String::new();
+                        // la cronologia è arrivata e la chat è a fuoco: il
+                        // badge unread della barra sparisce
+                        for d in app.contacts.iter_mut() {
+                            if tg::same_peer(d.peer_id, peer_id) {
+                                d.unread = 0;
+                                break;
+                            }
+                        }
                         if let Some(chat) = app.current_chat() {
                             let peer_ref = chat.peer_ref;
                             let cl = client.clone();
@@ -1866,8 +2023,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 LoopEvent::Converted((key, res)) => {
                     app.pending.remove(&key);
-                    if let Ok(path) = res {
-                        app.previews.insert(key, path);
+                    match res {
+                        Ok(path) => {
+                            app.failed.remove(&key);
+                            app.previews.insert(key, path);
+                        }
+                        Err(_why) => app.conversion_failed(key),
                     }
                 }
                 LoopEvent::Sent(res) => match res {
@@ -1910,18 +2071,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // ---------------- chiusura -----------------------------------------
-    kitty::clear_all();
-    terminal.show_cursor()?;
-    execute!(
-        std::io::stdout(),
-        crossterm::event::PopKeyboardEnhancementFlags
-    )?;
-    execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
-    execute!(std::io::stdout(), crossterm::event::DisableBracketedPaste)?;
-    crossterm::terminal::disable_raw_mode()?;
-    execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
     Ok(())
+    // il Drop di _guard fa il restore: qualunque via d'uscita esce pulito
 }
 
 impl App {

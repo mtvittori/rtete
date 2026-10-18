@@ -1,8 +1,8 @@
 //! Telegram backend: grammers 0.11 (MTProto client in pure Rust, no TDLib).
 
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use grammers_client::media::Media;
@@ -227,6 +227,21 @@ pub fn media_dir() -> PathBuf {
     data_dir().join("assets")
 }
 
+/// Cartella temporanea (foto dagli appunti, audio in riproduzione).
+pub fn tmp_dir() -> PathBuf {
+    data_dir().join("tmp")
+}
+
+/// Crea (o ripara) una cartella dati a 0700. Anche su cartelle già esistenti
+/// la chmod va risistemata: le installazioni vecchie l'hanno creata con la
+/// umask corrente (755) e i file dentro restavano leggibili da altri utenti.
+pub fn ensure_private_dir(path: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(path)?;
+    let mut perms = std::fs::metadata(path)?.permissions();
+    perms.set_mode(0o700);
+    std::fs::set_permissions(path, perms)
+}
+
 const CONFIG_FILE: &str = "credentials";
 
 /// Read credentials from disk; `None` the first time around.
@@ -258,14 +273,17 @@ pub async fn prompt_credentials() -> Result<Credentials, Box<dyn std::error::Err
         api_id,
         api_hash: hash.trim().to_string(),
     };
-    std::fs::create_dir_all(config_dir())?;
+    ensure_private_dir(&config_dir())?;
     let cred_path = config_dir().join(CONFIG_FILE);
-    std::fs::write(&cred_path, format!("{} {}\n", creds.api_id, creds.api_hash))?;
-    // il file contiene l'api_hash: visibile solo all'utente
-    if let Ok(mut perms) = std::fs::metadata(&cred_path).map(|m| m.permissions()) {
-        perms.set_mode(0o600);
-        let _ = std::fs::set_permissions(&cred_path, perms);
-    }
+    // il file contiene l'api_hash: nasce 0600 dall'open, senza la finestra
+    // "scritto con la umask, poi chmod" in cui era leggibile da altri
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&cred_path)?;
+    file.write_all(format!("{} {}\n", creds.api_id, creds.api_hash).as_bytes())?;
     Ok(creds)
 }
 
@@ -281,12 +299,24 @@ pub async fn connect(
     ),
     Box<dyn std::error::Error>,
 > {
-    std::fs::create_dir_all(data_dir())?;
-    let session = Arc::new(SqliteSession::open(data_dir().join("rtete.db")).await?);
-    // la sessione contiene le chiavi di autorizzazione: solo l'utente
-    if let Ok(mut perms) = std::fs::metadata(data_dir().join("rtete.db")).map(|m| m.permissions()) {
+    ensure_private_dir(&data_dir())?;
+    // La sessione contiene le chiavi di autorizzazione: solo l'utente.
+    // Il file nasce 0600 (pre-creato: sqlite apre quello esistente e non lo
+    // ricrea con la umask); i -wal/-journal che sqlite crea coi permessi
+    // standard restano protetti perché la cartella è 0700.
+    let db_path = data_dir().join("rtete.db");
+    if !db_path.exists() {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&db_path)?;
+    }
+    let session = Arc::new(SqliteSession::open(&db_path).await?);
+    // se esisteva già con permessi larghi (install vecchie): ripara
+    if let Ok(mut perms) = std::fs::metadata(&db_path).map(|m| m.permissions()) {
         perms.set_mode(0o600);
-        let _ = std::fs::set_permissions(data_dir().join("rtete.db"), perms);
+        let _ = std::fs::set_permissions(&db_path, perms);
     }
     let pool = SenderPool::new(Arc::clone(&session), creds.api_id);
     let SenderPool {
@@ -358,10 +388,14 @@ pub async fn sign_in(
         Ok(user) => user,
         Err(SignInError::PasswordRequired(token)) => {
             let hint = token.hint().map(str::to_string).unwrap_or_default();
-            let _ = write!(std::io::stdout(), "Password 2FA ({hint}): ");
-            let _ = std::io::stdout().flush();
-            let mut pass = String::new();
-            std::io::stdin().read_line(&mut pass)?;
+            // rpassword legge senza eco: la password non resta visibile
+            // nella cronologia del terminale come con read_line
+            let prompt = if hint.is_empty() {
+                "Password 2FA: ".to_string()
+            } else {
+                format!("Password 2FA ({hint}): ")
+            };
+            let pass = rpassword::prompt_password(prompt)?;
             client.check_password(token, pass.trim()).await?
         }
         Err(SignInError::SignUpRequired) => {
