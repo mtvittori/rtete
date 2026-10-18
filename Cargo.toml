@@ -9,7 +9,7 @@ grammers-session = { version = "0.11.0", default-features = false, features = ["
 futures-util = "0.3"
 ratatui = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-util", "io-std", "net", "sync", "time", "fs"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-util", "io-std", "net", "process", "sync", "time", "fs"] }
 image = { version = "0.25", default-features = false, features = ["webp", "png", "jpeg", "gif"] }
 png = { version = "0.18", default-features = false }
 base64 = "0.22"

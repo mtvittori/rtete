@@ -232,9 +232,62 @@ pub fn tmp_dir() -> PathBuf {
     data_dir().join("tmp")
 }
 
+/// Cartella dei salvataggi: XDG_DOWNLOAD_DIR (shell-quoted in user-dirs.dirs,
+/// tipicamente "$HOME/Scaricati") altrimenti ~/Downloads.
+pub fn downloads_dir() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    if let Ok(v) = std::env::var("XDG_DOWNLOAD_DIR") {
+        let v = v.trim().replace(['"', '\''], "");
+        if !v.is_empty() {
+            let v = v.replace("$HOME", &home);
+            if std::path::Path::new(&v).is_absolute() {
+                return PathBuf::from(v);
+            }
+        }
+    }
+    PathBuf::from(home).join("Downloads")
+}
+
+/// Nome file sanity per i salvataggi: via slash, punti elusivi e vuoto.
+/// None se il nome resta privo di senso (es. era solo ".", " ", "…").
+pub fn sanitize_file_name(name: &str) -> Option<String> {
+    let safe: String = name.chars().filter(|c| !c.is_control()).collect();
+    let safe = safe.replace(['/', '\\'], "_").replace("..", "_");
+    let safe = safe.trim().trim_end_matches('.').trim().to_string();
+    if safe.is_empty() || safe == "." {
+        None
+    } else {
+        Some(safe)
+    }
+}
+
+/// "report.pdf" già presente? prova "report (1).pdf", poi (2)… Non
+/// sovrascrive mai un file esistente; oltre 999 tentativi, usa il tempo
+/// corrente nel nome.
+pub fn unique_save_path(dir: &Path, name: &str) -> PathBuf {
+    if !dir.join(name).exists() {
+        return dir.join(name);
+    }
+    let (stem, ext) = match name.rfind('.') {
+        Some(0) | None => (name.to_string(), String::new()),
+        Some(i) => (name[..i].to_string(), name[i..].to_string()),
+    };
+    for n in 1..1000u32 {
+        let cand = dir.join(format!("{stem} ({n}){ext}"));
+        if !cand.exists() {
+            return cand;
+        }
+    }
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    dir.join(format!("{stem}-{ts}{ext}"))
+}
+
 /// Crea (o ripara) una cartella dati a 0700. Anche su cartelle già esistenti
 /// la chmod va risistemata: le installazioni vecchie l'hanno creata con la
-/// umask corrente (755) e i file dentro restavano leggibili da altri utenti.
+/// umask corrente (755), e i file dentro restavano leggibili dagli altri.
 pub fn ensure_private_dir(path: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(path)?;
     let mut perms = std::fs::metadata(path)?.permissions();

@@ -31,6 +31,13 @@ pub const STICKER_COLS: usize = 4;
 
 type PeerRefT = grammers_client::session::types::PeerRef;
 
+/// Dopo `prev` fallimenti, il prossimo tentativo tra 1, 2, 4… fino a 60s:
+/// backoff esponenziale unico per conversioni e richieste di rete.
+fn backoff_secs(prev: u32) -> Duration {
+    let secs = 1u64 << prev.min(6); // u64: nessun overflow
+    Duration::from_secs(secs.min(60))
+}
+
 fn row_from_msg(m: grammers_client::message::Message) -> Result<(PeerId, tg::HistoryRow), String> {
     let peer_id = m.peer_id();
     let row = tg::HistoryRow {
@@ -70,6 +77,8 @@ pub struct App {
     pub sets: Option<Vec<tg::StickerSetInfo>>,
     /// set_id -> sticker del set (scaricati on-demand).
     pub set_docs: HashMap<i64, Vec<Media>>,
+    /// set il cui download è in pausa di backoff: set_id → (riprova da, n).
+    pub docs_failed: HashMap<i64, (Instant, u32)>,
     /// id del set aperto.
     pub open_set: Option<i64>,
     /// media_key -> png convertito.
@@ -189,22 +198,46 @@ impl App {
         let Some(row) = ring.iter_mut().find(|r| r.id == mid) else {
             return;
         };
-        let mine_same = row
+        // Telegram senza Premium ammette una sola reazione per messaggio:
+        // se il mio voto sta già su questa emoji la tolgo; se sta su
+        // un'altra cambia bersaglio; il mio voto non resta mai su due item
+        if let Some(i) = row
             .reactions
             .iter()
-            .find(|r| r.mine && r.emoticon == emoticon);
-        if mine_same.is_some() {
-            // la tolgo: via il mio voto (e l'item se resta 0)
-            row.reactions.retain(|r| !(r.mine && r.emoticon == emoticon));
-        } else if let Some(item) = row.reactions.iter_mut().find(|r| r.emoticon == emoticon) {
-            item.count += 1;
-            item.mine = true;
-        } else {
-            row.reactions.push(tg::ReactionItem {
+            .position(|r| r.mine && r.emoticon == emoticon)
+        {
+            // il mio voto cala; l'item passa solo se resta a zero
+            // (prima il retain toglieva l'intera voce anche se altri hanno
+            // messo la stessa reazione)
+            let entry = &mut row.reactions[i];
+            entry.count = entry.count.saturating_sub(1);
+            if entry.count <= 0 {
+                row.reactions.remove(i);
+            }
+            return;
+        }
+        // cambio bersaglio: il mio voto vecchio cala (item via se resta a zero)
+        if let Some(i) = row
+            .reactions
+            .iter()
+            .position(|r| r.mine && r.emoticon != emoticon)
+        {
+            let entry = &mut row.reactions[i];
+            entry.count = entry.count.saturating_sub(1);
+            if entry.count <= 0 {
+                row.reactions.remove(i);
+            }
+        }
+        match row.reactions.iter_mut().find(|r| r.emoticon == emoticon) {
+            Some(item) => {
+                item.count += 1;
+                item.mine = true;
+            }
+            None => row.reactions.push(tg::ReactionItem {
                 emoticon: emoticon.to_string(),
                 count: 1,
                 mine: true,
-            });
+            }),
         }
     }
 
@@ -237,11 +270,28 @@ impl App {
     /// assente, webp corrotto) verrebbe rilanciato all'infinito.
     fn conversion_failed(&mut self, key: String) {
         let prev = self.failed.remove(&key).map(|(_, n)| n).unwrap_or(0);
-        let secs = 1u64 << prev.min(6); // 1, 2, 4 … 64 (u64: nessun overflow)
-        self.failed.insert(
-            key,
-            (Instant::now() + Duration::from_secs(secs.min(60)), prev + 1),
-        );
+        self.failed
+            .insert(key, (Instant::now() + backoff_secs(prev), prev + 1));
+    }
+
+    /// idem per i download di set: senza pausa, ogni freccia sul set
+    /// rilanciava la richiesta e un set guasto martellava la rete; un
+    /// errore non deve neanche marca il set come "caricato" (vuoto eterno)
+    fn docs_cooling(&self, set_id: i64) -> bool {
+        self.docs_failed
+            .get(&set_id)
+            .map(|&(until, _)| Instant::now() < until)
+            .unwrap_or(false)
+    }
+
+    fn docs_failed(&mut self, set_id: i64) {
+        let prev = self.docs_failed.remove(&set_id).map(|(_, n)| n).unwrap_or(0);
+        self.docs_failed
+            .insert(set_id, (Instant::now() + backoff_secs(prev), prev + 1));
+    }
+
+    fn docs_fine(&mut self, set_id: i64) {
+        self.docs_failed.remove(&set_id);
     }
 
     /// true una volta ogni READ_MARK_GAP (o alla prima richiesta): limita i
@@ -1131,7 +1181,8 @@ fn grid_right(app: &mut App, set_req_tx: &mpsc::UnboundedSender<(i64, String)>) 
                 app.set_level = true;
                 app.open_set = Some(set.set_id);
                 app.sticker_cursor = 0;
-                if !app.set_docs.contains_key(&set.set_id) {
+                // già qui, o in attesa di backoff da un errore recente? via
+                if !app.set_docs.contains_key(&set.set_id) && !app.docs_cooling(set.set_id) {
                     app.status = format!("scarico il set {}…", set.title);
                     let _ = set_req_tx.send((set.set_id, set.short_name.clone()));
                 }
@@ -1196,7 +1247,8 @@ async fn on_enter(
                     app.set_level = true;
                     app.open_set = Some(set.set_id);
                     app.sticker_cursor = 0;
-                    if !app.set_docs.contains_key(&set.set_id) {
+                    // già qui, o in attesa di backoff da un errore recente? via
+                    if !app.set_docs.contains_key(&set.set_id) && !app.docs_cooling(set.set_id) {
                         app.status = format!("scarico il set {}…", set.title);
                         let _ = set_req_tx.send((set.set_id, set.short_name.clone()));
                     }
@@ -1447,9 +1499,9 @@ async fn handle_update(
 
 #[allow(clippy::large_enum_variant)]
 enum LoopEvent {
-    History((PeerId, Vec<tg::HistoryRow>)),
-    Sets(Vec<tg::StickerSetInfo>),
-    Docs((i64, Vec<Media>)),
+    History((PeerId, Result<Vec<tg::HistoryRow>, String>)),
+    Sets(Result<Vec<tg::StickerSetInfo>, String>),
+    Docs((i64, Result<Vec<Media>, String>)),
     Converted((String, Result<PathBuf, String>)),
     Sent(Result<SendDone, String>),
     Deleted(Result<(), String>),
@@ -1470,9 +1522,9 @@ fn which(cmd: &str) -> bool {
 /// Primo servizio che risponde tra i canali.
 #[allow(clippy::too_many_arguments)]
 async fn waiting_pick(
-    hist_rx: &mut mpsc::UnboundedReceiver<(PeerId, Vec<tg::HistoryRow>)>,
-    sets_list_rx: &mut mpsc::UnboundedReceiver<Vec<tg::StickerSetInfo>>,
-    docs_rx: &mut mpsc::UnboundedReceiver<(i64, Vec<Media>)>,
+    hist_rx: &mut mpsc::UnboundedReceiver<(PeerId, Result<Vec<tg::HistoryRow>, String>)>,
+    sets_list_rx: &mut mpsc::UnboundedReceiver<Result<Vec<tg::StickerSetInfo>, String>>,
+    docs_rx: &mut mpsc::UnboundedReceiver<(i64, Result<Vec<Media>, String>)>,
     done_rx: &mut mpsc::UnboundedReceiver<(String, Result<PathBuf, String>)>,
     sent_rx: &mut mpsc::UnboundedReceiver<Result<SendDone, String>>,
     deleted_rx: &mut mpsc::UnboundedReceiver<Result<(), String>>,
@@ -1574,6 +1626,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         sticker_cursor: 0,
         sets: None,
         set_docs: HashMap::new(),
+        docs_failed: HashMap::new(),
         open_set: None,
         previews: HashMap::new(),
         pending: HashSet::new(),
@@ -1598,11 +1651,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ---------------- canali di servizio -------------------------------
     let (hist_tx, mut hist_req) = mpsc::unbounded_channel::<(PeerRefT, PeerId)>();
-    let (hist_done, mut hist_rx) = mpsc::unbounded_channel::<(PeerId, Vec<tg::HistoryRow>)>();
+    let (hist_done, mut hist_rx) =
+        mpsc::unbounded_channel::<(PeerId, Result<Vec<tg::HistoryRow>, String>)>();
     let (sets_tx, mut sets_rx) = mpsc::unbounded_channel::<()>();
-    let (sets_done, mut sets_list_rx) = mpsc::unbounded_channel::<Vec<tg::StickerSetInfo>>();
+    let (sets_done, mut sets_list_rx) =
+        mpsc::unbounded_channel::<Result<Vec<tg::StickerSetInfo>, String>>();
     let (set_req_tx, mut set_req_rx) = mpsc::unbounded_channel::<(i64, String)>();
-    let (docs_tx, mut docs_rx) = mpsc::unbounded_channel::<(i64, Vec<Media>)>();
+    let (docs_tx, mut docs_rx) = mpsc::unbounded_channel::<(i64, Result<Vec<Media>, String>)>();
     let (conv_tx, conv_rx) = mpsc::unbounded_channel::<Media>();
     let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(String, Result<PathBuf, String>)>();
     let (send_tx, mut send_rx) = mpsc::unbounded_channel::<SendJob>();
@@ -1619,7 +1674,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (react_tx, mut react_req) = mpsc::unbounded_channel::<(PeerRefT, PeerId, i32, Option<String>)>();
     let (reacted_tx, mut reacted_rx) = mpsc::unbounded_channel::<Result<(), String>>();
 
-    // cronologia: richiesta → risultato
+    // cronologia: richiesta → risultato (l'errore viaggia col canale: un
+    // guasto di rete non deve presentarsi come "chat senza messaggi")
     {
         let cl = client.clone();
         let out = hist_done;
@@ -1627,25 +1683,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             while let Some((peer_ref, peer_id)) = hist_req.recv().await {
                 let rows = tg::load_history(&cl, peer_ref, MAX_HISTORY)
                     .await
-                    .unwrap_or_default();
+                    .map_err(|e| e.to_string());
                 let _ = out.send((peer_id, rows));
             }
         });
     }
 
-    // lista completa dei set installati
+    // lista completa dei set installati (se fallisce resta None: frenarla
+    // fissa "in caricamento"; Tab, riaprendo il pannello, ritenta)
     {
         let cl = client.clone();
         let out = sets_done;
         tokio::spawn(async move {
             while sets_rx.recv().await.is_some() {
-                let sets = tg::fetch_installed_sets(&cl).await.unwrap_or_default();
+                let sets = tg::fetch_installed_sets(&cl).await.map_err(|e| e.to_string());
                 let _ = out.send(sets);
             }
         });
     }
 
-    // documenti on-demand di un set (via short_name)
+    // documenti on-demand di un set (via short_name); un errore NON marca
+    // il set come "caricato": la griglia riparte al prossimo input sul
+    // pannello (con la pausa di backoff di docs_failed)
     {
         let cl = client.clone();
         let out = docs_tx;
@@ -1653,9 +1712,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             while let Some((set_id, short_name)) = set_req_rx.recv().await {
                 let docs = tg::fetch_set_docs_by_name(&cl, &short_name)
                     .await
-                    .unwrap_or_default();
-                let media: Vec<Media> = docs.into_iter().filter_map(tg::media_from_doc).collect();
-                let _ = out.send((set_id, media));
+                    .map(|docs| docs.into_iter().filter_map(tg::media_from_doc).collect())
+                    .map_err(|e| e.to_string());
+                let _ = out.send((set_id, docs));
             }
         });
     }
@@ -1777,101 +1836,139 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    // salvataggi documenti in ~/Downloads
+    // salvataggi documenti in ~/Downloads: no sovrascritture e niente file
+    // parziali col nome finale (il download finiva direttamente sul file
+    // vero; il nome vuoto finiva puntando alla cartella stessa)
     {
         let cl = client.clone();
         let out = saved_tx;
         tokio::spawn(async move {
             while let Some((media, name)) = save_req.recv().await {
-                let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-                let dir = std::path::PathBuf::from(home).join("Downloads");
-                let target = dir.join(&name);
-                let res = tg::download_media_to(&cl, &media, target)
-                    .await
-                    .map(|_| format!("~/Downloads/{name}"));
+                let Some(sane) = tg::sanitize_file_name(&name) else {
+                    let _ = out.send(Err("nome file vuoto o inutilizzabile".into()));
+                    continue;
+                };
+                let dir = tg::downloads_dir();
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis())
+                    .unwrap_or(0);
+                let tmp = dir.join(format!(".rtete-{ts}.part"));
+                let res = match tg::download_media_to(&cl, &media, tmp.clone()).await {
+                    Ok(()) => {
+                        // scaricato per intero: trova un nome libero e sposta
+                        let target = tg::unique_save_path(&dir, &sane);
+                        match std::fs::rename(&tmp, &target) {
+                            Ok(()) => Ok(target.display().to_string()),
+                            Err(e) => Err(format!("spostamento: {e}")),
+                        }
+                    }
+                    Err(e) => Err(e),
+                };
+                // il .part non utile non resta a sporcare la cartella
+                let _ = tokio::fs::remove_file(&tmp).await;
                 let _ = out.send(res);
             }
         });
     }
 
-    // riproduzione audio: scarica in tmp, lancia mpv/ffplay e pulisce dopo
+    // riproduzione audio: scarica in tmp e lancia mpv/ffplay. Niente kill
+    // esterni per pid (soprattutto riusati: kill -TERM su un pid girato nel
+    // frattempo finiva su processi altrui): ogni player porta una
+    // generazione su un canale watch. Un nuovo Ctrl-P avanza la
+    // generazione e sveglia il task vecchio, che fa kill() sull'handle del
+    // figlio e NON manda l'Ok postumo (prima il thread morto manteneva
+    // vivo lo stato sbagliato)
     {
         let cl = client.clone();
         let out = played_tx;
         tokio::spawn(async move {
-            // pid del player in corso: un nuovo Ctrl-P lo sostituisce
-            let current = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+            static NEXT_GEN: std::sync::atomic::AtomicU64 =
+                std::sync::atomic::AtomicU64::new(0);
+            // il player in corsa osserva il watch: valori oltre la sua
+            // generazione vuol dire "sostituito"
+            let mut prev_alert: Option<tokio::sync::watch::Sender<u64>> = None;
             while let Some((media, fname, label)) = play_req.recv().await {
-                // ferma il player già in corsa, se c'è
-                let old = current.load(std::sync::atomic::Ordering::Relaxed);
-                if old != 0 {
-                    let _ = std::process::Command::new("kill")
-                        .args(["-TERM", &old.to_string()])
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .status();
-                    current.store(0, std::sync::atomic::Ordering::Relaxed);
+                let gen = NEXT_GEN.fetch_add(1, Ordering::Relaxed) + 1;
+                // sveglia il player in corsa, se c'è: lui ferma figlio e file
+                if let Some(prev) = prev_alert.take() {
+                    prev.send_replace(gen);
                 }
-                let dir = tg::tmp_dir();
-                let target = dir.join(&fname);
-                let dl = tg::download_media_to(&cl, &media, target.clone()).await;
-                match dl {
-                    Ok(()) => {
-                        let player = std::env::var("RTETE_PLAYER").ok().or_else(|| {
-                            ["mpv", "ffplay"]
-                                .iter()
-                                .find(|p| which(p))
-                                .map(|p| p.to_string())
-                        });
-                        match player {
-                            Some(p) => {
-                                let out2 = out.clone();
-                                let cur = current.clone();
-                                let label2 = label.clone();
-                                std::thread::spawn(move || {
-                                    let is_mpv = std::path::Path::new(&p)
-                                        .file_name()
-                                        .map(|f| f == std::ffi::OsStr::new("mpv"))
-                                        .unwrap_or(false);
-                                    let mut cmd = std::process::Command::new(p);
-                                    if is_mpv {
-                                        cmd.args(["--no-video", "--no-terminal", "--really-quiet"]);
-                                    } else {
-                                        cmd.args(["-nodisp", "-autoexit", "-loglevel", "quiet"]);
+                let (tx, mut rx) = tokio::sync::watch::channel(gen);
+                prev_alert = Some(tx);
+
+                // nel nome del temp la generazione: Ctrl-P vicini non si
+                // pestano i propri file
+                let target = tg::tmp_dir().join(format!("play-{gen}-{fname}"));
+                let _ = out.send(Ok(format!("▶ {label}")));
+                let out2 = out.clone();
+                let label2 = label.clone();
+                let cl2 = cl.clone();
+                tokio::spawn(async move {
+                    let dl = tg::download_media_to(&cl2, &media, target.clone()).await;
+                    if *rx.borrow() != gen {
+                        // sostituito: via il file scaricato e chiudi
+                        let _ = tokio::fs::remove_file(&target).await;
+                        return;
+                    }
+                    if let Err(e) = dl {
+                        let _ = tokio::fs::remove_file(&target).await;
+                        let _ = out2.send(Err(e));
+                        return;
+                    }
+                    let player = std::env::var("RTETE_PLAYER").ok().or_else(|| {
+                        ["mpv", "ffplay"]
+                            .iter()
+                            .find(|p| which(p))
+                            .map(|p| p.to_string())
+                    });
+                    let Some(p) = player else {
+                        let _ = out2.send(Err("nessun player: installa mpv o ffplay".into()));
+                        return;
+                    };
+                    let is_mpv = std::path::Path::new(&p)
+                        .file_name()
+                        .map(|f| f == std::ffi::OsStr::new("mpv"))
+                        .unwrap_or(false);
+                    let mut cmd = tokio::process::Command::new(&p);
+                    if is_mpv {
+                        cmd.args(["--no-video", "--no-terminal", "--really-quiet"]);
+                    } else {
+                        cmd.args(["-nodisp", "-autoexit", "-loglevel", "quiet"]);
+                    }
+                    cmd.arg(&target);
+                    cmd.stdout(std::process::Stdio::null());
+                    cmd.stderr(std::process::Stdio::null());
+                    // cintura di sicurezza: allo drop del figlio lo termina
+                    cmd.kill_on_drop(true);
+                    match cmd.spawn() {
+                        Ok(mut child) => {
+                            tokio::select! {
+                                st = child.wait() => {
+                                    let _ = tokio::fs::remove_file(&target).await;
+                                    // l'exit naturale conta solo se l'utente
+                                    // non ha già sostituito il player
+                                    if st.is_ok() && *rx.borrow() == gen {
+                                        let _ = out2.send(Ok(label2));
                                     }
-                                    cmd.arg(&target);
-                                    cmd.stdout(std::process::Stdio::null());
-                                    cmd.stderr(std::process::Stdio::null());
-                                    match cmd.spawn() {
-                                        Ok(mut child) => {
-                                            cur.store(
-                                                child.id(),
-                                                std::sync::atomic::Ordering::Relaxed,
-                                            );
-                                            let _ = child.wait();
-                                            let _ = std::fs::remove_file(&target);
-                                            let _ = out2.send(Ok(label2));
-                                        }
-                                        Err(e) => {
-                                            let _ = out2.send(Err(format!("player: {e}")));
-                                        }
-                                    }
-                                });
-                                let _ = out.send(Ok(format!("▶ {label}")));
-                            }
-                            None => {
-                                let _ =
-                                    out.send(Err("nessun player: installa mpv o ffplay".into()));
+                                }
+                                _ = rx.changed() => {
+                                    // sostituito da un Ctrl-P più recente: chiudi
+                                    let _ = child.kill().await;
+                                    let _ = tokio::fs::remove_file(&target).await;
+                                }
                             }
                         }
+                        Err(e) => {
+                            let _ = tokio::fs::remove_file(&target).await;
+                            let _ = out2.send(Err(format!("player: {e}")));
+                        }
                     }
-                    Err(e) => {
-                        let _ = out.send(Err(e));
-                    }
-                }
+                });
             }
         });
     }
+
 
     // stream aggiornamenti live
     let cfg = grammers_client::sender::UpdatesConfiguration { catch_up: false };
@@ -1970,9 +2067,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &mut played_rx,
                 &mut reacted_rx,
             ) => match done {
-                LoopEvent::History((peer_id, rows)) => {
-                    app.push_rows(peer_id, rows);
+                LoopEvent::History((peer_id, res)) => {
                     let is_open = app.current_chat().map(|c| c.peer_id) == Some(peer_id);
+                    let Ok(rows) = res else {
+                        // storia vuota e storia guasta sono cose diverse: un
+                        // errore di rete non deve apparire come "nessun messaggio"
+                        if is_open {
+                            app.status = format!("cronologia: {}", res.err().unwrap_or_default());
+                        }
+                        continue;
+                    };
+                    app.push_rows(peer_id, rows);
                     if is_open {
                         app.status = String::new();
                         // la cronologia è arrivata e la chat è a fuoco: il
@@ -2008,19 +2113,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         app.ensure_previews(&conv_tx, medias.iter());
                     }
                 }
-                LoopEvent::Sets(sets) => {
-                    let had_none = app.sets.is_none();
-                    app.sets = Some(sets);
-                    if had_none {
-                        app.status = String::new();
+                LoopEvent::Sets(res) => match res {
+                    Ok(sets) => {
+                        let had_none = app.sets.is_none();
+                        app.sets = Some(sets);
+                        if had_none {
+                            app.status = String::new();
+                        }
                     }
-                }
-                LoopEvent::Docs((set_id, docs)) => {
-                    app.set_docs.insert(set_id, docs);
-                    if app.open_set == Some(set_id) && app.set_level {
-                        app.status = String::new();
+                    Err(err) => {
+                        // sets resta None: riaprire il pannello ritenta
+                        app.status = format!("set: {err}");
                     }
-                }
+                },
+                LoopEvent::Docs((set_id, res)) => match res {
+                    Ok(docs) => {
+                        app.docs_fine(set_id);
+                        app.set_docs.insert(set_id, docs);
+                        if app.open_set == Some(set_id) && app.set_level {
+                            app.status = String::new();
+                        }
+                    }
+                    Err(err) => {
+                        // senza la lista la griglia può ripartire al prossimo
+                        // input: non inserire il set in set_docs come vuoto
+                        app.docs_failed(set_id);
+                        if app.open_set == Some(set_id) {
+                            app.status = format!("set: {err}");
+                        }
+                    }
+                },
                 LoopEvent::Converted((key, res)) => {
                     app.pending.remove(&key);
                     match res {

@@ -31,14 +31,25 @@ pub async fn convert_to_png(
     let raw_path = raw_source(&client, media).await?;
     let src = raw_path.clone();
     let dst = png_path.clone();
-    let converted = tokio::task::spawn_blocking(move || convert_sync(&src, &dst))
-        .await
-        .map_err(|e| format!("join: {e}"))??;
-    if !converted {
-        tokio::fs::remove_file(png_path).await.ok();
-        return Err("conversione impossibile".into());
+    let files = (src.clone(), dst.clone());
+    match tokio::task::spawn_blocking(move || {
+        let (src, dst) = files;
+        convert_sync(&src, &dst)
+    })
+    .await
+    {
+        // un errore a conversione partita lascia dietro un png monco:
+        // rimuovilo, altrimenti esists() lo restituisce roto per sempre
+        Ok(Ok(())) => Ok(png_path),
+        Ok(Err(e)) => {
+            let _ = tokio::fs::remove_file(&dst).await;
+            Err(e)
+        }
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&dst).await;
+            Err(format!("join: {e}"))
+        }
     }
-    Ok(png_path)
 }
 
 /// Scarica l'originale nella cache (se assente) e preleva il percorso con
@@ -110,7 +121,7 @@ fn gif_dims(bytes: &[u8]) -> Option<(u32, u32)> {
     ))
 }
 
-fn convert_sync(src: &Path, dst: &Path) -> Result<bool, String> {
+fn convert_sync(src: &Path, dst: &Path) -> Result<(), String> {
     let bytes = std::fs::read(src).map_err(|e| format!("read: {e}"))?;
     match (sniff(&bytes), is_apng(&bytes)) {
         // APNG: byte intatti, kitty anima in autonomia.
@@ -143,7 +154,7 @@ fn convert_sync(src: &Path, dst: &Path) -> Result<bool, String> {
             encode_png(&img, dst)?;
         }
     }
-    Ok(true)
+    Ok(())
 }
 
 /// Decodifica con lato massimo limitato (bassa RAM; le foto di Telegram
@@ -176,51 +187,81 @@ fn encode_png(img: &image::RgbaImage, dst: &Path) -> Result<(), String> {
 
 /// Ricodifica una GIF in APNG (kitty anima gli APNG da solo).
 /// Frame cap e delay per frame; da chiamare solo su gif ≤ 700px.
+///
+/// RAM piatta: due giri — il primo conta i frame (serve il numero esatto
+/// per l'header APNG), il secondo scrive ogni frame appena lo decodifica.
+/// Prima si accumulavano in RAM fino a 80 frame RGBA 700×700 ≈ 150 MB.
 pub fn gif_to_apng(src: &Path, dst: &Path, max_frames: usize) -> Result<(), String> {
     use image::AnimationDecoder;
     use png::{BitDepth, ColorType, Encoder as PngEnc};
-    let file = std::fs::File::open(src).map_err(|e| format!("open: {e}"))?;
+
+    let open = || std::fs::File::open(src).map_err(|e| format!("open: {e}"));
+    let count = {
+        let file = open()?;
+        let decoder = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file))
+            .map_err(|e| format!("gif: {e}"))?;
+        decoder.into_frames().take(max_frames).count()
+    };
+    if count == 0 {
+        return Err("gif vuota".into());
+    }
+
+    // secondo giro: streaming, un frame alla volta
+    let file = open()?;
     let decoder = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file))
         .map_err(|e| format!("gif: {e}"))?;
     let mut frames = decoder.into_frames();
-    // (rgba, delay_ms); le dimensioni sono comuni a tutti i frame gif
-    let mut shots: Vec<(Vec<u8>, u16)> = Vec::new();
-    let (mut w, mut h) = (0u32, 0u32);
-    for item in frames.by_ref() {
-        if shots.len() >= max_frames {
-            break;
-        }
+    let first = match frames.next() {
+        Some(Ok(f)) => f,
+        Some(Err(e)) => return Err(format!("frame: {e}")),
+        None => return Err("gif vuota".into()),
+    };
+    let w = first.buffer().width();
+    let h = first.buffer().height();
+    if w == 0 || h == 0 {
+        return Err("gif vuota".into());
+    }
+    let (num, denom) = first.delay().numer_denom_ms();
+    let first_delay = (num.max(1) / denom.max(1)).clamp(20, 600) as u16;
+
+    let out = std::fs::File::create(dst).map_err(|e| format!("create: {e}"))?;
+    let mut enc = PngEnc::new(std::io::BufWriter::new(out), w, h);
+    enc.set_color(ColorType::Rgba);
+    enc.set_depth(BitDepth::Eight);
+    enc.set_animated(count as u32, 0)
+        .map_err(|e| e.to_string())?;
+    let mut writer = enc.write_header().map_err(|e| e.to_string())?;
+    // il delay vale anche per il primo frame: senza, l'animazione partiva
+    // sempre al massimo della velocità
+    writer
+        .set_frame_delay(first_delay, 1000)
+        .map_err(|e| e.to_string())?;
+    writer
+        .write_image_data(first.buffer().as_raw())
+        .map_err(|e| format!("write f0: {e}"))?;
+
+    // dal secondo in poi, fino a completare il conteggio del primo giro
+    let mut left = count - 1;
+    while left > 0 {
+        let item = match frames.next() {
+            Some(i) => i,
+            None => return Err("gif inattesa: frame finiti in anticipo".into()),
+        };
         let frame = item.map_err(|e| format!("frame: {e}"))?;
         let (num, denom) = frame.delay().numer_denom_ms();
         let delay_ms = (num.max(1) / denom.max(1)).clamp(20, 600) as u16;
-        if w == 0 {
-            w = frame.buffer().width();
-            h = frame.buffer().height();
+        let bw = frame.buffer().width();
+        let bh = frame.buffer().height();
+        if bw != w || bh != h {
+            return Err(format!("frame inatteso {bw}x{bh} su {w}x{h}"));
         }
-        shots.push((frame.buffer().clone().into_raw(), delay_ms));
-    }
-    let Some((first_rgba, _)) = shots.first() else {
-        return Err("gif vuota".into());
-    };
-    let file = std::fs::File::create(dst).map_err(|e| format!("create: {e}"))?;
-    let mut enc = PngEnc::new(std::io::BufWriter::new(file), w, h);
-    enc.set_color(ColorType::Rgba);
-    enc.set_depth(BitDepth::Eight);
-    enc.set_animated(shots.len() as u32, 0)
-        .map_err(|e| e.to_string())?;
-    let mut writer = enc.write_header().map_err(|e| e.to_string())?;
-    writer
-        .write_image_data(first_rgba)
-        .map_err(|e| format!("write f0: {e}"))?;
-    // dal secondo frame in poi: delay esplicito per APNG
-    shots.remove(0);
-    for (rgba, delay_ms) in shots {
         writer
             .set_frame_delay(delay_ms, 1000)
             .map_err(|e| e.to_string())?;
         writer
-            .write_image_data(&rgba)
+            .write_image_data(frame.buffer().as_raw())
             .map_err(|e| format!("write f: {e}"))?;
+        left -= 1;
     }
     Ok(())
 }
