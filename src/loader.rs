@@ -18,6 +18,36 @@ fn cache_raw(key: &str, ext: &str) -> PathBuf {
     media_dir().join(format!("{key}.{ext}"))
 }
 
+const CACHE_MAX_FILES: usize = 200;
+const CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Sfoltisce la cache degli asset: via i file più vecchi (per mtime) finché
+/// restano al massimo ~200 file e ~32 MiB. Da chiamare all'avvio, prima che
+/// il terminale riceva qualunque immagine.
+pub fn prune_cache() {
+    let Ok(rd) = std::fs::read_dir(media_dir()) else {
+        return;
+    };
+    let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = rd
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let md = e.metadata().ok()?;
+            md.is_file()
+                .then(|| (md.modified().unwrap_or(std::time::UNIX_EPOCH), md.len(), e.path()))
+        })
+        .collect();
+    // più recenti prima: si tiene la testa, si butta la coda
+    files.sort_by_key(|f| std::cmp::Reverse(f.0));
+    let (mut n, mut bytes) = (0usize, 0u64);
+    for (_, len, path) in files {
+        n += 1;
+        bytes += len;
+        if n > CACHE_MAX_FILES || bytes > CACHE_MAX_BYTES {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
 /// Scarica (se manca) e converte in PNG/APNG pronto per kitty.
 pub async fn convert_to_png(
     client: grammers_client::Client,

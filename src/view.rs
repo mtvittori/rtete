@@ -1107,6 +1107,242 @@ fn draw_card(
     );
 }
 
+impl crate::App {
+    /// Proietta la cronologia della chat aperta in righe schedulate dal TUI.
+    pub fn history_lines(&self, width: usize) -> Vec<HistoryLine> {
+        let Some(rows) = self.open_history() else {
+            return Vec::new();
+        };
+        let mut lines = Vec::new();
+        for row in rows {
+            // etichetta: nome proprio per i messaggi in uscita, mittente per gli altri
+            let name = if row.outgoing {
+                if self.me.is_empty() {
+                    "Io"
+                } else {
+                    self.me.as_str()
+                }
+            } else if row.from.is_empty() {
+                "Lui"
+            } else {
+                row.from.as_str()
+            };
+            let label = msg_label(name);
+            let name_style = if row.outgoing {
+                OUTGOING
+            } else {
+                FG
+            };
+            match &row.kind {
+                tg::RowKind::Text(text) => {
+                    let (pieces, mut span_lines) =
+                        wrap_links(text, width.saturating_sub(LABEL_W + 3));
+                    if pieces.is_empty() {
+                        continue;
+                    }
+                    // le colonne dei link slittano della larghezza dell'etichetta
+                    let shift = (LABEL_W + 3) as u16;
+                    let first_spans = span_lines
+                        .first_mut()
+                        .map(|v| {
+                            v.iter()
+                                .map(|(a, b, u)| (a + shift, b + shift, u.clone()))
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+                    lines.push(HistoryLine {
+                        text: format!("{label}{}", pieces[0]),
+                        color: name_style,
+                        sticker: false,
+                        animated: false,
+                        sticker_media: None,
+                        rows: 1,
+                        frac: 0,
+                        id: row.id,
+                        links: first_spans,
+                    });
+                    for (i, piece) in pieces[1..].iter().enumerate() {
+                        let links = span_lines
+                            .get(i + 1)
+                            .map(|v| {
+                                v.iter()
+                                    .map(|(a, b, u)| (a + shift, b + shift, u.clone()))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        lines.push(HistoryLine {
+                            text: format!("{} │ {}", " ".repeat(LABEL_W), piece),
+                            color: name_style,
+                            ..HistoryLine::sep()
+                        });
+                        if let Some(last) = lines.last_mut() {
+                            last.id = row.id;
+                            last.links = links;
+                        }
+                    }
+                }
+                tg::RowKind::Sticker {
+                    media,
+                    emoji,
+                    animated,
+                } => {
+                    lines.push(HistoryLine {
+                        text: format!(
+                            "{label}sticker {emoji}{}",
+                            if *animated {
+                                " (tgs animato, non renderizzato)"
+                            } else {
+                                ""
+                            }
+                        ),
+                        color: if *animated {
+                            WARNING
+                        } else {
+                            ACCENT
+                        },
+                        sticker: !*animated,
+                        animated: *animated,
+                        sticker_media: Some(media.clone()),
+                        rows: if *animated {
+                            1
+                        } else {
+                            band_rows(false) + 1
+                        },
+                        frac: 50,
+                        id: row.id,
+                        links: Vec::new(),
+                    });
+                }
+                tg::RowKind::Photo {
+                    media,
+                    caption,
+                    gif,
+                } => {
+                    let cap_txt = if caption.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" — “{caption}”")
+                    };
+                    let line_text = format!(
+                        "{label}{}{}",
+                        if *gif { "🎞 gif" } else { "📷 foto" },
+                        cap_txt
+                    );
+                    lines.push(HistoryLine {
+                        text: line_text.clone(),
+                        color: name_style,
+                        sticker: true,
+                        animated: *gif,
+                        sticker_media: Some(media.clone()),
+                        rows: band_rows(true) + 1,
+                        frac: 66,
+                        id: row.id,
+                        links: scan_links(&line_text),
+                    });
+                }
+                tg::RowKind::Doc {
+                    media: _,
+                    name,
+                    size,
+                    caption,
+                } => {
+                    let size_txt = size
+                        .map(|s| format!(" ({})", tg::fmt_size(s as f64)))
+                        .unwrap_or_default();
+                    let cap_txt = if caption.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" — “{caption}”")
+                    };
+                    lines.push(HistoryLine {
+                        text: format!("{label}📄 {name}{size_txt}{cap_txt} · Ctrl-O salva"),
+                        color: ACCENT_DIM,
+                        ..HistoryLine::sep()
+                    });
+                    if let Some(last) = lines.last_mut() {
+                        last.id = row.id;
+                        last.links = scan_links(&last.text);
+                    }
+                }
+                tg::RowKind::Audio {
+                    name,
+                    seconds,
+                    caption,
+                    voice,
+                    ..
+                } => {
+                    let main = if *voice {
+                        format!("🎙 vocale {}", tg::fmt_secs(*seconds))
+                    } else {
+                        format!("🎧 {}", name)
+                    };
+                    let cap_txt = if caption.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" — “{caption}”")
+                    };
+                    lines.push(HistoryLine {
+                        text: format!("{label}{main}{cap_txt} · Ctrl-P riproduce"),
+                        color: ACCENT_DIM,
+                        ..HistoryLine::sep()
+                    });
+                    if let Some(last) = lines.last_mut() {
+                        last.links = scan_links(&last.text);
+                    }
+                }
+                tg::RowKind::Note(text) => {
+                    lines.push(HistoryLine {
+                        text: format!("{label}🎥 {text}"),
+                        color: ACCENT_DIM,
+                        ..HistoryLine::sep()
+                    });
+                    if let Some(last) = lines.last_mut() {
+                        last.id = row.id;
+                        last.links = scan_links(&last.text);
+                    }
+                }
+                tg::RowKind::Service(text) => {
+                    lines.push(HistoryLine {
+                        text: format!("· {text}"),
+                        color: INCOMING,
+                        ..HistoryLine::sep()
+                    });
+                    if let Some(last) = lines.last_mut() {
+                        last.id = row.id;
+                        last.links = scan_links(&last.text);
+                    }
+                }
+            }
+            // reazioni visibili sotto il messaggio
+            if !row.reactions.is_empty() {
+                let mut rtxt = String::new();
+                for (i, r) in row.reactions.iter().enumerate() {
+                    if i > 0 {
+                        rtxt.push_str("  ");
+                    }
+                    rtxt.push_str(&format!("{} {}", r.emoticon, r.count));
+                    if r.mine {
+                        rtxt.push_str(" ✓");
+                    }
+                }
+                lines.push(HistoryLine {
+                    text: format!("{} │ {}", " ".repeat(LABEL_W), rtxt),
+                    color: FAINT,
+                    ..HistoryLine::sep()
+                });
+                if let Some(last) = lines.last_mut() {
+                    last.id = row.id;
+                }
+            }
+            lines.push(HistoryLine::sep());
+        }
+        if !lines.is_empty() {
+            lines.pop(); // rimuove l'ultimo separatore
+        }
+        lines
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

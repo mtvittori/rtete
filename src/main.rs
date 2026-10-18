@@ -61,7 +61,7 @@ pub enum Cmd {
 pub struct App {
     pub contacts: Vec<tg::DialogInfo>,
     pub contact_cursor: usize,
-    pub open: Option<usize>,
+    pub open: Option<PeerId>,
     pub histories: HashMap<PeerId, VecDeque<tg::HistoryRow>>,
     pub compose: String,
     pub status: String,
@@ -123,7 +123,9 @@ pub struct App {
 
 impl App {
     pub fn current_chat(&self) -> Option<&tg::DialogInfo> {
-        self.open.and_then(|i| self.contacts.get(i))
+        self.open
+            .as_ref()
+            .and_then(|pid| self.contacts.iter().find(|c| tg::same_peer(c.peer_id, *pid)))
     }
 
     pub fn open_history(&self) -> Option<&VecDeque<tg::HistoryRow>> {
@@ -245,7 +247,7 @@ impl App {
     /// appena fallito non parte di nuovo finché il backoff non scade.
     fn ensure_previews<'a>(
         &mut self,
-        conv_tx: &mpsc::UnboundedSender<Media>,
+        req: &mpsc::UnboundedSender<Request>,
         medias: impl IntoIterator<Item = &'a Media>,
     ) {
         for media in medias {
@@ -259,7 +261,7 @@ impl App {
                 }
             }
             if self.pending.insert(key) {
-                let _ = conv_tx.send(media.clone());
+                let _ = req.send(Request::Conv(media.clone()));
             }
         }
     }
@@ -338,19 +340,88 @@ enum SendKind {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Richieste verso i worker: un solo canale in ingresso (prima dieci
+/// coppie mpsc e un `waiting_pick` che girava a mano pescando dal primo
+/// canale che rispondeva, con `.expect("servizio chiuso")` ovunque).
+enum Request {
+    Hist {
+        peer_ref: PeerRefT,
+        peer: PeerId,
+    },
+    Sets,
+    SetDocs {
+        set_id: i64,
+        short: String,
+    },
+    /// conversione png: il dispatcher la limita con un semaforo a 2 posti
+    Conv(Media),
+    Send(SendJob),
+    Del {
+        peer_ref: PeerRefT,
+        id: i32,
+    },
+    Search {
+        peer_ref: PeerRefT,
+        query: String,
+    },
+    Save {
+        media: Media,
+        name: String,
+    },
+    Play {
+        media: Media,
+        fname: String,
+        label: String,
+    },
+    React {
+        peer_ref: PeerRefT,
+        msg_id: i32,
+        emoticon: Option<String>,
+    },
+}
+
+/// Risposte dei worker: un solo canale verso il ciclo; ogni variante ha
+/// il suo aggiornamento di stato (le voci della vecchia LoopEvent restano).
+// Come SendKind: i payload viaggiano interi, il boxing aggiungerebbe solo
+// allocazioni.
+#[allow(clippy::large_enum_variant)]
+enum Response {
+    Hist {
+        peer: PeerId,
+        rows: Result<Vec<tg::HistoryRow>, String>,
+    },
+    Sets(Result<Vec<tg::StickerSetInfo>, String>),
+    Docs {
+        set_id: i64,
+        docs: Result<Vec<Media>, String>,
+    },
+    Converted((String, Result<PathBuf, String>)),
+    Sent(Result<SendDone, String>),
+    Deleted(Result<(), String>),
+    Searched(Result<Vec<tg::SearchHit>, String>),
+    Saved(Result<String, String>),
+    Played(Result<String, String>),
+    Reacted(Result<(), String>),
+    /// il probe wl-clipboard ha girato a thread fuori dal ciclo eventi
+    Clipboard(ClipboardHit),
+}
+
+/// Esito del probe degli appunti (wl-clipboard gira a thread, fuori dal
+/// ciclo degli eventi): immagine con byte e mime, testo, oppure vuoto.
+enum ClipboardHit {
+    Image(Vec<u8>, &'static str),
+    Text(String),
+    Empty,
+}
+
+/// generazione progressiva del player audio (niente pid esterni)
+static NEXT_PLAY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 async fn handle_event(
     app: &mut App,
     ev: Event,
-    hist_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId)>,
-    send_tx: &mpsc::UnboundedSender<SendJob>,
-    sets_tx: &mpsc::UnboundedSender<()>,
-    set_req_tx: &mpsc::UnboundedSender<(i64, String)>,
-    conv_tx: &mpsc::UnboundedSender<Media>,
-    del_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId, i32)>,
-    search_tx: &mpsc::UnboundedSender<(PeerRefT, String)>,
-    save_tx: &mpsc::UnboundedSender<(Media, String)>,
-    play_tx: &mpsc::UnboundedSender<(Media, String, String)>,
-    react_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId, i32, Option<String>)>,
+    req: &mpsc::UnboundedSender<Request>,
+    res: &mpsc::UnboundedSender<Response>,
 ) {
     match ev {
         Event::Resize(_, _) => {}
@@ -371,7 +442,7 @@ async fn handle_event(
                             return;
                         }
                         'v' => {
-                            ctrl_paste(app);
+                            ctrl_paste(app, res);
                             return;
                         }
                         _ => {} // altre lettere col super: al flusso normale
@@ -394,15 +465,15 @@ async fn handle_event(
                             }
                         }
                         // ctrl/cmd+V: incolla dagli appunti (via wl-paste)
-                        'v' => ctrl_paste(app),
+                        'v' => ctrl_paste(app, res),
                         // modifica l'ultimo tuo messaggio di testo
                         'e' => ctrl_edit(app),
                         // arma la cancellazione dell'ultimo tuo messaggio
                         'd' => ctrl_delete(app),
                         // salva l'ultimo documento ricevuto in ~/Downloads
-                        'o' => ctrl_save(app, save_tx),
+                        'o' => ctrl_save(app, req),
                         // riproduce l'ultimo audio (vocale o brano)
-                        'p' => ctrl_play(app, play_tx),
+                        'p' => ctrl_play(app, req),
                         // copia il messaggio selezionato negli appunti
                         'y' => ctrl_copy(app),
                         // reazioni veloci sul messaggio selezionato
@@ -508,9 +579,9 @@ async fn handle_event(
                     app.react_idx = app.react_idx.saturating_sub(1);
                 }
                 KeyCode::Left if app.show_sticker => grid_left(app),
-                KeyCode::Right if app.show_sticker => grid_right(app, set_req_tx),
+                KeyCode::Right if app.show_sticker => grid_right(app, req),
                 KeyCode::Char('h') if app.show_sticker => grid_left(app),
-                KeyCode::Char('l') if app.show_sticker => grid_right(app, set_req_tx),
+                KeyCode::Char('l') if app.show_sticker => grid_right(app, req),
                 // Tab apre/chiude il pannello sticker: 's' torna una lettera
                 KeyCode::Tab if !app.show_search && !app.del_arm => {
                     app.editing = None;
@@ -526,17 +597,11 @@ async fn handle_event(
                         app.sticker_cursor = 0;
                         if app.sets.is_none() {
                             app.status = "scarico i set di sticker…".into();
-                            let _ = sets_tx.send(());
+                            let _ = req.send(Request::Sets);
                         }
                     }
                 }
-                KeyCode::Enter => {
-                    on_enter(
-                        app, hist_tx, send_tx, set_req_tx, conv_tx, del_tx, search_tx,
-                        react_tx,
-                    )
-                    .await
-                }
+                KeyCode::Enter => on_enter(app, req).await,
                 KeyCode::Backspace => {
                     app.del_arm = false;
                     app.del_id = None;
@@ -708,7 +773,7 @@ fn ctrl_delete(app: &mut App) {
 }
 
 /// Riproduce l'ultimo audio (vocale o brano) della chat aperta.
-fn ctrl_play(app: &mut App, play_tx: &mpsc::UnboundedSender<(Media, String, String)>) {
+fn ctrl_play(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     app.status.clear();
     if app.show_search || app.show_sticker {
         return;
@@ -740,7 +805,7 @@ fn ctrl_play(app: &mut App, play_tx: &mpsc::UnboundedSender<(Media, String, Stri
             let fname = if *voice {
                 format!("voce-{}.ogg", tg::media_key(media))
             } else {
-                name.replace('/', "_").replace("..", "_")
+                tg::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
             };
             Some((media.clone(), fname, label))
         }
@@ -752,14 +817,14 @@ fn ctrl_play(app: &mut App, play_tx: &mpsc::UnboundedSender<(Media, String, Stri
     match found {
         Some((media, fname, label)) => {
             app.status = format!("scarico «{label}» e la riproduco…");
-            let _ = play_tx.send((media, fname, label));
+            let _ = req.send(Request::Play { media, fname, label });
         }
         None => app.status = "nessun audio nella cronologia caricata".into(),
     }
 }
 
 /// Salva su disco l'ultimo documento (o foto) della chat aperta.
-fn ctrl_save(app: &mut App, save_tx: &mpsc::UnboundedSender<(Media, String)>) {
+fn ctrl_save(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     app.status.clear();
     if app.show_search || app.show_sticker {
         return;
@@ -791,9 +856,10 @@ fn ctrl_save(app: &mut App, save_tx: &mpsc::UnboundedSender<(Media, String)>) {
     };
     match found {
         Some((media, name)) => {
-            let safe = name.replace('/', "_").replace("..", "_");
-            app.status = format!("salvo «{safe}» in ~/Downloads…");
-            let _ = save_tx.send((media, safe));
+            // la pulizia del nome sta nel worker (sanitize_file_name): qui
+            // l'utente vede il nome originale
+            app.status = format!("salvo «{name}» in ~/Downloads…");
+            let _ = req.send(Request::Save { media, name });
         }
         None => app.status = "nessun documento da salvare nella cronologia caricata".into(),
     }
@@ -925,112 +991,6 @@ fn ctrl_copy(app: &mut App) {
             Err(_) => eprintln!("[rtete] wl-copy non trovato (installa wl-clipboard)"),
         }
     });
-}
-
-/// cmd+V: incolla dagli appunti. Se il clipboard contiene un'immagine
-/// (image/png o image/jpeg) la salva in tmp e la prepara come foto da
-/// inviare; altrimenti fa il paste di testo (via wl-paste, esterno e
-/// momentaneo). Nel compose il testo multi-riga resta intatto; nella
-/// ricerca gli accapo diventano spazi e il cap limita i caratteri.
-fn ctrl_paste(app: &mut App) {
-    if app.show_search {
-        app.del_arm = false;
-        app.del_id = None;
-        let text = clipboard_text();
-        if text.is_empty() {
-            app.status = "appunti vuoti (serve wl-clipboard)".into();
-            return;
-        }
-        let clean = paste_text(&text, false, 200);
-        app.search_q.push_str(&clean);
-    } else if app.open.is_some() && app.editing.is_none() {
-        // immagine negli appunti? diventa la foto da inviare
-        if let Some((path, kb)) = clipboard_image() {
-            if let Some(old) = app.pending_photo.take() {
-                let _ = std::fs::remove_file(old);
-            }
-            app.pending_photo = Some(path.display().to_string());
-            app.del_arm = false;
-            app.del_id = None;
-            app.status = format!("foto ({kb} KB) pronta — Invio invia, il testo del compose è la didascalia");
-            return;
-        }
-        app.del_arm = false;
-        app.del_id = None;
-        let text = clipboard_text();
-        if text.is_empty() {
-            app.status = "appunti vuoti (serve wl-clipboard)".into();
-            return;
-        }
-        let cap = 4000usize.saturating_sub(app.compose.chars().count());
-        let clean = paste_text(&text, true, cap.min(4000));
-        app.compose.push_str(&clean);
-    }
-}
-
-/// Cerca un'immagine image/png|jpeg negli appunti: la butta su file in
-/// ~/.local/share/rtete/tmp/ e ritorna (percorso, KB). WL-clipboard.
-fn clipboard_image() -> Option<(std::path::PathBuf, usize)> {
-    use std::io::Write as _;
-    let probe_wl = |mut cmd: std::process::Command| -> Option<Vec<u8>> {
-        cmd.stdin(std::process::Stdio::null());
-        cmd.stdout(std::process::Stdio::piped());
-        let res = cmd.output().ok()?;
-        Some(res.stdout)
-    };
-    let probe = |extra: &[&str]| -> Option<Vec<u8>> {
-        let mut cmd = std::process::Command::new("wl-paste");
-        for a in extra {
-            cmd.arg(a);
-        }
-        probe_wl(cmd)
-    };
-    let raw = probe(&["--list-types"])?;
-    let types = String::from_utf8_lossy(&raw);
-    let mime = ["image/png", "image/jpeg"].iter().copied().find(|m| {
-        types
-            .lines()
-            .any(|t| t.trim().eq_ignore_ascii_case(m))
-    })?;
-    let bytes = probe(&["--type", mime])?;
-    if bytes.is_empty() {
-        return None;
-    }
-    // tmp sta dentro data_dir (0700): uno screenshot non resta leggibile
-    // dagli altri utenti come farebbe un 644
-    let dir = tg::tmp_dir();
-    tg::ensure_private_dir(&dir).ok()?;
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let ext = if mime == "image/jpeg" { "jpg" } else { "png" };
-    let path = dir.join(format!("appunti-{ts}.{ext}"));
-    // 0600 sin dalla creazione, non scritto con la umask e poi sistemato
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&path)
-        .and_then(|mut f| f.write_all(&bytes))
-        .ok()?;
-    Some((path, bytes.len() / 1024))
-}
-
-/// testo degli appunti via wl-paste (legge i byte UTF-8; se non c'è, vuoto).
-fn clipboard_text() -> String {
-    match std::process::Command::new("wl-paste")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-    {
-        Ok(ch) => ch
-            .wait_with_output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-            .unwrap_or_default(),
-        Err(_) => String::new(),
-    }
 }
 
 /// Pulisce il testo incollato: via i caratteri di controllo, le nuove
@@ -1175,7 +1135,7 @@ fn grid_left(app: &mut App) {
 }
 
 /// Dentro il pannello: destra nella griglia, o ingresso nel set sotto il cursore.
-fn grid_right(app: &mut App, set_req_tx: &mpsc::UnboundedSender<(i64, String)>) {
+fn grid_right(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     app.status.clear();
     if !app.set_level {
         if let Some(sets) = app.sets.as_ref() {
@@ -1186,7 +1146,10 @@ fn grid_right(app: &mut App, set_req_tx: &mpsc::UnboundedSender<(i64, String)>) 
                 // già qui, o in attesa di backoff da un errore recente? via
                 if !app.set_docs.contains_key(&set.set_id) && !app.docs_cooling(set.set_id) {
                     app.status = format!("scarico il set {}…", set.title);
-                    let _ = set_req_tx.send((set.set_id, set.short_name.clone()));
+                    let _ = req.send(Request::SetDocs {
+                        set_id: set.set_id,
+                        short: set.short_name.clone(),
+                    });
                 }
             }
         }
@@ -1196,16 +1159,7 @@ fn grid_right(app: &mut App, set_req_tx: &mpsc::UnboundedSender<(i64, String)>) 
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn on_enter(
-    app: &mut App,
-    hist_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId)>,
-    send_tx: &mpsc::UnboundedSender<SendJob>,
-    set_req_tx: &mpsc::UnboundedSender<(i64, String)>,
-    conv_tx: &mpsc::UnboundedSender<Media>,
-    del_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId, i32)>,
-    search_tx: &mpsc::UnboundedSender<(PeerRefT, String)>,
-    react_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId, i32, Option<String>)>,
-) {
+async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     // reazioni veloci aperte: Invio toggle sull'emoji corrente
     if app.react_open {
         let emoticon = tg::QUICK_REACTIONS[app.react_idx].to_string();
@@ -1213,19 +1167,18 @@ async fn on_enter(
         let peer = app
             .current_chat()
             .map(|c| (c.peer_ref, c.peer_id));
-        if let (Some(mid), Some((peer_ref, pid))) = (mid, peer) {
+        if let (Some(mid), Some((peer_ref, _))) = (mid, peer) {
             // già mia? → la tolgo
             let mine_already = app
                 .open_history()
                 .and_then(|ring| ring.iter().find(|r| r.id == mid))
                 .map(|r| r.reactions.iter().any(|i| i.mine && i.emoticon == emoticon))
                 .unwrap_or(false);
-            let _ = react_tx.send((
+            let _ = req.send(Request::React {
                 peer_ref,
-                pid,
-                mid,
-                if mine_already { None } else { Some(emoticon.clone()) },
-            ));
+                msg_id: mid,
+                emoticon: if mine_already { None } else { Some(emoticon.clone()) },
+            });
             app.optimistic_react(&emoticon);
             app.react_open = false;
             app.status = if mine_already {
@@ -1252,34 +1205,43 @@ async fn on_enter(
                     // già qui, o in attesa di backoff da un errore recente? via
                     if !app.set_docs.contains_key(&set.set_id) && !app.docs_cooling(set.set_id) {
                         app.status = format!("scarico il set {}…", set.title);
-                        let _ = set_req_tx.send((set.set_id, set.short_name.clone()));
+                        let _ = req.send(Request::SetDocs {
+                            set_id: set.set_id,
+                            short: set.short_name.clone(),
+                        });
                     }
                 }
             }
         } else if let Some(docs) = docs {
             if let Some(chat) = app.current_chat() {
                 if let Some(media) = docs.get(app.sticker_cursor) {
-                    let _ = send_tx.send(SendJob {
+                    let _ = req.send(Request::Send(SendJob {
                         peer: chat.peer_ref,
                         peer_id: chat.peer_id,
                         kind: SendKind::Sticker(media.clone()),
-                    });
+                    }));
                     app.status = "invio sticker…".into();
                 }
             }
             // anteprime: converti tutta la griglia
-            app.ensure_previews(conv_tx, docs.iter());
+            app.ensure_previews(req, docs.iter());
         } else {
             app.status = "sticker ancora in scaricamento…".into();
         }
         return;
     }
 
-    // passare a un'altra chat: chiude edit/canc/ricerca
-    if app.open.is_none() || app.contact_cursor != app.open.unwrap_or(usize::MAX) {
-        if let Some(chat) = app.contacts.get(app.contact_cursor) {
-            app.open = Some(app.contact_cursor);
-            let _ = hist_tx.send((chat.peer_ref, chat.peer_id));
+    // passare a un'altra chat: chiude edit/canc/ricerca; `open` tiene il
+    // PeerId (il cursore dei contatti si sposta nelle voci nuove senza
+    // scartare la chat rimasta aperta: l'indice si scalarci, l'id no)
+    if let Some(chat) = app.contacts.get(app.contact_cursor) {
+        let switching = app.current_chat().map(|c| c.peer_id) != Some(chat.peer_id);
+        if switching {
+            app.open = Some(chat.peer_id);
+            let _ = req.send(Request::Hist {
+                peer_ref: chat.peer_ref,
+                peer: chat.peer_id,
+            });
             app.status = "carico la cronologia…".into();
             app.editing = None;
             app.del_arm = false;
@@ -1304,7 +1266,7 @@ async fn on_enter(
                     .and_then(|ring| ring.iter().rev().find(|r| r.outgoing).map(|r| r.id))
             });
             if let Some(id) = target {
-                let _ = del_tx.send((peer_ref, pid, id));
+                let _ = req.send(Request::Del { peer_ref, id });
                 app.status = format!("cancello il messaggio #{id}…");
                 if app.msg_cursor == Some(id) {
                     app.msg_cursor = None;
@@ -1323,7 +1285,10 @@ async fn on_enter(
                 app.status = "scrivi cosa cercare".into();
                 return;
             }
-            let _ = search_tx.send((chat.peer_ref, app.search_q.clone()));
+            let _ = req.send(Request::Search {
+                peer_ref: chat.peer_ref,
+                query: app.search_q.clone(),
+            });
             app.status = format!("cerco «{}»…", app.search_q);
         }
         return;
@@ -1336,14 +1301,14 @@ async fn on_enter(
         app.editing = None;
         if let Some(chat) = app.current_chat() {
             let (peer_ref, pid) = (chat.peer_ref, chat.peer_id);
-            let _ = send_tx.send(SendJob {
+            let _ = req.send(Request::Send(SendJob {
                 peer: peer_ref,
                 peer_id: pid,
                 kind: SendKind::Photo {
                     path,
                     caption: caption_text,
                 },
-            });
+            }));
             app.status = "invio la foto…".into();
         } else {
             app.pending_photo = Some(path);
@@ -1361,11 +1326,11 @@ async fn on_enter(
             app.compose.clear();
             app.editing = None;
             if let Some((peer_ref, peer_id)) = peer {
-                let _ = send_tx.send(SendJob {
+                let _ = req.send(Request::Send(SendJob {
                     peer: peer_ref,
                     peer_id,
                     kind: SendKind::EditText { id: edit_id, text },
-                });
+                }));
                 app.status = format!("salvo la modifica #{edit_id}…");
             }
         } else {
@@ -1380,11 +1345,11 @@ async fn on_enter(
             let peer_id = app.current_chat().map(|c| c.peer_id);
             let text = app.compose.clone();
             app.compose.clear();
-            let _ = send_tx.send(SendJob {
+            let _ = req.send(Request::Send(SendJob {
                 peer: peer_ref,
                 peer_id: peer_id.unwrap(),
                 kind: SendKind::Text(text),
-            });
+            }));
             app.status = "invio…".into();
         }
     }
@@ -1499,20 +1464,6 @@ async fn handle_update(
     }
 }
 
-#[allow(clippy::large_enum_variant)]
-enum LoopEvent {
-    History((PeerId, Result<Vec<tg::HistoryRow>, String>)),
-    Sets(Result<Vec<tg::StickerSetInfo>, String>),
-    Docs((i64, Result<Vec<Media>, String>)),
-    Converted((String, Result<PathBuf, String>)),
-    Sent(Result<SendDone, String>),
-    Deleted(Result<(), String>),
-    Searched(Result<Vec<tg::SearchHit>, String>),
-    Saved(Result<String, String>),
-    Played(Result<String, String>),
-    Reacted(Result<(), String>),
-}
-
 /// Individua un comando nel PATH senza dipendenze esterne.
 fn which(cmd: &str) -> bool {
     std::env::var("PATH")
@@ -1521,37 +1472,415 @@ fn which(cmd: &str) -> bool {
         .any(|d| std::path::Path::new(d).join(cmd).exists())
 }
 
-/// Primo servizio che risponde tra i canali.
-#[allow(clippy::too_many_arguments)]
-async fn waiting_pick(
-    hist_rx: &mut mpsc::UnboundedReceiver<(PeerId, Result<Vec<tg::HistoryRow>, String>)>,
-    sets_list_rx: &mut mpsc::UnboundedReceiver<Result<Vec<tg::StickerSetInfo>, String>>,
-    docs_rx: &mut mpsc::UnboundedReceiver<(i64, Result<Vec<Media>, String>)>,
-    done_rx: &mut mpsc::UnboundedReceiver<(String, Result<PathBuf, String>)>,
-    sent_rx: &mut mpsc::UnboundedReceiver<Result<SendDone, String>>,
-    deleted_rx: &mut mpsc::UnboundedReceiver<Result<(), String>>,
-    searched_rx: &mut mpsc::UnboundedReceiver<Result<Vec<tg::SearchHit>, String>>,
-    saved_rx: &mut mpsc::UnboundedReceiver<Result<String, String>>,
-    played_rx: &mut mpsc::UnboundedReceiver<Result<String, String>>,
-    reacted_rx: &mut mpsc::UnboundedReceiver<Result<(), String>>,
-) -> LoopEvent {
-    tokio::select! {
-        v = hist_rx.recv() => LoopEvent::History(v.expect("servizio cronologia chiuso")),
-        v = sets_list_rx.recv() => LoopEvent::Sets(v.expect("servizio set chiuso")),
-        v = docs_rx.recv() => LoopEvent::Docs(v.expect("servizio documenti chiuso")),
-        v = done_rx.recv() => LoopEvent::Converted(v.expect("servizio conversioni chiuso")),
-        v = sent_rx.recv() => LoopEvent::Sent(v.expect("servizio invii chiuso")),
-        v = deleted_rx.recv() => LoopEvent::Deleted(v.expect("servizio cancellazioni chiuso")),
-        v = searched_rx.recv() => LoopEvent::Searched(v.expect("servizio ricerche chiuso")),
-        v = saved_rx.recv() => LoopEvent::Saved(v.expect("servizio salvataggi chiuso")),
-        v = played_rx.recv() => LoopEvent::Played(v.expect("servizio riproduzioni chiuso")),
-        v = reacted_rx.recv() => LoopEvent::Reacted(v.expect("servizio reazioni chiuso")),
+/// Un invio testi/foto/sticker o l'edit di un messaggio (era il vecchio
+/// worker: solo estratto in funzione, il dispatcher lo esegue per job).
+async fn send_job(
+    client: &grammers_client::Client,
+    job: SendJob,
+) -> Result<SendDone, String> {
+    match job.kind {
+        SendKind::Text(text) => match tg::send_text(client, job.peer, &text).await {
+            Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
+            Err(e) => Err(e.to_string()),
+        },
+        SendKind::Sticker(media) => match tg::send_sticker(client, job.peer, &media).await {
+            Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
+            Err(e) => Err(e.to_string()),
+        },
+        SendKind::Photo { path, caption } => {
+            match tg::send_photo(client, job.peer, std::path::Path::new(&path), &caption).await {
+                Ok(m) => {
+                    // l'upload chiude il job: il temporaneo non serve più
+                    let _ = std::fs::remove_file(&path);
+                    row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row))
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        SendKind::EditText { id, text } => {
+            match tg::edit_text(client, job.peer, id, &text).await {
+                Ok(()) => Ok(SendDone::Edit(
+                    job.peer_id,
+                    tg::HistoryRow {
+                        id,
+                        outgoing: true,
+                        from: String::new(),
+                        kind: tg::RowKind::Text(text),
+                        reactions: Vec::new(),
+                    },
+                )),
+                Err(e) => Err(e.to_string()),
+            }
+        }
     }
+}
+
+/// Un salvataggio: scarica in .part e sposta col nome libero (mai
+/// sovrascritture, mai parziali col nome finale).
+async fn save_job(
+    client: &grammers_client::Client,
+    media: Media,
+    name: String,
+) -> Result<String, String> {
+    let Some(sane) = tg::sanitize_file_name(&name) else {
+        return Err("nome file vuoto o inutilizzabile".into());
+    };
+    let dir = tg::downloads_dir();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let tmp = dir.join(format!(".rtete-{ts}.part"));
+    let res = match tg::download_media_to(client, &media, tmp.clone()).await {
+        Ok(()) => {
+            // scaricato per intero: prendi un nome libero e sposta
+            let target = tg::unique_save_path(&dir, &sane);
+            match std::fs::rename(&tmp, &target) {
+                Ok(()) => Ok(target.display().to_string()),
+                Err(e) => Err(format!("spostamento: {e}")),
+            }
+        }
+        Err(e) => Err(e),
+    };
+    // il .part avviato non merita di restare a sporcare la cartella
+    let _ = tokio::fs::remove_file(&tmp).await;
+    res
+}
+
+/// Riproduzione audio: niente kill esterni col pid (si riusano: uccideva
+/// un processo qualsiasi). La generazione gira su un watch: un nuovo
+/// Ctrl-P avanza il valore, il task vecchio chiude figlio e temporanei
+/// e non manda l'Ok postumo che sovrascriveva lo stato sbagliato.
+async fn play_job(
+    client: &grammers_client::Client,
+    media: &Media,
+    target: PathBuf,
+    mut stop_rx: tokio::sync::watch::Receiver<u64>,
+    gen: u64,
+    label: String,
+    out: mpsc::UnboundedSender<Response>,
+) {
+    let _ = out.send(Response::Played(Ok(format!("▶ {label}"))));
+    if *stop_rx.borrow() != gen {
+        // già sostituito: via il temporaneo e chiudi
+        let _ = tokio::fs::remove_file(&target).await;
+        return;
+    }
+    if let Err(e) = tg::download_media_to(client, media, target.clone()).await {
+        let _ = tokio::fs::remove_file(&target).await;
+        let _ = out.send(Response::Played(Err(e)));
+        return;
+    }
+    if *stop_rx.borrow() != gen {
+        let _ = tokio::fs::remove_file(&target).await;
+        return;
+    }
+    let player = std::env::var("RTETE_PLAYER")
+        .ok()
+        .or_else(|| ["mpv", "ffplay"].iter().find(|p| which(p)).map(|p| p.to_string()));
+    let Some(p) = player else {
+        let _ = out.send(Response::Played(Err("nessun player: installa mpv o ffplay".into())));
+        return;
+    };
+    let is_mpv = std::path::Path::new(&p)
+        .file_name()
+        .map(|f| f == std::ffi::OsStr::new("mpv"))
+        .unwrap_or(false);
+    let mut cmd = tokio::process::Command::new(&p);
+    if is_mpv {
+        cmd.args(["--no-video", "--no-terminal", "--really-quiet"]);
+    } else {
+        cmd.args(["-nodisp", "-autoexit", "-loglevel", "quiet"]);
+    }
+    cmd.arg(&target);
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
+    // cintura di sicurezza: allo drop del figlio si chiude da sé
+    cmd.kill_on_drop(true);
+    let Ok(mut child) = cmd.spawn() else {
+        let _ = tokio::fs::remove_file(&target).await;
+        let _ = out.send(Response::Played(Err("player: non parte".into())));
+        return;
+    };
+    tokio::select! {
+        st = child.wait() => {
+            let _ = tokio::fs::remove_file(&target).await;
+            // l'exit naturale conta solo senza player più recente
+            if st.is_ok() && *stop_rx.borrow() == gen {
+                let _ = out.send(Response::Played(Ok(label)));
+            }
+        }
+        _ = stop_rx.changed() => {
+            // sostituito da un Ctrl-P nuovo: chiudi senza Ok (il verso
+            // arriva dal nuovo player)
+            let _ = child.kill().await;
+            let _ = tokio::fs::remove_file(&target).await;
+        }
+    }
+}
+
+/// L'intero ramo di risposte del ciclo eventi, estratto in funzione:
+/// una ricezione sola sul canale (prima: dieci canali e un waiting_pick
+/// che scartava a mano il primo che rispondeva).
+async fn handle_response(
+    app: &mut App,
+    resp: Response,
+    client: &grammers_client::Client,
+    req: &mpsc::UnboundedSender<Request>,
+) {
+    match resp {
+        Response::Hist { peer, rows } => {
+            let is_open = app.current_chat().map(|c| c.peer_id) == Some(peer);
+            let Ok(rows) = rows else {
+                // storia vuota e storia guasta sono cose diverse: un errore
+                // di rete non deve apparire come "nessun messaggio"
+                if is_open {
+                    app.status = format!("cronologia: {}", rows.err().unwrap_or_default());
+                }
+                return;
+            };
+            app.push_rows(peer, rows);
+            if is_open {
+                app.status = String::new();
+                // la storia è arrivata e la chat è a fuoco: il badge
+                // unread della barra sparisce
+                for d in app.contacts.iter_mut() {
+                    if tg::same_peer(d.peer_id, peer) {
+                        d.unread = 0;
+                        break;
+                    }
+                }
+                if let Some(chat) = app.current_chat() {
+                    let peer_ref = chat.peer_ref;
+                    let cl = client.clone();
+                    tokio::spawn(async move {
+                        let _ = cl.mark_as_read(peer_ref).await;
+                    });
+                }
+                let medias: Vec<Media> = app
+                    .histories
+                    .get(&peer)
+                    .map(|ring| {
+                        ring.iter()
+                            .filter_map(|r| match &r.kind {
+                                tg::RowKind::Sticker { media, animated, .. } => {
+                                    if *animated { None } else { Some(media.clone()) }
+                                }
+                                tg::RowKind::Photo { media, .. } => Some(media.clone()),
+                                _ => None,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                app.ensure_previews(req, medias.iter());
+            }
+        }
+        Response::Sets(res) => match res {
+            Ok(sets) => {
+                let had_none = app.sets.is_none();
+                app.sets = Some(sets);
+                if had_none {
+                    app.status = String::new();
+                }
+            }
+            Err(err) => {
+                // sets resta None: riaprendo il pannello con Tab ritenta
+                app.status = format!("set: {err}");
+            }
+        },
+        Response::Docs { set_id, docs } => match docs {
+            Ok(docs) => {
+                app.docs_fine(set_id);
+                app.set_docs.insert(set_id, docs);
+                if app.open_set == Some(set_id) && app.set_level {
+                    app.status = String::new();
+                }
+            }
+            Err(err) => {
+                // senza la lista la griglia può ripartire al prossimo input:
+                // non inserire il set in set_docs come "vuoto però caricato"
+                app.docs_failed(set_id);
+                if app.open_set == Some(set_id) {
+                    app.status = format!("set: {err}");
+                }
+            }
+        },
+        Response::Converted((key, res)) => {
+            app.pending.remove(&key);
+            match res {
+                Ok(path) => {
+                    app.failed.remove(&key);
+                    app.previews.insert(key, path);
+                }
+                Err(_why) => app.conversion_failed(key),
+            }
+        }
+        Response::Sent(res) => match res {
+            Ok(SendDone::New(peer_id, row)) => {
+                app.push_row(peer_id, row);
+                app.status = String::new();
+            }
+            Ok(SendDone::Edit(peer_id, row)) => {
+                app.replace_row(peer_id, row);
+                app.status = "modifica salvata".into();
+            }
+            Err(err) => app.status = format!("invio: {err}"),
+        },
+        Response::Deleted(res) => match res {
+            Ok(()) => app.status = "cancellato".into(),
+            Err(err) => app.status = format!("cancellazione: {err}"),
+        },
+        Response::Searched(res) => match res {
+            Ok(hits) => {
+                let n = hits.len();
+                app.search_results = Some(hits);
+                app.search_cursor = 0;
+                app.status = format!("ricerca: {n} risultati (↓ per muoverti, Esc chiude)");
+            }
+            Err(err) => app.status = format!("ricerca: {err}"),
+        },
+        Response::Saved(res) => match res {
+            Ok(path) => app.status = format!("salvato in {path}"),
+            Err(err) => app.status = format!("salvataggio: {err}"),
+        },
+        Response::Played(res) => match res {
+            Ok(label) => app.status = label,
+            Err(err) => app.status = format!("riproduzione: {err}"),
+        },
+        Response::Reacted(res) => match res {
+            Ok(()) => app.status = "reazione salvata".into(),
+            Err(err) => app.status = format!("reazione: {err}"),
+        },
+        Response::Clipboard(hit) => handle_clipboard(app, hit),
+    }
+}
+
+/// Consegna del probe degli appunti (girava a thread fuori dal ciclo):
+/// lo stato della UI viene rileto qui, non al momento del Ctrl-V.
+fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
+    match hit {
+        ClipboardHit::Image(bytes, mime) => match clipboard_png_file(&bytes, mime) {
+            Some((path, kb)) => {
+                if let Some(old) = app.pending_photo.take() {
+                    let _ = std::fs::remove_file(old);
+                }
+                app.del_arm = false;
+                app.del_id = None;
+                app.pending_photo = Some(path.display().to_string());
+                app.status = format!(
+                    "foto ({kb} KB) pronta — Invio invia, il testo del compose è la didascalia"
+                );
+            }
+            None => app.status = "appunti: non leggo l'immagine".into(),
+        },
+        ClipboardHit::Text(text) => {
+            if app.show_search {
+                let clean = paste_text(&text, false, 200);
+                app.search_q.push_str(&clean);
+                app.status = "appunti incollati nella ricerca".into();
+            } else if app.open.is_some() && app.editing.is_none() {
+                let cap = 4000usize.saturating_sub(app.compose.chars().count());
+                let clean = paste_text(&text, true, cap.min(4000));
+                app.compose.push_str(&clean);
+                app.del_arm = false;
+                app.del_id = None;
+                let n = clean.chars().count();
+                app.status = format!("appunti: {n} caratteri incollati");
+            } else {
+                app.status = "apri prima una chat".into();
+            }
+        }
+        ClipboardHit::Empty => app.status = "appunti vuoti (serve wl-clipboard)".into(),
+    }
+}
+
+// ---------------- appunti (wl-clipboard) ------------------------------
+// Ctrl-V non blocca più il ciclo: il probe gira a thread e la conseguenza
+// arriva come Response::Clipboard, con lo stato della UI rilegto allora.
+
+/// wl-paste con argomenti extra: `None` se il processo manca o fallisce.
+fn wl_paste_bytes(extra: &[&str]) -> Option<Vec<u8>> {
+    let mut cmd = std::process::Command::new("wl-paste");
+    for a in extra {
+        cmd.arg(a);
+    }
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .output()
+        .ok()
+        .map(|o| o.stdout)
+}
+
+/// Tipi e byte degli appunti: prima l'immagine (png/jpeg), poi il testo.
+fn probe_clipboard() -> ClipboardHit {
+    let types = String::from_utf8_lossy(&wl_paste_bytes(&["--list-types"]).unwrap_or_default())
+        .into_owned();
+    let mime = ["image/png", "image/jpeg"]
+        .iter()
+        .copied()
+        .find(|m| types.lines().any(|t| t.trim().eq_ignore_ascii_case(m)));
+    if let Some(m) = mime {
+        if let Some(bytes) = wl_paste_bytes(&["--type", m]) {
+            return ClipboardHit::Image(bytes, m);
+        }
+    }
+    let text = String::from_utf8_lossy(&wl_paste_bytes(&[]).unwrap_or_default()).into_owned();
+    if text.is_empty() {
+        ClipboardHit::Empty
+    } else {
+        ClipboardHit::Text(text)
+    }
+}
+
+/// L'immagine degli appunti in file in tmp (0600): (percorso, KB).
+fn clipboard_png_file(bytes: &[u8], mime: &str) -> Option<(std::path::PathBuf, usize)> {
+    use std::io::Write as _;
+    if bytes.is_empty() {
+        return None;
+    }
+    // tmp sta dentro data_dir (0700): uno screenshot non resta leggibile
+    // dagli altri utenti come farebbe un 644
+    let dir = tg::tmp_dir();
+    tg::ensure_private_dir(&dir).ok()?;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let ext = if mime == "image/jpeg" { "jpg" } else { "png" };
+    let path = dir.join(format!("appunti-{ts}.{ext}"));
+    // 0600 sin dalla creazione, non scritto con la umask e poi sistemato
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)
+        .and_then(|mut f| f.write_all(bytes))
+        .ok()?;
+    Some((path, bytes.len() / 1024))
+}
+
+/// Ctrl-V non blocca la UI: il probe wl-paste gira a thread fuori dal
+/// ciclo; il risultato torna come Response::Clipboard mentre l'utente
+/// continua a usare il client (luce a volte i processi si inceppano).
+fn ctrl_paste(app: &mut App, res: &mpsc::UnboundedSender<Response>) {
+    app.del_arm = false;
+    app.del_id = None;
+    if !(app.show_search || (app.open.is_some() && app.editing.is_none())) {
+        return;
+    }
+    app.status = "appunti…".into();
+    let res = res.clone();
+    std::thread::spawn(move || {
+        let hit = probe_clipboard();
+        let _ = res.send(Response::Clipboard(hit));
+    });
 }
 
 /// La TUI sta a schermo; consumata una volta sola dal panic hook o dal
 /// Drop della guard, così non si ripristina due volte la stessa cosa.
 static TUI_UP: AtomicBool = AtomicBool::new(false);
+
 
 /// Ripristina raw mode, schermo alternativo, mouse e keyboard protocol.
 /// Ogni istruzione è eseguita con `let _`: se una fallisce, le altre
@@ -1610,6 +1939,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // rileva il supporto kitty graphics prima che la TUI prenda stdin
     kitty::startup_detect();
+    loader::prune_cache();
 
     println!("Verifico l'accesso al tuo account…");
     tg::sign_in(&client, &creds).await?;
@@ -1652,325 +1982,107 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // ---------------- canali di servizio -------------------------------
-    let (hist_tx, mut hist_req) = mpsc::unbounded_channel::<(PeerRefT, PeerId)>();
-    let (hist_done, mut hist_rx) =
-        mpsc::unbounded_channel::<(PeerId, Result<Vec<tg::HistoryRow>, String>)>();
-    let (sets_tx, mut sets_rx) = mpsc::unbounded_channel::<()>();
-    let (sets_done, mut sets_list_rx) =
-        mpsc::unbounded_channel::<Result<Vec<tg::StickerSetInfo>, String>>();
-    let (set_req_tx, mut set_req_rx) = mpsc::unbounded_channel::<(i64, String)>();
-    let (docs_tx, mut docs_rx) = mpsc::unbounded_channel::<(i64, Result<Vec<Media>, String>)>();
-    let (conv_tx, conv_rx) = mpsc::unbounded_channel::<Media>();
-    let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(String, Result<PathBuf, String>)>();
-    let (send_tx, mut send_rx) = mpsc::unbounded_channel::<SendJob>();
-    let (sent_tx, mut sent_rx) = mpsc::unbounded_channel::<Result<SendDone, String>>();
-    let (del_tx, mut del_req) = mpsc::unbounded_channel::<(PeerRefT, PeerId, i32)>();
-    let (deleted_tx, mut deleted_rx) = mpsc::unbounded_channel::<Result<(), String>>();
-    let (search_tx, mut search_req) = mpsc::unbounded_channel::<(PeerRefT, String)>();
-    let (searched_tx, mut searched_rx) =
-        mpsc::unbounded_channel::<Result<Vec<tg::SearchHit>, String>>();
-    let (save_tx, mut save_req) = mpsc::unbounded_channel::<(Media, String)>();
-    let (saved_tx, mut saved_rx) = mpsc::unbounded_channel::<Result<String, String>>();
-    let (play_tx, mut play_req) = mpsc::unbounded_channel::<(Media, String, String)>();
-    let (played_tx, mut played_rx) = mpsc::unbounded_channel::<Result<String, String>>();
-    let (react_tx, mut react_req) = mpsc::unbounded_channel::<(PeerRefT, PeerId, i32, Option<String>)>();
-    let (reacted_tx, mut reacted_rx) = mpsc::unbounded_channel::<Result<(), String>>();
+    // Un solo canale di richieste e uno di risposte: prima erano dieci
+    // coppie mpsc e un waiting_pick che girava a mano col primo canale che
+    // rispondeva, con `expect("servizio chiuso")` su ogni receive.
+    let (req_tx, mut req_rx) = mpsc::unbounded_channel::<Request>();
+    let (res_tx, mut res_rx) = mpsc::unbounded_channel::<Response>();
 
-    // cronologia: richiesta → risultato (l'errore viaggia col canale: un
-    // guasto di rete non deve presentarsi come "chat senza messaggi")
+    // dispatcher: un task per job (i lavori di rete vanno in parallelo);
+    // la sola conversione resta limitata a due in trasmissione con un
+    // semaforo, come i due vecchi worker (RAM piatta)
     {
         let cl = client.clone();
-        let out = hist_done;
+        let out = res_tx.clone();
+        let conv_permits = Arc::new(tokio::sync::Semaphore::new(2));
         tokio::spawn(async move {
-            while let Some((peer_ref, peer_id)) = hist_req.recv().await {
-                let rows = tg::load_history(&cl, peer_ref, MAX_HISTORY)
-                    .await
-                    .map_err(|e| e.to_string());
-                let _ = out.send((peer_id, rows));
-            }
-        });
-    }
-
-    // lista completa dei set installati (se fallisce resta None: frenarla
-    // fissa "in caricamento"; Tab, riaprendo il pannello, ritenta)
-    {
-        let cl = client.clone();
-        let out = sets_done;
-        tokio::spawn(async move {
-            while sets_rx.recv().await.is_some() {
-                let sets = tg::fetch_installed_sets(&cl).await.map_err(|e| e.to_string());
-                let _ = out.send(sets);
-            }
-        });
-    }
-
-    // documenti on-demand di un set (via short_name); un errore NON marca
-    // il set come "caricato": la griglia riparte al prossimo input sul
-    // pannello (con la pausa di backoff di docs_failed)
-    {
-        let cl = client.clone();
-        let out = docs_tx;
-        tokio::spawn(async move {
-            while let Some((set_id, short_name)) = set_req_rx.recv().await {
-                let docs = tg::fetch_set_docs_by_name(&cl, &short_name)
-                    .await
-                    .map(|docs| docs.into_iter().filter_map(tg::media_from_doc).collect())
-                    .map_err(|e| e.to_string());
-                let _ = out.send((set_id, docs));
-            }
-        });
-    }
-
-    // conversioni webp → png, due worker in serie tra loro (poco heap)
-    {
-        let shared = Arc::new(tokio::sync::Mutex::new(conv_rx));
-        for _ in 0..2 {
-            let rx = Arc::clone(&shared);
-            let cl = client.clone();
-            let out = done_tx.clone();
-            tokio::spawn(async move {
-                loop {
-                    let media = {
-                        let mut guard = rx.lock().await;
-                        guard.recv().await
-                    };
-                    let Some(media) = media else { break };
-                    let key = tg::media_key(&media);
-                    let res = loader::convert_to_png(cl.clone(), &media, key.clone())
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send((key, res));
-                }
-            });
-        }
-    }
-
-    // invio testi/sticker e modifiche
-    {
-        let cl = client.clone();
-        let out = sent_tx;
-        tokio::spawn(async move {
-            while let Some(job) = send_rx.recv().await {
-                let res: Result<SendDone, String> = match job.kind {
-                    SendKind::Text(text) => match tg::send_text(&cl, job.peer, &text).await {
-                        Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
-                        Err(e) => Err(e.to_string()),
-                    },
-                    SendKind::Sticker(media) => {
-                        match tg::send_sticker(&cl, job.peer, &media).await {
-                            Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
-                            Err(e) => Err(e.to_string()),
-                        }
-                    }
-                    SendKind::Photo { path, caption } => {
-                        match tg::send_photo(&cl, job.peer, std::path::Path::new(&path), &caption)
+            // sveglia del player audio in corsa: generazione sul watch
+            let mut play_alert: Option<tokio::sync::watch::Sender<u64>> = None;
+            while let Some(req) = req_rx.recv().await {
+                let cl = cl.clone();
+                let out = out.clone();
+                let permits = Arc::clone(&conv_permits);
+                match req {
+                    Request::Conv(media) => tokio::spawn(async move {
+                        let _gate = permits.acquire_owned().await;
+                        let key = tg::media_key(&media);
+                        let res = loader::convert_to_png(cl, &media, key.clone())
                             .await
-                        {
-                            Ok(m) => {
-                                // upload conclude il compito: il file temporaneo non serve più
-                                let _ = std::fs::remove_file(&path);
-                                row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row))
-                            }
-                            Err(e) => Err(e),
+                            .map_err(|e| e.to_string());
+                        let _ = out.send(Response::Converted((key, res)));
+                    }),
+                    Request::Hist { peer_ref, peer } => tokio::spawn(async move {
+                        // l'errore viaggia col canale: un guasto di rete non
+                        // è storia vuota ("chat senza messaggi")
+                        let rows = tg::load_history(&cl, peer_ref, MAX_HISTORY)
+                            .await
+                            .map_err(|e| e.to_string());
+                        let _ = out.send(Response::Hist { peer, rows });
+                    }),
+                    Request::Sets => tokio::spawn(async move {
+                        // se fallisce resta None: riaprire con Tab ritenta,
+                        // invece di servire per sempre una finta lista vuota
+                        let sets = tg::fetch_installed_sets(&cl)
+                            .await
+                            .map_err(|e| e.to_string());
+                        let _ = out.send(Response::Sets(sets));
+                    }),
+                    Request::SetDocs { set_id, short } => tokio::spawn(async move {
+                        // un errore NON marca il set come caricato: la
+                        // griglia riparte al prossimo input, dopo il backoff
+                        let docs = tg::fetch_set_docs_by_name(&cl, &short)
+                            .await
+                            .map(|docs| docs.into_iter().filter_map(tg::media_from_doc).collect())
+                            .map_err(|e| e.to_string());
+                        let _ = out.send(Response::Docs { set_id, docs });
+                    }),
+                    Request::Send(job) => tokio::spawn(async move {
+                        let res = send_job(&cl, job).await;
+                        let _ = out.send(Response::Sent(res));
+                    }),
+                    Request::Del { peer_ref, id } => tokio::spawn(async move {
+                        let res = tg::delete_messages(&cl, peer_ref, &[id])
+                            .await
+                            .map(|_| ())
+                            .map_err(|e| e.to_string());
+                        let _ = out.send(Response::Deleted(res));
+                    }),
+                    Request::Search { peer_ref, query } => tokio::spawn(async move {
+                        let res = tg::search_chat(&cl, peer_ref, &query, 40)
+                            .await
+                            .map_err(|e| e.to_string());
+                        let _ = out.send(Response::Searched(res));
+                    }),
+                    Request::React { peer_ref, msg_id, emoticon } => tokio::spawn(async move {
+                        let res = tg::send_reaction(&cl, peer_ref, msg_id, emoticon.as_deref())
+                            .await
+                            .map_err(|e| e.to_string());
+                        let _ = out.send(Response::Reacted(res));
+                    }),
+                    Request::Save { media, name } => tokio::spawn(async move {
+                        let res = save_job(&cl, media, name).await;
+                        let _ = out.send(Response::Saved(res));
+                    }),
+                    Request::Play { media, fname, label } => {
+                        // sveglia il player vecchio (se c'è): lui chiude
+                        // figlio e temporanei e non manda l'Ok postumo
+                        let gen = NEXT_PLAY.fetch_add(1, Ordering::Relaxed) + 1;
+                        if let Some(prev) = play_alert.take() {
+                            prev.send_replace(gen);
                         }
-                    }
-                    SendKind::EditText { id, text } => {
-                        match tg::edit_text(&cl, job.peer, id, &text).await {
-                            Ok(()) => Ok(SendDone::Edit(
-                                job.peer_id,
-                                tg::HistoryRow {
-                                    id,
-                                    outgoing: true,
-                                    from: String::new(),
-                                    kind: tg::RowKind::Text(text),
-                                    reactions: Vec::new(),
-                                },
-                            )),
-                            Err(e) => Err(e.to_string()),
-                        }
+                        let (alert, wait) = tokio::sync::watch::channel(gen);
+                        play_alert = Some(alert);
+                        // nel nome del temp la generazione: Ctrl-P vicini
+                        // non si pestano i propri file
+                        let target = tg::tmp_dir().join(format!("play-{gen}-{fname}"));
+                        tokio::spawn(async move {
+                            play_job(&cl, &media, target, wait, gen, label, out).await;
+                        })
                     }
                 };
-                let _ = out.send(res);
             }
         });
     }
-
-    // cancellazioni (revoke) dei messaggi propri
-    {
-        let cl = client.clone();
-        let out = deleted_tx;
-        tokio::spawn(async move {
-            while let Some((peer_ref, _peer_id, id)) = del_req.recv().await {
-                let res = tg::delete_messages(&cl, peer_ref, &[id])
-                    .await
-                    .map(|_| ())
-                    .map_err(|e| e.to_string());
-                let _ = out.send(res);
-            }
-        });
-    }
-
-    // ricerche server-side nella chat aperta
-    {
-        let cl = client.clone();
-        let out = searched_tx;
-        tokio::spawn(async move {
-            while let Some((peer_ref, query)) = search_req.recv().await {
-                let res = tg::search_chat(&cl, peer_ref, &query, 40)
-                    .await
-                    .map_err(|e| e.to_string());
-                let _ = out.send(res);
-            }
-        });
-    }
-
-    // reazioni veloci su un messaggio selezionato
-    {
-        let cl = client.clone();
-        let out = reacted_tx;
-        tokio::spawn(async move {
-            while let Some((peer_ref, _pid, msg_id, emoticon)) = react_req.recv().await {
-                let res = tg::send_reaction(&cl, peer_ref, msg_id, emoticon.as_deref())
-                    .await
-                    .map_err(|e| e.to_string());
-                let _ = out.send(res);
-            }
-        });
-    }
-
-    // salvataggi documenti in ~/Downloads: no sovrascritture e niente file
-    // parziali col nome finale (il download finiva direttamente sul file
-    // vero; il nome vuoto finiva puntando alla cartella stessa)
-    {
-        let cl = client.clone();
-        let out = saved_tx;
-        tokio::spawn(async move {
-            while let Some((media, name)) = save_req.recv().await {
-                let Some(sane) = tg::sanitize_file_name(&name) else {
-                    let _ = out.send(Err("nome file vuoto o inutilizzabile".into()));
-                    continue;
-                };
-                let dir = tg::downloads_dir();
-                let ts = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis())
-                    .unwrap_or(0);
-                let tmp = dir.join(format!(".rtete-{ts}.part"));
-                let res = match tg::download_media_to(&cl, &media, tmp.clone()).await {
-                    Ok(()) => {
-                        // scaricato per intero: trova un nome libero e sposta
-                        let target = tg::unique_save_path(&dir, &sane);
-                        match std::fs::rename(&tmp, &target) {
-                            Ok(()) => Ok(target.display().to_string()),
-                            Err(e) => Err(format!("spostamento: {e}")),
-                        }
-                    }
-                    Err(e) => Err(e),
-                };
-                // il .part non utile non resta a sporcare la cartella
-                let _ = tokio::fs::remove_file(&tmp).await;
-                let _ = out.send(res);
-            }
-        });
-    }
-
-    // riproduzione audio: scarica in tmp e lancia mpv/ffplay. Niente kill
-    // esterni per pid (soprattutto riusati: kill -TERM su un pid girato nel
-    // frattempo finiva su processi altrui): ogni player porta una
-    // generazione su un canale watch. Un nuovo Ctrl-P avanza la
-    // generazione e sveglia il task vecchio, che fa kill() sull'handle del
-    // figlio e NON manda l'Ok postumo (prima il thread morto manteneva
-    // vivo lo stato sbagliato)
-    {
-        let cl = client.clone();
-        let out = played_tx;
-        tokio::spawn(async move {
-            static NEXT_GEN: std::sync::atomic::AtomicU64 =
-                std::sync::atomic::AtomicU64::new(0);
-            // il player in corsa osserva il watch: valori oltre la sua
-            // generazione vuol dire "sostituito"
-            let mut prev_alert: Option<tokio::sync::watch::Sender<u64>> = None;
-            while let Some((media, fname, label)) = play_req.recv().await {
-                let gen = NEXT_GEN.fetch_add(1, Ordering::Relaxed) + 1;
-                // sveglia il player in corsa, se c'è: lui ferma figlio e file
-                if let Some(prev) = prev_alert.take() {
-                    prev.send_replace(gen);
-                }
-                let (tx, mut rx) = tokio::sync::watch::channel(gen);
-                prev_alert = Some(tx);
-
-                // nel nome del temp la generazione: Ctrl-P vicini non si
-                // pestano i propri file
-                let target = tg::tmp_dir().join(format!("play-{gen}-{fname}"));
-                let _ = out.send(Ok(format!("▶ {label}")));
-                let out2 = out.clone();
-                let label2 = label.clone();
-                let cl2 = cl.clone();
-                tokio::spawn(async move {
-                    let dl = tg::download_media_to(&cl2, &media, target.clone()).await;
-                    if *rx.borrow() != gen {
-                        // sostituito: via il file scaricato e chiudi
-                        let _ = tokio::fs::remove_file(&target).await;
-                        return;
-                    }
-                    if let Err(e) = dl {
-                        let _ = tokio::fs::remove_file(&target).await;
-                        let _ = out2.send(Err(e));
-                        return;
-                    }
-                    let player = std::env::var("RTETE_PLAYER").ok().or_else(|| {
-                        ["mpv", "ffplay"]
-                            .iter()
-                            .find(|p| which(p))
-                            .map(|p| p.to_string())
-                    });
-                    let Some(p) = player else {
-                        let _ = out2.send(Err("nessun player: installa mpv o ffplay".into()));
-                        return;
-                    };
-                    let is_mpv = std::path::Path::new(&p)
-                        .file_name()
-                        .map(|f| f == std::ffi::OsStr::new("mpv"))
-                        .unwrap_or(false);
-                    let mut cmd = tokio::process::Command::new(&p);
-                    if is_mpv {
-                        cmd.args(["--no-video", "--no-terminal", "--really-quiet"]);
-                    } else {
-                        cmd.args(["-nodisp", "-autoexit", "-loglevel", "quiet"]);
-                    }
-                    cmd.arg(&target);
-                    cmd.stdout(std::process::Stdio::null());
-                    cmd.stderr(std::process::Stdio::null());
-                    // cintura di sicurezza: allo drop del figlio lo termina
-                    cmd.kill_on_drop(true);
-                    match cmd.spawn() {
-                        Ok(mut child) => {
-                            tokio::select! {
-                                st = child.wait() => {
-                                    let _ = tokio::fs::remove_file(&target).await;
-                                    // l'exit naturale conta solo se l'utente
-                                    // non ha già sostituito il player
-                                    if st.is_ok() && *rx.borrow() == gen {
-                                        let _ = out2.send(Ok(label2));
-                                    }
-                                }
-                                _ = rx.changed() => {
-                                    // sostituito da un Ctrl-P più recente: chiudi
-                                    let _ = child.kill().await;
-                                    let _ = tokio::fs::remove_file(&target).await;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let _ = tokio::fs::remove_file(&target).await;
-                            let _ = out2.send(Err(format!("player: {e}")));
-                        }
-                    }
-                });
-            }
-        });
-    }
-
 
     // stream aggiornamenti live
     let cfg = grammers_client::sender::UpdatesConfiguration { catch_up: false };
@@ -2002,7 +2114,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     let mut events = EventStream::new();
-    let mut frame_had_images = false;
     let mut frame_sig: Vec<(u16, u16, u16, u16, String)> = Vec::new();
 
     while !app.quit {
@@ -2021,34 +2132,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .collect();
 
-        // aggiorna il pannello: prenota le anteprime degli sticker visibili
-        if !frame_had_images || sig != frame_sig {
-            app.refresh_preview_queue(&conv_tx);
+        // prenota le anteprime solo quando cambia l'asset visibile
+        if sig != frame_sig {
+            app.refresh_preview_queue(&req_tx);
         }
 
-        if frame_had_images && (sig.is_empty() || sig != frame_sig) {
-            kitty::clear_all();
-            frame_had_images = false;
+        // immagini: a=p a ogni frame; il dato dell'immagine entra UNA volta
+        // sola per path (t=f: il terminale legge il file da solo) e a fine
+        // frame le scomparse vengono rimosse per id — prima un `a=d,d=A` a
+        // ogni cambio di layout le svuotava tutte e la view le ritrasmetteva
+        // da zero (base64 sul pty, flicker)
+        kitty::frame_begin();
+        for cmd in cmds.drain(..) {
+            let Cmd::Place { rect, path } = cmd;
+            let size = kitty::square_fit(rect.width as u32, rect.height as u32);
+            let _ = kitty::draw_png(&path, (rect.x, rect.y), size);
         }
-        if !cmds.is_empty() && !frame_had_images {
-            for cmd in cmds.drain(..) {
-                let Cmd::Place { rect, path } = cmd;
-                let size = kitty::square_fit(rect.width as u32, rect.height as u32);
-                if kitty::draw_png(&path, (rect.x, rect.y), size).is_some() {
-                    frame_had_images = true;
-                }
-            }
-        }
-        cmds.clear();
+        kitty::frame_end();
         frame_sig = sig;
 
         tokio::select! {
             ev = events.next() => match ev {
                 Some(Ok(e)) => {
-                    handle_event(
-                        &mut app, e, &hist_tx, &send_tx, &sets_tx, &set_req_tx, &conv_tx,
-                        &del_tx, &search_tx, &save_tx, &play_tx, &react_tx,
-                    ).await
+                    handle_event(&mut app, e, &req_tx, &res_tx).await
                 }
                 Some(Err(_)) => {}
                 None => break,
@@ -2057,141 +2163,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(u) => handle_update(&mut app, &client, u).await,
                 Err(e) => app.status = format!("rete: {e}"),
             },
-            done = waiting_pick(
-                &mut hist_rx,
-                &mut sets_list_rx,
-                &mut docs_rx,
-                &mut done_rx,
-                &mut sent_rx,
-                &mut deleted_rx,
-                &mut searched_rx,
-                &mut saved_rx,
-                &mut played_rx,
-                &mut reacted_rx,
-            ) => match done {
-                LoopEvent::History((peer_id, res)) => {
-                    let is_open = app.current_chat().map(|c| c.peer_id) == Some(peer_id);
-                    let Ok(rows) = res else {
-                        // storia vuota e storia guasta sono cose diverse: un
-                        // errore di rete non deve apparire come "nessun messaggio"
-                        if is_open {
-                            app.status = format!("cronologia: {}", res.err().unwrap_or_default());
-                        }
-                        continue;
-                    };
-                    app.push_rows(peer_id, rows);
-                    if is_open {
-                        app.status = String::new();
-                        // la cronologia è arrivata e la chat è a fuoco: il
-                        // badge unread della barra sparisce
-                        for d in app.contacts.iter_mut() {
-                            if tg::same_peer(d.peer_id, peer_id) {
-                                d.unread = 0;
-                                break;
-                            }
-                        }
-                        if let Some(chat) = app.current_chat() {
-                            let peer_ref = chat.peer_ref;
-                            let cl = client.clone();
-                            tokio::spawn(async move {
-                                let _ = cl.mark_as_read(peer_ref).await;
-                            });
-                        }
-                        let medias: Vec<Media> = app
-                            .histories
-                            .get(&peer_id)
-                            .map(|ring| {
-                                ring.iter().filter_map(|r| {
-                                    match &r.kind {
-                                        tg::RowKind::Sticker { media, animated, .. } => {
-                                            if *animated { None } else { Some(media.clone()) }
-                                        }
-                                        tg::RowKind::Photo { media, .. } => Some(media.clone()),
-                                        _ => None,
-                                    }
-                                }).collect()
-                            })
-                            .unwrap_or_default();
-                        app.ensure_previews(&conv_tx, medias.iter());
-                    }
-                }
-                LoopEvent::Sets(res) => match res {
-                    Ok(sets) => {
-                        let had_none = app.sets.is_none();
-                        app.sets = Some(sets);
-                        if had_none {
-                            app.status = String::new();
-                        }
-                    }
-                    Err(err) => {
-                        // sets resta None: riaprire il pannello ritenta
-                        app.status = format!("set: {err}");
-                    }
-                },
-                LoopEvent::Docs((set_id, res)) => match res {
-                    Ok(docs) => {
-                        app.docs_fine(set_id);
-                        app.set_docs.insert(set_id, docs);
-                        if app.open_set == Some(set_id) && app.set_level {
-                            app.status = String::new();
-                        }
-                    }
-                    Err(err) => {
-                        // senza la lista la griglia può ripartire al prossimo
-                        // input: non inserire il set in set_docs come vuoto
-                        app.docs_failed(set_id);
-                        if app.open_set == Some(set_id) {
-                            app.status = format!("set: {err}");
-                        }
-                    }
-                },
-                LoopEvent::Converted((key, res)) => {
-                    app.pending.remove(&key);
-                    match res {
-                        Ok(path) => {
-                            app.failed.remove(&key);
-                            app.previews.insert(key, path);
-                        }
-                        Err(_why) => app.conversion_failed(key),
-                    }
-                }
-                LoopEvent::Sent(res) => match res {
-                    Ok(SendDone::New(peer_id, row)) => {
-                        app.push_row(peer_id, row);
-                        app.status = String::new();
-                    }
-                    Ok(SendDone::Edit(peer_id, row)) => {
-                        app.replace_row(peer_id, row);
-                        app.status = "modifica salvata".into();
-                    }
-                    Err(err) => app.status = format!("invio: {err}"),
-                },
-                LoopEvent::Deleted(res) => match res {
-                    Ok(()) => app.status = "cancellato".into(),
-                    Err(err) => app.status = format!("cancellazione: {err}"),
-                },
-                LoopEvent::Searched(res) => match res {
-                    Ok(hits) => {
-                        let n = hits.len();
-                        app.search_results = Some(hits);
-                        app.search_cursor = 0;
-                        app.status = format!("ricerca: {n} risultati (↓ per muoverti, Esc chiude)");
-                    }
-                    Err(err) => app.status = format!("ricerca: {err}"),
-                },
-                LoopEvent::Saved(res) => match res {
-                    Ok(path) => app.status = format!("salvato in {path}"),
-                    Err(err) => app.status = format!("salvataggio: {err}"),
-                },
-                LoopEvent::Played(res) => match res {
-                    Ok(label) => app.status = label,
-                    Err(err) => app.status = format!("riproduzione: {err}"),
-                },
-                LoopEvent::Reacted(res) => match res {
-                    Ok(()) => app.status = "reazione salvata".into(),
-                    Err(err) => app.status = format!("reazione: {err}"),
-                },
-            }
+            done = res_rx.recv() => match done {
+                Some(resp) => handle_response(&mut app, resp, &client, &req_tx).await,
+                None => break,
+            },
         }
     }
 
@@ -2200,241 +2175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 impl App {
-    /// Proietta la cronologia della chat aperta in righe schedulate dal TUI.
-    pub fn history_lines(&self, width: usize) -> Vec<view::HistoryLine> {
-        let Some(rows) = self.open_history() else {
-            return Vec::new();
-        };
-        let mut lines = Vec::new();
-        for row in rows {
-            // etichetta: nome proprio per i messaggi in uscita, mittente per gli altri
-            let name = if row.outgoing {
-                if self.me.is_empty() {
-                    "Io"
-                } else {
-                    self.me.as_str()
-                }
-            } else if row.from.is_empty() {
-                "Lui"
-            } else {
-                row.from.as_str()
-            };
-            let label = view::msg_label(name);
-            let name_style = if row.outgoing {
-                styles::OUTGOING
-            } else {
-                styles::FG
-            };
-            match &row.kind {
-                tg::RowKind::Text(text) => {
-                    let (pieces, mut span_lines) =
-                        view::wrap_links(text, width.saturating_sub(view::LABEL_W + 3));
-                    if pieces.is_empty() {
-                        continue;
-                    }
-                    // le colonne dei link slittano della larghezza dell'etichetta
-                    let shift = (view::LABEL_W + 3) as u16;
-                    let first_spans = span_lines
-                        .first_mut()
-                        .map(|v| {
-                            v.iter()
-                                .map(|(a, b, u)| (a + shift, b + shift, u.clone()))
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default();
-                    lines.push(view::HistoryLine {
-                        text: format!("{label}{}", pieces[0]),
-                        color: name_style,
-                        sticker: false,
-                        animated: false,
-                        sticker_media: None,
-                        rows: 1,
-                        frac: 0,
-                        id: row.id,
-                        links: first_spans,
-                    });
-                    for (i, piece) in pieces[1..].iter().enumerate() {
-                        let links = span_lines
-                            .get(i + 1)
-                            .map(|v| {
-                                v.iter()
-                                    .map(|(a, b, u)| (a + shift, b + shift, u.clone()))
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_default();
-                        lines.push(view::HistoryLine {
-                            text: format!("{} │ {}", " ".repeat(view::LABEL_W), piece),
-                            color: name_style,
-                            ..view::HistoryLine::sep()
-                        });
-                        if let Some(last) = lines.last_mut() {
-                            last.id = row.id;
-                            last.links = links;
-                        }
-                    }
-                }
-                tg::RowKind::Sticker {
-                    media,
-                    emoji,
-                    animated,
-                } => {
-                    lines.push(view::HistoryLine {
-                        text: format!(
-                            "{label}sticker {emoji}{}",
-                            if *animated {
-                                " (tgs animato, non renderizzato)"
-                            } else {
-                                ""
-                            }
-                        ),
-                        color: if *animated {
-                            styles::WARNING
-                        } else {
-                            styles::ACCENT
-                        },
-                        sticker: !*animated,
-                        animated: *animated,
-                        sticker_media: Some(media.clone()),
-                        rows: if *animated {
-                            1
-                        } else {
-                            view::band_rows(false) + 1
-                        },
-                        frac: 50,
-                        id: row.id,
-                        links: Vec::new(),
-                    });
-                }
-                tg::RowKind::Photo {
-                    media,
-                    caption,
-                    gif,
-                } => {
-                    let cap_txt = if caption.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" — “{caption}”")
-                    };
-                    let line_text = format!(
-                        "{label}{}{}",
-                        if *gif { "🎞 gif" } else { "📷 foto" },
-                        cap_txt
-                    );
-                    lines.push(view::HistoryLine {
-                        text: line_text.clone(),
-                        color: name_style,
-                        sticker: true,
-                        animated: *gif,
-                        sticker_media: Some(media.clone()),
-                        rows: view::band_rows(true) + 1,
-                        frac: 66,
-                        id: row.id,
-                        links: view::scan_links(&line_text),
-                    });
-                }
-                tg::RowKind::Doc {
-                    media: _,
-                    name,
-                    size,
-                    caption,
-                } => {
-                    let size_txt = size
-                        .map(|s| format!(" ({})", tg::fmt_size(s as f64)))
-                        .unwrap_or_default();
-                    let cap_txt = if caption.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" — “{caption}”")
-                    };
-                    lines.push(view::HistoryLine {
-                        text: format!("{label}📄 {name}{size_txt}{cap_txt} · Ctrl-O salva"),
-                        color: styles::ACCENT_DIM,
-                        ..view::HistoryLine::sep()
-                    });
-                    if let Some(last) = lines.last_mut() {
-                        last.id = row.id;
-                        last.links = view::scan_links(&last.text);
-                    }
-                }
-                tg::RowKind::Audio {
-                    name,
-                    seconds,
-                    caption,
-                    voice,
-                    ..
-                } => {
-                    let main = if *voice {
-                        format!("🎙 vocale {}", tg::fmt_secs(*seconds))
-                    } else {
-                        format!("🎧 {}", name)
-                    };
-                    let cap_txt = if caption.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" — “{caption}”")
-                    };
-                    lines.push(view::HistoryLine {
-                        text: format!("{label}{main}{cap_txt} · Ctrl-P riproduce"),
-                        color: styles::ACCENT_DIM,
-                        ..view::HistoryLine::sep()
-                    });
-                    if let Some(last) = lines.last_mut() {
-                        last.links = view::scan_links(&last.text);
-                    }
-                }
-                tg::RowKind::Note(text) => {
-                    lines.push(view::HistoryLine {
-                        text: format!("{label}🎥 {text}"),
-                        color: styles::ACCENT_DIM,
-                        ..view::HistoryLine::sep()
-                    });
-                    if let Some(last) = lines.last_mut() {
-                        last.id = row.id;
-                        last.links = view::scan_links(&last.text);
-                    }
-                }
-                tg::RowKind::Service(text) => {
-                    lines.push(view::HistoryLine {
-                        text: format!("· {text}"),
-                        color: styles::INCOMING,
-                        ..view::HistoryLine::sep()
-                    });
-                    if let Some(last) = lines.last_mut() {
-                        last.id = row.id;
-                        last.links = view::scan_links(&last.text);
-                    }
-                }
-            }
-            // reazioni visibili sotto il messaggio
-            if !row.reactions.is_empty() {
-                let mut rtxt = String::new();
-                for (i, r) in row.reactions.iter().enumerate() {
-                    if i > 0 {
-                        rtxt.push_str("  ");
-                    }
-                    rtxt.push_str(&format!("{} {}", r.emoticon, r.count));
-                    if r.mine {
-                        rtxt.push_str(" ✓");
-                    }
-                }
-                lines.push(view::HistoryLine {
-                    text: format!("{} │ {}", " ".repeat(view::LABEL_W), rtxt),
-                    color: styles::FAINT,
-                    ..view::HistoryLine::sep()
-                });
-                if let Some(last) = lines.last_mut() {
-                    last.id = row.id;
-                }
-            }
-            lines.push(view::HistoryLine::sep());
-        }
-        if !lines.is_empty() {
-            lines.pop(); // rimuove l'ultimo separatore
-        }
-        lines
-    }
-
-    fn refresh_preview_queue(&mut self, conv_tx: &mpsc::UnboundedSender<Media>) {
+    fn refresh_preview_queue(&mut self, req: &mpsc::UnboundedSender<Request>) {
         let mut medias: Vec<Media> = Vec::new();
         if let Some(ring) = self.open_history() {
             medias.extend(ring.iter().filter_map(|r| match &r.kind {
@@ -2458,6 +2199,6 @@ impl App {
             }
             medias.truncate(24);
         }
-        self.ensure_previews(conv_tx, medias.iter());
+        self.ensure_previews(req, medias.iter());
     }
 }
