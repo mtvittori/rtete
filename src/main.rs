@@ -35,6 +35,7 @@ fn row_from_msg(m: grammers_client::message::Message) -> Result<(PeerId, tg::His
         outgoing: true,
         from: tg::sender_name(&m),
         kind: tg::row_kind(m.media(), m.text().to_string()),
+        reactions: tg::collect_reactions(&m.raw),
     };
     Ok((peer_id, row))
 }
@@ -92,6 +93,10 @@ pub struct App {
     pub mouse_map: Vec<(u16, i32)>,
     /// foto dagli appunti pronta da inviare (percorso del file in tmp).
     pub pending_photo: Option<String>,
+    /// pannello reazioni veloci aperto sul messaggio selezionato.
+    pub react_open: bool,
+    /// indice nella lista tg::QUICK_REACTIONS.
+    pub react_idx: usize,
     pub quit: bool,
 }
 
@@ -142,6 +147,52 @@ impl App {
             while ring.len() > MAX_HISTORY {
                 ring.pop_front();
             }
+        }
+    }
+
+    /// Sostituisce (o applica) le reazioni di un messaggio: update server
+    /// o toggle locale ottimistico.
+    fn apply_reactions(&mut self, peer_id: PeerId, msg_id: i32, items: Vec<tg::ReactionItem>) {
+        let Some(ring) = self.histories.get_mut(&peer_id) else {
+            return;
+        };
+        if let Some(row) = ring.iter_mut().find(|r| r.id == msg_id) {
+            row.reactions = items;
+        }
+    }
+
+    /// Toggle locale immediato di una reazione sull'ultimo cursore (il
+    /// server conferma poi con l'update vero e proprio).
+    fn optimistic_react(&mut self, emoticon: &str) {
+        let Some(chat) = self.current_chat() else {
+            return;
+        };
+        let (pid, mid) = (chat.peer_id, self.msg_cursor);
+        let Some(mid) = mid else {
+            return;
+        };
+        let Some(ring) = self.histories.get_mut(&pid) else {
+            return;
+        };
+        let Some(row) = ring.iter_mut().find(|r| r.id == mid) else {
+            return;
+        };
+        let mine_same = row
+            .reactions
+            .iter()
+            .find(|r| r.mine && r.emoticon == emoticon);
+        if mine_same.is_some() {
+            // la tolgo: via il mio voto (e l'item se resta 0)
+            row.reactions.retain(|r| !(r.mine && r.emoticon == emoticon));
+        } else if let Some(item) = row.reactions.iter_mut().find(|r| r.emoticon == emoticon) {
+            item.count += 1;
+            item.mine = true;
+        } else {
+            row.reactions.push(tg::ReactionItem {
+                emoticon: emoticon.to_string(),
+                count: 1,
+                mine: true,
+            });
         }
     }
 
@@ -201,6 +252,7 @@ async fn handle_event(
     search_tx: &mpsc::UnboundedSender<(PeerRefT, String)>,
     save_tx: &mpsc::UnboundedSender<(Media, String)>,
     play_tx: &mpsc::UnboundedSender<(Media, String, String)>,
+    react_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId, i32, Option<String>)>,
 ) {
     match ev {
         Event::Resize(_, _) => {}
@@ -255,6 +307,16 @@ async fn handle_event(
                         'p' => ctrl_play(app, play_tx),
                         // copia il messaggio selezionato negli appunti
                         'y' => ctrl_copy(app),
+                        // reazioni veloci sul messaggio selezionato
+                        'r' => {
+                            app.react_idx = 0;
+                            app.react_open = !app.react_open;
+                            app.status = if app.react_open {
+                                "reazioni: ←/→ o 1..8 · Invio toggle · Esc chiude".into()
+                            } else {
+                                String::new()
+                            };
+                        }
                         // ricerca nella chat aperta
                         'f' if app.current_chat().is_some() => {
                             app.show_search = true;
@@ -309,6 +371,9 @@ async fn handle_event(
                             app.show_sticker = false;
                             app.open_set = None;
                         }
+                    } else if app.react_open {
+                        app.status = "reazioni: chiuse".into();
+                        app.react_open = false;
                     } else if app.pending_photo.is_some() {
                         app.status = "appunti: foto scartata".into();
                         if let Some(p) = app.pending_photo.take() {
@@ -336,8 +401,16 @@ async fn handle_event(
                     }
                 }
                 // orizzontale: solo nel pannello sticker (→ = l, ← = h)
-                KeyCode::Right if app.show_sticker => grid_right(app, set_req_tx),
+                // nel pannello reazioni: ←/→ muovono la scelta
+                KeyCode::Right if app.react_open => {
+                    let max = tg::QUICK_REACTIONS.len() - 1;
+                    app.react_idx = (app.react_idx + 1).min(max);
+                }
+                KeyCode::Left if app.react_open => {
+                    app.react_idx = app.react_idx.saturating_sub(1);
+                }
                 KeyCode::Left if app.show_sticker => grid_left(app),
+                KeyCode::Right if app.show_sticker => grid_right(app, set_req_tx),
                 KeyCode::Char('h') if app.show_sticker => grid_left(app),
                 KeyCode::Char('l') if app.show_sticker => grid_right(app, set_req_tx),
                 // Tab apre/chiude il pannello sticker: 's' torna una lettera
@@ -345,6 +418,7 @@ async fn handle_event(
                     app.editing = None;
                     app.del_arm = false;
                     app.del_id = None;
+                    app.react_open = false;
                     if let Some(p) = app.pending_photo.take() {
                         let _ = std::fs::remove_file(p);
                     }
@@ -361,6 +435,7 @@ async fn handle_event(
                 KeyCode::Enter => {
                     on_enter(
                         app, hist_tx, send_tx, set_req_tx, conv_tx, del_tx, search_tx,
+                        react_tx,
                     )
                     .await
                 }
@@ -373,7 +448,14 @@ async fn handle_event(
                         app.compose.pop();
                     }
                 }
-                KeyCode::Char(c) if !app.show_sticker => {
+                KeyCode::Char(c) if app.react_open && c.is_ascii_digit() => {
+                    let n = c as usize - '1' as usize + 1;
+                    if n >= 1 && n <= tg::QUICK_REACTIONS.len() {
+                        app.react_idx = n - 1;
+                        app.status = format!("reazioni: {} (Invio per applicare)", tg::QUICK_REACTIONS[n - 1]);
+                    }
+                }
+                KeyCode::Char(c) if !app.show_sticker && !app.react_open => {
                     app.del_arm = false;
                     app.del_id = None;
                     if app.show_search {
@@ -979,7 +1061,42 @@ async fn on_enter(
     conv_tx: &mpsc::UnboundedSender<Media>,
     del_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId, i32)>,
     search_tx: &mpsc::UnboundedSender<(PeerRefT, String)>,
+    react_tx: &mpsc::UnboundedSender<(PeerRefT, PeerId, i32, Option<String>)>,
 ) {
+    // reazioni veloci aperte: Invio toggle sull'emoji corrente
+    if app.react_open {
+        let emoticon = tg::QUICK_REACTIONS[app.react_idx].to_string();
+        let mid = app.msg_cursor;
+        let peer = app
+            .current_chat()
+            .map(|c| (c.peer_ref, c.peer_id));
+        if let (Some(mid), Some((peer_ref, pid))) = (mid, peer) {
+            // già mia? → la tolgo
+            let mine_already = app
+                .open_history()
+                .and_then(|ring| ring.iter().find(|r| r.id == mid))
+                .map(|r| r.reactions.iter().any(|i| i.mine && i.emoticon == emoticon))
+                .unwrap_or(false);
+            let _ = react_tx.send((
+                peer_ref,
+                pid,
+                mid,
+                if mine_already { None } else { Some(emoticon.clone()) },
+            ));
+            app.optimistic_react(&emoticon);
+            app.react_open = false;
+            app.status = if mine_already {
+                "reazione via…".into()
+            } else {
+                format!("reazione {emoticon} su #{mid}…")
+            };
+        } else {
+            app.status = "seleziona prima un messaggio (↑/↓)".into();
+            app.react_open = false;
+        }
+        return;
+    }
+
     // pannello sticker: prima di tutto
     if app.show_sticker {
         let docs = app.open_set.and_then(|id| app.set_docs.get(&id)).cloned();
@@ -1147,6 +1264,7 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
 
     match update {
         Update::NewMessage(m) => {
+            let m = m.into_inner();
             let peer_id = m.peer_id();
             let outgoing = m.outgoing();
             let row = tg::HistoryRow {
@@ -1154,6 +1272,7 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
                 outgoing,
                 from: dialog_or(app, peer_id, tg::sender_name(&m)),
                 kind: tg::row_kind(m.media(), m.text().to_string()),
+                reactions: tg::collect_reactions(&m.raw),
             };
             let open_id = app.current_chat().map(|c| c.peer_id);
             if Some(peer_id) == open_id {
@@ -1168,12 +1287,14 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
             }
         }
         Update::MessageEdited(m) => {
+            let m = m.into_inner();
             let peer_id = m.peer_id();
             let row = tg::HistoryRow {
                 id: m.id(),
                 outgoing: m.outgoing(),
                 from: dialog_or(app, peer_id, tg::sender_name(&m)),
                 kind: tg::row_kind(m.media(), m.text().to_string()),
+                reactions: tg::collect_reactions(&m.raw),
             };
             app.replace_row(peer_id, row);
             if app.editing == Some(m.id()) {
@@ -1188,6 +1309,14 @@ async fn handle_update(app: &mut App, update: grammers_client::update::Update) {
             }
             if !ids.is_empty() {
                 app.status = format!("· {} messaggi cancellati in chat", ids.len());
+            }
+        }
+        Update::Raw(raw) => {
+            // le reazioni arrivano come update grezzo: aggiorna la riga
+            use grammers_client::tl;
+            if let tl::enums::Update::MessageReactions(u) = raw.raw {
+                let items = tg::reactions_from(&u.reactions);
+                app.apply_reactions(PeerId::from(u.peer), u.msg_id, items);
             }
         }
         _ => {}
@@ -1205,6 +1334,7 @@ enum LoopEvent {
     Searched(Result<Vec<tg::SearchHit>, String>),
     Saved(Result<String, String>),
     Played(Result<String, String>),
+    Reacted(Result<(), String>),
 }
 
 /// Individua un comando nel PATH senza dipendenze esterne.
@@ -1227,6 +1357,7 @@ async fn waiting_pick(
     searched_rx: &mut mpsc::UnboundedReceiver<Result<Vec<tg::SearchHit>, String>>,
     saved_rx: &mut mpsc::UnboundedReceiver<Result<String, String>>,
     played_rx: &mut mpsc::UnboundedReceiver<Result<String, String>>,
+    reacted_rx: &mut mpsc::UnboundedReceiver<Result<(), String>>,
 ) -> LoopEvent {
     tokio::select! {
         v = hist_rx.recv() => LoopEvent::History(v.expect("servizio cronologia chiuso")),
@@ -1238,6 +1369,7 @@ async fn waiting_pick(
         v = searched_rx.recv() => LoopEvent::Searched(v.expect("servizio ricerche chiuso")),
         v = saved_rx.recv() => LoopEvent::Saved(v.expect("servizio salvataggi chiuso")),
         v = played_rx.recv() => LoopEvent::Played(v.expect("servizio riproduzioni chiuso")),
+        v = reacted_rx.recv() => LoopEvent::Reacted(v.expect("servizio reazioni chiuso")),
     }
 }
 
@@ -1292,6 +1424,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         search_results: None,
         mouse_map: Vec::new(),
         pending_photo: None,
+        react_open: false,
+        react_idx: 0,
         quit: false,
     };
 
@@ -1315,6 +1449,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (saved_tx, mut saved_rx) = mpsc::unbounded_channel::<Result<String, String>>();
     let (play_tx, mut play_req) = mpsc::unbounded_channel::<(Media, String, String)>();
     let (played_tx, mut played_rx) = mpsc::unbounded_channel::<Result<String, String>>();
+    let (react_tx, mut react_req) = mpsc::unbounded_channel::<(PeerRefT, PeerId, i32, Option<String>)>();
+    let (reacted_tx, mut reacted_rx) = mpsc::unbounded_channel::<Result<(), String>>();
 
     // cronologia: richiesta → risultato
     {
@@ -1419,6 +1555,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     outgoing: true,
                                     from: String::new(),
                                     kind: tg::RowKind::Text(text),
+                                    reactions: Vec::new(),
                                 },
                             )),
                             Err(e) => Err(e.to_string()),
@@ -1452,6 +1589,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             while let Some((peer_ref, query)) = search_req.recv().await {
                 let res = tg::search_chat(&cl, peer_ref, &query, 40)
+                    .await
+                    .map_err(|e| e.to_string());
+                let _ = out.send(res);
+            }
+        });
+    }
+
+    // reazioni veloci su un messaggio selezionato
+    {
+        let cl = client.clone();
+        let out = reacted_tx;
+        tokio::spawn(async move {
+            while let Some((peer_ref, _pid, msg_id, emoticon)) = react_req.recv().await {
+                let res = tg::send_reaction(&cl, peer_ref, msg_id, emoticon.as_deref())
                     .await
                     .map_err(|e| e.to_string());
                 let _ = out.send(res);
@@ -1626,7 +1777,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(Ok(e)) => {
                     handle_event(
                         &mut app, e, &hist_tx, &send_tx, &sets_tx, &set_req_tx, &conv_tx,
-                        &del_tx, &search_tx, &save_tx, &play_tx,
+                        &del_tx, &search_tx, &save_tx, &play_tx, &react_tx,
                     ).await
                 }
                 Some(Err(_)) => {}
@@ -1646,6 +1797,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &mut searched_rx,
                 &mut saved_rx,
                 &mut played_rx,
+                &mut reacted_rx,
             ) => match done {
                 LoopEvent::History((peer_id, rows)) => {
                     app.push_rows(peer_id, rows);
@@ -1727,6 +1879,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 LoopEvent::Played(res) => match res {
                     Ok(label) => app.status = label,
                     Err(err) => app.status = format!("riproduzione: {err}"),
+                },
+                LoopEvent::Reacted(res) => match res {
+                    Ok(()) => app.status = "reazione salvata".into(),
+                    Err(err) => app.status = format!("reazione: {err}"),
                 },
             }
         }
@@ -1920,6 +2076,27 @@ impl App {
                     if let Some(last) = lines.last_mut() {
                         last.id = row.id;
                     }
+                }
+            }
+            // reazioni visibili sotto il messaggio
+            if !row.reactions.is_empty() {
+                let mut rtxt = String::new();
+                for (i, r) in row.reactions.iter().enumerate() {
+                    if i > 0 {
+                        rtxt.push_str("  ");
+                    }
+                    rtxt.push_str(&format!("{} {}", r.emoticon, r.count));
+                    if r.mine {
+                        rtxt.push_str(" ✓");
+                    }
+                }
+                lines.push(view::HistoryLine {
+                    text: format!("{} │ {}", " ".repeat(view::LABEL_W), rtxt),
+                    color: styles::FAINT,
+                    ..view::HistoryLine::sep()
+                });
+                if let Some(last) = lines.last_mut() {
+                    last.id = row.id;
                 }
             }
             lines.push(view::HistoryLine::sep());

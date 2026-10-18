@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use grammers_client::media::Media;
 use grammers_client::message::InputMessage;
+use grammers_client::message::InputReactions;
 use grammers_client::sender::SenderPool;
 use grammers_client::session::storages::SqliteSession;
 use grammers_client::session::types::PeerId;
@@ -34,6 +35,52 @@ pub struct HistoryRow {
     /// nome del mittente (vuoto per i messaggi propri: si usa quello dell'utente).
     pub from: String,
     pub kind: RowKind,
+    /// reazioni visibili: emoji standard (quelle custom si scartano).
+    pub reactions: Vec<ReactionItem>,
+}
+
+/// conteggio di una reazione standard sulla riga.
+#[derive(Clone, Debug)]
+pub struct ReactionItem {
+    pub emoticon: String,
+    pub count: i32,
+    /// seleziona questa reazione al momento.
+    pub mine: bool,
+}
+
+/// gli otto empresi veloci della scelta (tasti 1..8).
+pub const QUICK_REACTIONS: [&str; 8] = ["👍", "❤", "🔥", "😂", "🎉", "😮", "🙏", "👎"];
+
+///(conteggi) da una pagina delle reazioni (update server o raw del messaggio).
+pub fn reactions_from(container: &tl::enums::MessageReactions) -> Vec<ReactionItem> {
+    match container {
+        tl::enums::MessageReactions::Reactions(r) => r
+            .results
+            .iter()
+            .filter_map(|rc| {
+                let tl::enums::ReactionCount::Count(rc) = rc;
+                let tl::enums::Reaction::Emoji(e) = &rc.reaction else {
+                    return None; // reazioni custom senza entità: oggi niente
+                };
+                Some(ReactionItem {
+                    emoticon: e.emoticon.clone(),
+                    count: rc.count,
+                    mine: rc.chosen_order.is_some(),
+                })
+            })
+            .collect(),
+    }
+}
+
+/// le reazioni di un messaggio grezzo (storia: raw durante l'iter).
+pub fn collect_reactions(raw: &tl::enums::Message) -> Vec<ReactionItem> {
+    let tl::enums::Message::Message(inner) = raw else {
+        return Vec::new();
+    };
+    match inner.reactions.as_ref() {
+        Some(r) => reactions_from(r),
+        None => Vec::new(),
+    }
 }
 
 pub enum RowKind {
@@ -463,11 +510,13 @@ pub async fn load_history(
         let outgoing = m.outgoing();
         let from = sender_name(&m);
         let kind = row_kind(m.media(), m.text().to_string());
+        let reactions = collect_reactions(&m.raw);
         rows.push(HistoryRow {
             id,
             outgoing,
             from,
             kind,
+            reactions,
         });
     }
     rows.reverse();
@@ -562,6 +611,23 @@ pub async fn send_sticker(
     client
         .send_message(peer_ref, InputMessage::new().copy_media(media))
         .await
+}
+
+/// aggiunge o toglie la reazione standard a un messaggio (None = le mie via).
+pub async fn send_reaction(
+    client: &Client,
+    peer_ref: ChatRef,
+    msg_id: i32,
+    emoticon: Option<&str>,
+) -> Result<(), InvocationError> {
+    match emoticon {
+        Some(e) => client
+            .send_reactions(peer_ref, msg_id, InputReactions::emoticon(e))
+            .await,
+        None => client
+            .send_reactions(peer_ref, msg_id, InputReactions::remove())
+            .await,
+    }
 }
 
 /// Invia un file locale (PNG/JPEG) come foto del messaggio: upload piano,

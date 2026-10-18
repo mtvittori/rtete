@@ -99,6 +99,22 @@ pub fn msg_label(name: &str) -> String {
     format!("{trunc:<LABEL_W$} │ ")
 }
 
+/// La barra delle reazioni veloci: l'emoji scelta tra parentesi quadre.
+pub fn react_bar(idx: usize) -> String {
+    tg::QUICK_REACTIONS
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            if i == idx {
+                format!("[{e}]")
+            } else {
+                format!(" {e}  ")
+            }
+        })
+        .collect::<Vec<String>>()
+        .join(" ")
+}
+
 /// Word wrapping lineare, senza dipendenze. Le parole più larghe della riga
 /// vengono spezzate a livello di carattere (URL, parole appiccicate…).
 pub fn wrap(text: &str, width: usize) -> Vec<String> {
@@ -341,8 +357,15 @@ fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<
     f.render_widget(block, body[0]);
 
     // riquadro di composizione: ambra in modifica, giallo se cancella,
-    // l'immagine quando c'è una foto dagli appunti da inviare
-    let (c_border, c_title): (Color, Option<String>) = if app.del_arm {
+    // l'immagine quando c'è una foto dagli appunti da inviare,
+    // la barra delle reazioni quando è aperta (sostituisce il testo)
+    let react_bar = app.react_open.then(|| react_bar(app.react_idx));
+    let (c_border, c_title): (Color, Option<String>) = if app.react_open {
+        (
+            ACCENT,
+            Some(" reactions · ←/→ o 1..8 · Invio toggle · Esc chiude ".into()),
+        )
+    } else if app.del_arm {
         (
             WARNING,
             Some(" \u{2620} Invio = CANCELLA \u{b7} Esc annulla ".into()),
@@ -362,7 +385,15 @@ fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<
     } else {
         (FAINT, None)
     };
-    draw_input_box(f, body[1], &app.compose, c_title, c_border);
+    draw_input_box(
+        f,
+        body[1],
+        react_bar
+            .as_deref()
+            .unwrap_or(app.compose.as_str()),
+        c_title,
+        c_border,
+    );
 
     let width = msgs.width.saturating_sub(1) as usize;
     let lines = app.history_lines(width);
