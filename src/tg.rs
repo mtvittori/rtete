@@ -26,6 +26,8 @@ pub struct DialogInfo {
     pub peer_id: PeerId,
     pub is_group: bool,
     pub unread: usize,
+    /// chat fissata in alto (preferiti): resta sopra le altre.
+    pub pinned: bool,
 }
 
 /// One message rendered in the history pane.
@@ -512,6 +514,10 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
             tl::enums::Dialog::Dialog(raw) => raw.unread_count.max(0) as usize,
             _ => 0,
         };
+        let pinned = match &dialog.raw {
+            tl::enums::Dialog::Dialog(raw) => raw.pinned,
+            _ => false,
+        };
         out.push(DialogInfo {
             name,
             username: peer.username().map(str::to_string),
@@ -520,6 +526,7 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
             peer_id: dialog.peer_id(),
             is_group,
             unread: read_unread,
+            pinned,
         });
     }
     Ok(out)
@@ -545,6 +552,7 @@ pub async fn dialog_from_message(
         peer_ref,
         peer,
         unread: 0,
+        pinned: false,
     })
 }
 

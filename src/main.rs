@@ -175,18 +175,21 @@ impl App {
         }
     }
 
-    /// Porta la chat in cima alla lista come fa Telegram a ogni messaggio;
-    /// se è nuova la inserisce (`fresh`). Il cursore resta sulla stessa chat.
+    /// Porta la chat in cima alla lista come fa Telegram a ogni messaggio,
+    /// ma sotto le chat fissate (preferiti); se è nuova la inserisce
+    /// (`fresh`). Il cursore resta sulla stessa chat.
     fn bump_chat(&mut self, peer_id: PeerId, fresh: Option<tg::DialogInfo>) {
         let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
+        let pinned_len = self.contacts.iter().take_while(|c| c.pinned).count();
         match self.contacts.iter().position(|c| tg::same_peer(c.peer_id, peer_id)) {
-            Some(0) => return,
+            Some(i) if self.contacts[i].pinned => return,
+            Some(i) if i == pinned_len => return,
             Some(i) => {
                 let c = self.contacts.remove(i);
-                self.contacts.insert(0, c);
+                self.contacts.insert(pinned_len, c);
             }
             None => match fresh {
-                Some(d) => self.contacts.insert(0, d),
+                Some(d) => self.contacts.insert(pinned_len, d),
                 None => return,
             },
         }
