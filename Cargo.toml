@@ -16,6 +16,7 @@ base64 = "0.22"
 md5 = "0.8"
 rpassword = "7"
 jiff = "0.2.38"
+icy_sixel = "0.7.0"
 
 [profile.release]
 opt-level = 2

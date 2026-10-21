@@ -18,7 +18,8 @@ pub(crate) async fn handle_event(
     res: &mpsc::UnboundedSender<Response>,
 ) {
     match ev {
-        Event::Resize(_, _) => {}
+        // la finestra ha nuovi pixel per cella: sixel li usa per scalare le immagini
+        Event::Resize(_, _) => crate::gfx::refresh_cells(),
         Event::Key(k) => {
             if k.kind == KeyEventKind::Release {
                 return;

@@ -2,7 +2,8 @@
 # RTete — client Telegram TUI (~/Work/rtete).
 # Avvia il client nel miglior terminale disponibile per gli sticker:
 # kitty (kitty graphics protocol) → ghostty → wezterm → terminale di sistema.
-# Su foot/senza grafica sono visibili solo le etichette emoji.
+# Dentro foot gira sul posto: lì gli sticker passano da sixel.
+# Senza grafica sono visibili solo le etichette emoji.
 # Errori del client (stderr) finiscono su ~/.local/state/rtete.err.log:
 # la TUI usa solo stdout, quindi la visualizzazione resta intatta.
 set -uo pipefail
@@ -16,8 +17,25 @@ fi
 mkdir -m 700 -p "$HOME/.local/state"
 touch "$HOME/.local/state/rtete.err.log" && chmod 600 "$HOME/.local/state/rtete.err.log"
 
+# foot di Omarchy dichiara TERM=xterm-256color: lo si riconosce dal
+# processo antenato (stesso controllo di gfx.rs nel client).
+in_foot() {
+  [[ ${TERM:-} == foot* ]] && return 0
+  local pid=$PPID comm
+  while (( pid > 1 )); do
+    comm=$(<"/proc/$pid/comm") 2>/dev/null || return 1
+    [[ $comm == foot || $comm == footclient ]] && return 0
+    # stat: «pid (comm) stato ppid …»; comm può contenere spazi
+    # (tmux: «tmux: server»), quindi si legge dopo l'ultima «) »
+    pid=$(<"/proc/$pid/stat") 2>/dev/null || return 1
+    pid=${pid##*) }; pid=${pid#* }; pid=${pid%% *}
+    [[ $pid =~ ^[0-9]+$ ]] || return 1
+  done
+  return 1
+}
+
 # Già dentro un terminale compatibile: esegui qui, senza aprire finestre.
-if [[ -n ${KITTY_WINDOW_ID:-} || -n ${GHOSTTY_RESOURCES_DIR:-} || -n ${WEZTERM_PANE:-} ]]; then
+if in_foot || [[ -n ${KITTY_WINDOW_ID:-} || -n ${GHOSTTY_RESOURCES_DIR:-} || -n ${WEZTERM_PANE:-} ]]; then
   exec "$bin"
 fi
 

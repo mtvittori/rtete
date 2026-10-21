@@ -14,7 +14,7 @@ use ratatui::widgets::{
 };
 use ratatui::Frame;
 
-use crate::kitty;
+use crate::gfx;
 use crate::styles::*;
 use crate::tg;
 use crate::app::{App, Cmd, STICKER_COLS};
@@ -339,7 +339,7 @@ pub fn wrap_links(text: &str, width: usize) -> (Vec<String>, Vec<Vec<LinkSpan>>)
 
 pub fn draw(f: &mut Frame, app: &mut App, cmds: &mut Vec<Cmd>) {
     let area = f.area();
-    // carta crema su tutto lo schermo
+    // sfondo del terminale su tutto lo schermo
     f.render_widget(Block::new().style(Style::new().bg(BG)), area);
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -430,7 +430,7 @@ fn hints_line(pairs: &[(&str, &str)]) -> Line<'static> {
     for (name, key) in pairs {
         spans.push(Span::styled(
             format!(" {name} "),
-            Style::new().fg(BG).bg(SELECT),
+            Style::new().add_modifier(Modifier::REVERSED),
         ));
         spans.push(Span::styled(format!("<{key}>"), Style::new().fg(ACCENT)));
     }
@@ -494,7 +494,7 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
         .collect();
     let list = List::new(items)
         .style(Style::new().bg(BG))
-        .highlight_style(Style::new().bg(SELECT).fg(ON_SELECT))
+        .highlight_style(Style::new().fg(FG).bg(BG).add_modifier(Modifier::REVERSED))
         .highlight_symbol("▶ ");
     let mut state = ListState::default();
     state.select(Some(app.contact_cursor.min(app.contacts.len() - 1)));
@@ -634,19 +634,20 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
         if y >= y_end {
             break;
         }
-        // il messaggio sotto il cursore prende una barra di selezione scura
+        // il messaggio sotto il cursore prende la barra di selezione (colori invertiti)
         let picked = line.id != 0 && app.msg_cursor == Some(line.id);
-        let (fgc, bgc) = if picked {
-            (ON_SELECT, SELECT)
+        let (fgc, bgc) = (line.color, BG);
+        let sel = if picked {
+            Modifier::REVERSED
         } else {
-            (line.color, BG)
+            Modifier::empty()
         };
         if line.sticker {
             // etichetta nella prima riga riservata
             f.render_widget(
                 Paragraph::new(Span::styled(
                     line.text.clone(),
-                    Style::new().fg(fgc).bg(bgc),
+                    Style::new().fg(fgc).bg(bgc).add_modifier(sel),
                 )),
                 Rect {
                     x: msgs.x,
@@ -662,7 +663,7 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
                 if let Some(path) = app.previews.get(&key) {
                     let band = line.rows.saturating_sub(1);
                     let w = msgs.width.saturating_sub(1) * line.frac.max(1) / 100;
-                    let (fw, fh) = kitty::square_fit(w.max(2) as u32, band as u32);
+                    let (fw, fh) = gfx::square_fit(w.max(2) as u32, band as u32);
                     let rect = Rect {
                         x: msgs.x,
                         y,
@@ -678,8 +679,9 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
                         Paragraph::new(Span::styled(
                             "(in arrivo…)".to_string(),
                             Style::new()
-                                .fg(if picked { ON_SELECT } else { INCOMING })
-                                .bg(if picked { SELECT } else { BG }),
+                                .fg(INCOMING)
+                                .bg(BG)
+                                .add_modifier(sel),
                         )),
                         Rect {
                             x: msgs.x,
@@ -705,7 +707,10 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
                 width_fix = width_fix.min(msgs.width as usize + 1)
             );
             f.render_widget(
-                Paragraph::new(Span::styled(padded, Style::new().fg(fgc).bg(bgc))),
+                Paragraph::new(Span::styled(
+                    padded,
+                    Style::new().fg(fgc).bg(bgc).add_modifier(sel),
+                )),
                 Rect {
                     x: msgs.x,
                     y,
@@ -804,7 +809,7 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
                 ),
                 Style::new().fg(ACCENT),
             ),
-            Span::styled("esci ", Style::new().fg(BG).bg(SELECT)),
+            Span::styled("esci ", Style::new().add_modifier(Modifier::REVERSED)),
             Span::styled("<Esc>", Style::new().fg(ACCENT)),
         ])
         .left_aligned(),
@@ -879,7 +884,7 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
         .collect();
     let list = List::new(items)
         .style(Style::new().bg(BG))
-        .highlight_style(Style::new().bg(SELECT).fg(ON_SELECT));
+        .highlight_style(Style::new().fg(FG).bg(BG).add_modifier(Modifier::REVERSED));
     let mut state = ListState::default();
     state.select(Some(app.search_cursor));
     f.render_stateful_widget(list, inner, &mut state);
@@ -939,7 +944,7 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
                     .collect();
                 let list = List::new(items)
                     .style(Style::new().bg(BG))
-                    .highlight_style(Style::new().bg(SELECT).fg(ON_SELECT))
+                    .highlight_style(Style::new().fg(FG).bg(BG).add_modifier(Modifier::REVERSED))
                     .highlight_symbol("▶ ");
                 let mut state = ListState::default();
                 state.select(Some(app.set_cursor.min(sets.len().saturating_sub(1))));
@@ -1016,22 +1021,16 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
             let mut spans = vec![Span::styled(
                 format!(" {}", emoji),
                 Style::new()
-                    .bg(if selected { SELECT } else { BG })
-                    .fg(if selected {
-                        ON_SELECT
-                    } else if emoji.is_empty() {
-                        INCOMING
-                    } else {
-                        FG
-                    })
+                    .bg(BG)
+                    .fg(if emoji.is_empty() { INCOMING } else { FG })
                     .add_modifier(if selected {
-                        Modifier::BOLD
+                        Modifier::BOLD | Modifier::REVERSED
                     } else {
                         Modifier::empty()
                     }),
             )];
             if selected {
-                spans.push(Span::styled(" ", Style::new().bg(SELECT)));
+                spans.push(Span::styled(" ", Style::new().add_modifier(Modifier::REVERSED)));
             }
             f.render_widget(
                 Paragraph::new(Line::from(spans)),
@@ -1045,7 +1044,7 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
             // anteprima immagine (kitty) sulle righe sopra la cella
             let key = tg::media_key(media);
             if let Some(path) = app.previews.get(&key) {
-                let (w, h) = kitty::square_fit((cell_w.saturating_sub(1)) as u32, (ch - 1) as u32);
+                let (w, h) = gfx::square_fit((cell_w.saturating_sub(1)) as u32, (ch - 1) as u32);
                 let rect = Rect {
                     x: x + 1,
                     y,
@@ -1107,7 +1106,7 @@ fn draw_card(
     };
     let key = tg::media_key(media);
     if let Some(path) = app.previews.get(&key) {
-        let (w, h) = kitty::square_fit(art.width as u32, art.height as u32);
+        let (w, h) = gfx::square_fit(art.width as u32, art.height as u32);
         let rect = Rect {
             x: art.x,
             y: art.y,

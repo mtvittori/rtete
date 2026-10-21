@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossterm::execute;
 
-use crate::kitty;
+use crate::gfx;
 
 /// La TUI sta a schermo; consumata una volta sola dal panic hook o dal
 /// Drop della guard, così non si ripristina due volte la stessa cosa.
@@ -15,7 +15,7 @@ pub(crate) static TUI_UP: AtomicBool = AtomicBool::new(false);
 /// Ogni istruzione è eseguita con `let _`: se una fallisce, le altre
 /// partono comunque.
 pub(crate) fn restore_terminal() {
-    kitty::clear_all();
+    gfx::clear_all();
     let mut out = std::io::stdout();
     let _ = execute!(out, crossterm::cursor::Show);
     let _ = execute!(out, crossterm::event::PopKeyboardEnhancementFlags);

@@ -1,13 +1,15 @@
 //! RTete — client Telegram TUI per Linux, pensato per consumare pochissima RAM:
 //! grammers (MTProto puro-Rust, niente TDLib), ratatui per l'interfaccia e il
-//! kitty graphics protocol per mostrare gli sticker.
+//! kitty graphics protocol (o sixel su foot) per mostrare gli sticker.
 
 mod app;
 mod clipboard;
 mod events;
+mod gfx;
 mod kitty;
 mod loader;
 mod send;
+mod sixel;
 mod styles;
 mod term;
 mod tg;
@@ -33,7 +35,9 @@ async fn render(
     app: &mut App,
 ) -> Result<Vec<Cmd>, Box<dyn std::error::Error>> {
     let mut cmds = Vec::new();
-    terminal.draw(|f| view::draw(f, app, &mut cmds))?;
+    let done = terminal.draw(|f| view::draw(f, app, &mut cmds))?;
+    // sixel: serve il buffer disegnato per sapere quali celle sono state riscritte
+    gfx::observe_frame(done.buffer);
     Ok(cmds)
 }
 
@@ -43,8 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(c) => c,
         None => tg::prompt_credentials().await?,
     };
-    // rileva il supporto kitty graphics prima che la TUI prenda stdin
-    kitty::startup_detect();
+    // rileva kitty / sixel e la misura delle celle prima che la TUI prenda stdin
+    gfx::startup_detect();
     loader::prune_cache();
 
     // connect + sign_in: se la rete non è pronta ritenta qualche colpo
@@ -85,6 +89,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
     terminal.hide_cursor()?;
+    // all'avvio alcuni terminali non hanno ancora i pixel: si rilegge a TUI su
+    gfx::refresh_cells();
     // trackpad/rotella: invii di scorrimento verso il cursore selezione
     execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
     // il terminale avvolge gli incolla: niente Invio involontari multipli
@@ -101,6 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut frame_sig: Vec<(u16, u16, u16, u16, String)> = Vec::new();
 
     while !app.quit {
+        gfx::sync_begin();
         let mut cmds = render(&mut terminal, &mut app).await?;
         let sig: Vec<(u16, u16, u16, u16, String)> = cmds
             .iter()
@@ -122,18 +129,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         app.request_older(&req_tx);
 
-        // immagini: a=p a ogni frame; il dato dell'immagine entra UNA volta
-        // sola per path (t=f: il terminale legge il file da solo) e a fine
-        // frame le scomparse vengono rimosse per id — prima un `a=d,d=A` a
-        // ogni cambio di layout le svuotava tutte e la view le ritrasmetteva
-        // da zero (base64 sul pty, flicker)
-        kitty::frame_begin();
+        // immagini. Kitty: a=p a ogni frame; il dato entra UNA volta sola per
+        // path (t=f: il terminale legge il file da solo) e a fine frame le
+        // scomparse vengono rimosse per id — prima un `a=d,d=A` a ogni cambio
+        // di layout le svuotava tutte e la view le ritrasmetteva da zero
+        // (base64 sul pty, flicker). Sixel: non ha id, i pixel restano finché
+        // qualcuno riscrive le celle; se un'immagine è sparita o si è mossa
+        // `frame_end` riscrive le sue celle, e le immagini si emettono in
+        // `frame_flush`, dopo l'ultimo draw (ratatui sopra le cancellerebbe)
+        gfx::frame_begin();
         for cmd in cmds.drain(..) {
             let Cmd::Place { rect, path } = cmd;
-            let size = kitty::square_fit(rect.width as u32, rect.height as u32);
-            let _ = kitty::draw_png(&path, (rect.x, rect.y), size);
+            let size = gfx::square_fit(rect.width as u32, rect.height as u32);
+            let _ = gfx::draw_png(&path, (rect.x, rect.y), size);
         }
-        kitty::frame_end();
+        gfx::frame_end(&mut terminal);
+        gfx::frame_flush();
         frame_sig = sig;
 
         tokio::select! {
