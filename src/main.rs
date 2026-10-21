@@ -43,14 +43,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(c) => c,
         None => tg::prompt_credentials().await?,
     };
-    let (_session, client, updates) = tg::connect(&creds).await?;
-
     // rileva il supporto kitty graphics prima che la TUI prenda stdin
     kitty::startup_detect();
     loader::prune_cache();
 
-    println!("Verifico l'accesso al tuo account…");
-    tg::sign_in(&client, &creds).await?;
+    // connect + sign_in: se la rete non è pronta ritenta qualche colpo
+    let (_session, client, updates) = tg::connect_and_sign(&creds).await?;
 
     println!("Carico le conversazioni…");
     let mut contacts = tg::load_dialogs(&client).await?;

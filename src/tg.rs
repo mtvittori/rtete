@@ -416,6 +416,74 @@ pub async fn connect(
     Ok((session, client, updates))
 }
 
+/// La rete non è sempre pronta al primo colpo (Wi-Fi che rientra, laptop
+/// che riprende dal sospendo): chi lanciava rtete vedeva solo un errore
+/// e una chiusura. Qui si ritenta pochi colpi con crescente attesa, e
+/// solo per errori di cavallo di rete: parola? numero sbagliato?
+pub async fn connect_and_sign(
+    creds: &Credentials,
+) -> Result<
+    (
+        Arc<SqliteSession>,
+        Client,
+        tokio::sync::mpsc::Receiver<UpdatesLike>,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    const ATTEMPTS: u32 = 5;
+    let mut wait = 2u64;
+    println!("Verifico l\'accesso al tuo account…");
+    let mut wobble: Option<Box<dyn std::error::Error>> = None;
+    for attempt in 1..=ATTEMPTS {
+        // c'era un calo di rete al colpo prima: aspetta e dicilo
+        if let Some(e) = wobble.take() {
+            eprintln!(
+                "Rete non pronta ({e}): ritento tra {wait}s ({attempt}/{})…",
+                ATTEMPTS - 1
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+            wait = (wait * 2).min(16);
+        }
+        let (session, client, updates) = match connect(creds).await {
+            Ok(x) => x,
+            Err(e) if attempt < ATTEMPTS && net_wobble(&e.to_string()) => {
+                wobble = Some(e);
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+        // sign_in tocca la rete (is_authorized): un calo qui è lo stesso
+        // tipo di problema, quindi rientra negli stessi tentativi
+        match sign_in(&client, creds).await {
+            Ok(()) => return Ok((session, client, updates)),
+            Err(e) if attempt < ATTEMPTS && net_wobble(&e.to_string()) => {
+                wobble = Some(e);
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("dell'ultimo tentativo un errore non-netto era già uscito")
+}
+
+/// Errori per cui ha senso il ritento: solo la rete da prepararsi, non i
+/// valve/numeri/codici sbagliati (quelli vanno corretti da persona).
+fn net_wobble(e: &str) -> bool {
+    [
+        "NetworkUnreachable",
+        "NetworkDown",
+        "NetworkChanged",
+        "TimedOut",
+        "ConnectionRefused",
+        "ConnectionReset",
+        "AddrNotAvailable",
+        "HostUnreachable",
+        "UnexpectedEof",
+    ]
+    .iter()
+    .any(|s| e.contains(s))
+}
+
 /// Normalizza un numero di telefono all'unico formato che Telegram accetta:
 /// solo cifre con `+` davanti. Accetta spazi/trattini/parentesi e `00…` al
 /// posto di `+`. Il numero nudo si legge come mobile italiano (3XXXXXXXXX)
