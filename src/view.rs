@@ -17,7 +17,7 @@ use ratatui::Frame;
 use crate::kitty;
 use crate::styles::*;
 use crate::tg;
-use crate::STICKER_COLS;
+use crate::app::{App, Cmd, STICKER_COLS};
 
 /// Altezza del riquadro «in evidenza» sotto la griglia sticker.
 const CARD_H: u16 = 10;
@@ -337,7 +337,7 @@ pub fn wrap_links(text: &str, width: usize) -> (Vec<String>, Vec<Vec<LinkSpan>>)
     (out, spans)
 }
 
-pub fn draw(f: &mut Frame, app: &mut crate::App, cmds: &mut Vec<crate::Cmd>) {
+pub fn draw(f: &mut Frame, app: &mut App, cmds: &mut Vec<Cmd>) {
     let area = f.area();
     // carta crema su tutto lo schermo
     f.render_widget(Block::new().style(Style::new().bg(BG)), area);
@@ -369,7 +369,7 @@ pub fn draw(f: &mut Frame, app: &mut crate::App, cmds: &mut Vec<crate::Cmd>) {
 
 /// Prima riga: percorso corrente a sinistra, stato locale a destra
 /// (come il volume di jellyfin-tui).
-fn draw_breadcrumb(f: &mut Frame, app: &crate::App, area: Rect) {
+fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
     let mut spans = vec![Span::styled("rtete", Style::new().fg(FAINT))];
     if let Some(chat) = app.current_chat() {
         spans.push(Span::styled(" › ", Style::new().fg(FAINT)));
@@ -460,7 +460,7 @@ fn rail(f: &mut Frame, area: Rect, total: usize, pos: usize) {
     f.render_stateful_widget(sb, rect, &mut state);
 }
 
-fn draw_sidebar(f: &mut Frame, app: &crate::App, area: Rect) {
+fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
     if app.contacts.is_empty() {
         f.render_widget(pane("Conversazioni", false), area);
         return;
@@ -501,7 +501,7 @@ fn draw_sidebar(f: &mut Frame, app: &crate::App, area: Rect) {
 }
 
 /// Disegna la cronologia della chat aperta (o un pannello vuoto).
-fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<crate::Cmd>) {
+fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
     let Some(chat) = app.current_chat() else {
         app.mouse_map.clear();
         app.link_map.clear();
@@ -666,7 +666,7 @@ fn draw_history(f: &mut Frame, app: &mut crate::App, area: Rect, cmds: &mut Vec<
                         width: (fw.max(1) as u16).min(msgs.width),
                         height: (fh.max(1) as u16).min(y_end.saturating_sub(y)).min(band),
                     };
-                    cmds.push(crate::Cmd::Place {
+                    cmds.push(Cmd::Place {
                         rect,
                         path: path.clone(),
                     });
@@ -776,7 +776,7 @@ fn draw_input_box(f: &mut Frame, area: Rect, text: &str, title: Option<String>, 
 
 /// Pannello dei risultati di ricerca nella chat aperta (Ctrl-F):
 /// lista dei colpi sopra e riquadro multifila con la query sotto.
-fn draw_search(f: &mut Frame, app: &crate::App, area: Rect) {
+fn draw_search(f: &mut Frame, app: &App, area: Rect) {
     // riquadro query multifila in basso (1..5 righe)
     let inner_w = area.width.saturating_sub(2) as usize;
     let q_lines = (wrap(&app.search_q, inner_w.saturating_sub(2)).len() as u16).clamp(1, 5);
@@ -888,7 +888,7 @@ fn view_wrap_first(text: &str, max: usize) -> String {
     text.chars().take(max).collect::<String>()
 }
 
-fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<crate::Cmd>) {
+fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
     if !app.set_level {
         // lista dei set installati
         let block = pane("Set sticker", true)
@@ -1049,7 +1049,7 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
                     width: (w.max(1) as u16).min(cell_w.saturating_sub(1)),
                     height: (h.max(1) as u16).min(ch - 1),
                 };
-                cmds.push(crate::Cmd::Place {
+                cmds.push(Cmd::Place {
                     rect,
                     path: path.clone(),
                 });
@@ -1073,9 +1073,9 @@ fn draw_stickers(f: &mut Frame, app: &crate::App, area: Rect, cmds: &mut Vec<cra
 /// come la card «Now playing» di jellyfin-tui.
 fn draw_card(
     f: &mut Frame,
-    app: &crate::App,
+    app: &App,
     area: Rect,
-    cmds: &mut Vec<crate::Cmd>,
+    cmds: &mut Vec<Cmd>,
     sel: Option<(&grammers_client::media::Media, usize, usize)>,
 ) {
     let block = pane("In evidenza", false);
@@ -1111,7 +1111,7 @@ fn draw_card(
             width: (w.max(1) as u16).min(art.width),
             height: (h.max(1) as u16).min(art.height),
         };
-        cmds.push(crate::Cmd::Place {
+        cmds.push(Cmd::Place {
             rect,
             path: path.clone(),
         });
@@ -1151,7 +1151,7 @@ fn draw_card(
     );
 }
 
-impl crate::App {
+impl App {
     /// Proietta la cronologia della chat aperta in righe schedulate dal TUI.
     pub fn history_lines(&self, width: usize) -> Vec<HistoryLine> {
         let Some(rows) = self.open_history() else {
