@@ -18,6 +18,7 @@ use grammers_client::{Client, InvocationError, SignInError};
 pub type ChatRef = grammers_client::session::types::PeerRef;
 
 /// One conversation row in the sidebar.
+#[derive(Clone)]
 pub struct DialogInfo {
     pub name: String,
     pub peer_ref: ChatRef,

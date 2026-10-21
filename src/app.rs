@@ -22,6 +22,10 @@ pub const STICKER_COLS: usize = 4;
 
 /// Dopo `prev` fallimenti, il prossimo tentativo tra 1, 2, 4… fino a 60s:
 /// backoff esponenziale unico per conversioni e richieste di rete.
+pub(crate) fn pinned_first(contacts: &mut [tg::DialogInfo]) {
+    contacts.sort_by_key(|d| !d.pinned);
+}
+
 pub(crate) fn backoff_secs(prev: u32) -> Duration {
     let secs = 1u64 << prev.min(6); // u64: nessun overflow
     Duration::from_secs(secs.min(60))
@@ -461,5 +465,65 @@ impl App {
             medias.truncate(24);
         }
         self.ensure_previews(req, medias.iter());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use grammers_client::session::types::{PeerAuth, PeerId};
+
+    fn dialog(name: &str, id: i64, pinned: bool) -> tg::DialogInfo {
+        let pid = PeerId::user_unchecked(id);
+        tg::DialogInfo {
+            name: name.to_string(),
+            peer_ref: tg::ChatRef {
+                id: pid,
+                auth: PeerAuth::default(),
+            },
+            peer_id: pid,
+            is_group: false,
+            unread: 0,
+            pinned,
+        }
+    }
+
+    #[test]
+    fn pinned_first_remette_le_fissate_sopra() {
+        let mut contacts =
+            vec![dialog("a", 1, false), dialog("b", 2, true), dialog("c", 3, false), dialog("d", 4, true)];
+        pinned_first(&mut contacts);
+        let flags: Vec<bool> = contacts.iter().map(|d| d.pinned).collect();
+        assert_eq!(flags, [true, true, false, false]);
+        // ordinamento stabile: l'ordine relativo dentro ogni gruppo resta
+        let names: Vec<&str> = contacts.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(names, ["b", "d", "a", "c"]);
+    }
+
+    #[test]
+    fn bump_chat_lascia_ferme_le_chat_fissate() {
+        let (f1, f2, a3, a4, a5) =
+            (dialog("f1", 11, true), dialog("f2", 12, true), dialog("a3", 13, false), dialog("a4", 14, false), dialog("a5", 15, false));
+        let mut app = App::default();
+        app.contacts = vec![f1.clone(), f2.clone(), a3.clone(), a4.clone(), a5.clone()];
+        app.contact_cursor = 4;
+
+        // un messaggio da a5 la porta alla cima delle NON fissate
+        app.bump_chat(a5.peer_id, None);
+        let soon = (0..2).all(|i| app.contacts[i].pinned);
+        assert!(soon, "le fissate devono restare nella loro posizione");
+        assert_eq!(app.contacts[2].peer_id, a5.peer_id);
+        assert_eq!(app.contacts[app.contact_cursor].peer_id, a5.peer_id);
+
+        // una chat nuova entra sempre sotto le fissate
+        let fresh = dialog("nuovo", 16, false);
+        app.bump_chat(fresh.peer_id, Some(fresh.clone()));
+        assert!(app.contacts.iter().take(2).all(|d| d.pinned));
+        assert_eq!(app.contacts[2].peer_id, fresh.peer_id);
+
+        // una fissata che riceve messaggi NON si muove per niente
+        app.bump_chat(f2.peer_id, None);
+        assert_eq!(app.contacts[1].peer_id, f2.peer_id);
+        assert_eq!(app.contacts[2].peer_id, fresh.peer_id);
     }
 }

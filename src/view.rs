@@ -483,6 +483,9 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
                 format!(" {}", d.name),
                 Style::new().fg(if d.unread > 0 { ACCENT } else { FG }),
             ));
+            if d.pinned {
+                spans.push(Span::styled(" 📌", Style::new().fg(ACCENT)));
+            }
             if d.unread > 0 {
                 spans.push(Span::styled(badge, Style::new().fg(FAINT)));
             }

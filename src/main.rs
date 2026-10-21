@@ -53,8 +53,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tg::sign_in(&client, &creds).await?;
 
     println!("Carico le conversazioni…");
+    let mut contacts = tg::load_dialogs(&client).await?;
+    app::pinned_first(&mut contacts);
     let mut app = App {
-        contacts: tg::load_dialogs(&client).await?,
+        contacts,
         me: tg::own_name(&client).await,
         ..App::default()
     };
