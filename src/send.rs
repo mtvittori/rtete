@@ -14,6 +14,8 @@ pub(crate) struct SendJob {
     pub(crate) peer: PeerRefT,
     pub(crate) peer_id: PeerId,
     pub(crate) kind: SendKind,
+    /// risposta a questo messaggio (Ctrl-R); ignorato dalle modifiche
+    pub(crate) reply_to: Option<i32>,
 }
 
 /// esito: nuovo messaggio o modifica confermata

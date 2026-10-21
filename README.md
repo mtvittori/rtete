@@ -82,7 +82,8 @@ messaggio selezionato invece che sull'ultimo.
 | `Ctrl-O` | salva un documento (`~/Downloads`): selezionato o l'ultimo della chat |
 | `Ctrl-P` | riproduce audio selezionato/ultimo: `🎙 vocali` e brani tra i documenti; mpv/ffplay (`RTETE_PLAYER` sovrascrive) |
 | `Ctrl-Y` | copia negli appunti il messaggio selezionato (senza selezione: l'ultimo con testo) via `wl-copy` |
-| `Ctrl-R` | reazioni veloci sul messaggio selezionato: si apre la barra delle emoji (`←/→` o tasti `1..8`), `Invio` aggiunge/toglie la reazione, `Esc` chiude |
+| `Ctrl-R` | risponde al messaggio selezionato: sopra la composizione compare `↱ Autore: …`, il prossimo invio (testo, sticker o foto) è la risposta; di nuovo `Ctrl-R` o `Esc` annulla |
+| `Ctrl-T` | reazioni veloci sul messaggio selezionato: si apre la barra delle emoji (`←/→` o tasti `1..8`), `Invio` aggiunge/toglie la reazione, `Esc` chiude |
 | `Ctrl+C` / `Cmd+C` | copia il messaggio selezionato; **senza selezione esce** (`q` per uscire sempre) |
 | `Ctrl+V` / `Cmd+V` | incolla dagli appunti via `wl-paste`: se c'è un'**immagine** (png/jpeg) la prepara in tmp → Invio la invia come foto alla chat aperta (il testo del compose è la didascalia); testo altrimenti (multi-riga nel compose, spazi in ricerca) |
 | `Ctrl-F` | ricerca server-side nella chat aperta: la query si scrive nel riquadro in fondo (multifila, `Invio` cerca) |

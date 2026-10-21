@@ -637,6 +637,7 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
     // suggerimenti fissi nella cornice dei messaggi
     let hints = hints_line(&[
         ("invia", "Invio"),
+        ("rispondi", "Ctrl-R"),
         ("edita", "Ctrl-E"),
         ("canc", "Ctrl-D"),
         ("copia", "Ctrl-Y"),
@@ -673,6 +674,21 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
             Some(format!(
                 " \u{270e} modifica #{id} \u{b7} Invio salva \u{b7} Esc annulla "
             )),
+        )
+    } else if let Some(id) = app.replying {
+        // "↱ Autore: inizio del messaggio · Esc annulla", entro il bordo
+        let target = app
+            .open_history()
+            .and_then(|ring| ring.iter().find(|r| r.id == id));
+        let what = target
+            .map(|r| format!("{}: {}", author(r, &app.me), row_summary(r)))
+            .unwrap_or_else(|| format!("#{id}"));
+        let tail = " \u{b7} Esc annulla ";
+        let room = (body[1].width as usize)
+            .saturating_sub(4 + 3 + tail.chars().count());
+        (
+            ACCENT,
+            Some(format!(" \u{21b1} {}{tail}", fit(what, room))),
         )
     } else {
         (FAINT, None)

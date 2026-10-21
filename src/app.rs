@@ -105,6 +105,8 @@ pub struct App {
     pub del_id: Option<i32>,
     /// id del messaggio che stiamo modificando (Ctrl-E).
     pub editing: Option<i32>,
+    /// id del messaggio a cui il prossimo invio risponde (Ctrl-R).
+    pub replying: Option<i32>,
     /// eliminazione armata da Ctrl-D: il prossimo Invio la conferma.
     pub del_arm: bool,
     /// ricerca nella chat aperta (Ctrl-F).

@@ -847,8 +847,11 @@ pub async fn send_text(
     client: &Client,
     peer_ref: ChatRef,
     text: &str,
+    reply_to: Option<i32>,
 ) -> Result<grammers_client::message::Message, InvocationError> {
-    client.send_message(peer_ref, text.to_string()).await
+    client
+        .send_message(peer_ref, InputMessage::new().text(text).reply_to(reply_to))
+        .await
 }
 
 /// Send a sticker reusing its server-side file reference (`copy_media`
@@ -857,9 +860,13 @@ pub async fn send_sticker(
     client: &Client,
     peer_ref: ChatRef,
     media: &Media,
+    reply_to: Option<i32>,
 ) -> Result<grammers_client::message::Message, InvocationError> {
     client
-        .send_message(peer_ref, InputMessage::new().copy_media(media))
+        .send_message(
+            peer_ref,
+            InputMessage::new().copy_media(media).reply_to(reply_to),
+        )
         .await
 }
 
@@ -887,12 +894,13 @@ pub async fn send_photo(
     peer_ref: ChatRef,
     path: &std::path::Path,
     caption: &str,
+    reply_to: Option<i32>,
 ) -> Result<grammers_client::message::Message, String> {
     let uploaded = client
         .upload_file(path)
         .await
         .map_err(|e| format!("upload: {e}"))?;
-    let mut msg = InputMessage::new().photo(uploaded);
+    let mut msg = InputMessage::new().photo(uploaded).reply_to(reply_to);
     if !caption.trim().is_empty() {
         msg = msg.text(caption);
     }

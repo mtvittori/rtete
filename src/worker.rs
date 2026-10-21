@@ -39,16 +39,23 @@ pub(crate) async fn send_job(
     job: SendJob,
 ) -> Result<SendDone, String> {
     match job.kind {
-        SendKind::Text(text) => match tg::send_text(client, job.peer, &text).await {
+        SendKind::Text(text) => match tg::send_text(client, job.peer, &text, job.reply_to).await {
             Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
             Err(e) => Err(e.to_string()),
         },
-        SendKind::Sticker(media) => match tg::send_sticker(client, job.peer, &media).await {
+        SendKind::Sticker(media) => match tg::send_sticker(client, job.peer, &media, job.reply_to).await {
             Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
             Err(e) => Err(e.to_string()),
         },
         SendKind::Photo { path, caption } => {
-            match tg::send_photo(client, job.peer, std::path::Path::new(&path), &caption).await {
+            match tg::send_photo(
+                client,
+                job.peer,
+                std::path::Path::new(&path),
+                &caption,
+                job.reply_to,
+            )
+            .await {
                 Ok(m) => {
                     // l'upload chiude il job: il temporaneo non serve più
                     let _ = std::fs::remove_file(&path);
