@@ -20,8 +20,6 @@ pub type ChatRef = grammers_client::session::types::PeerRef;
 /// One conversation row in the sidebar.
 pub struct DialogInfo {
     pub name: String,
-    pub username: Option<String>,
-    pub peer: grammers_client::peer::Peer,
     pub peer_ref: ChatRef,
     pub peer_id: PeerId,
     pub is_group: bool,
@@ -520,8 +518,6 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
         };
         out.push(DialogInfo {
             name,
-            username: peer.username().map(str::to_string),
-            peer,
             peer_ref: dialog.peer_ref(),
             peer_id: dialog.peer_id(),
             is_group,
@@ -546,11 +542,9 @@ pub async fn dialog_from_message(
     };
     Some(DialogInfo {
         name: peer.name().unwrap_or("senza nome").to_string(),
-        username: peer.username().map(str::to_string),
         is_group: !matches!(peer, grammers_client::peer::Peer::User(_)),
         peer_id: m.peer_id(),
         peer_ref,
-        peer,
         unread: 0,
         pinned: false,
     })
@@ -692,7 +686,6 @@ pub async fn load_history_before(
 /// One installed sticker set.
 pub struct StickerSetInfo {
     pub set_id: i64,
-    pub access_hash: i64,
     pub title: String,
     pub short_name: String,
 }
@@ -712,7 +705,6 @@ pub async fn fetch_installed_sets(client: &Client) -> Result<Vec<StickerSetInfo>
             let tl::enums::StickerSet::Set(s) = &st;
             StickerSetInfo {
                 set_id: s.id,
-                access_hash: s.access_hash,
                 title: s.title.clone(),
                 short_name: s.short_name.clone(),
             }
@@ -842,7 +834,6 @@ pub async fn delete_messages(
 
 /// Un colpo da ricerca: id, data, autore e testo potentemente tagsliato.
 pub struct SearchHit {
-    pub id: i32,
     pub outgoing: bool,
     pub from: String,
     pub date: String,
@@ -876,7 +867,6 @@ pub async fn search_chat(
                 let date = m.date().to_string();
                 let date = date.replace('T', " ").chars().take(16).collect::<String>();
                 out.push(SearchHit {
-                    id: m.id(),
                     outgoing: m.outgoing(),
                     from: sender_name(&m),
                     date,
