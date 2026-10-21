@@ -52,6 +52,12 @@ pub(crate) enum Request {
         peer: PeerId,
         before: i32,
     },
+    /// messaggi citati da risposte ma assenti dalla cronologia caricata
+    Quoted {
+        peer_ref: PeerRefT,
+        peer: PeerId,
+        ids: Vec<i32>,
+    },
     Sets,
     SetDocs {
         set_id: i64,
@@ -97,6 +103,11 @@ pub(crate) enum Response {
     HistOlder {
         peer: PeerId,
         rows: Result<Vec<tg::HistoryRow>, String>,
+    },
+    /// per id: la riga, o `None` se il messaggio non esiste più
+    Quoted {
+        peer: PeerId,
+        rows: Result<Vec<(i32, Option<tg::HistoryRow>)>, String>,
     },
     Sets(Result<Vec<tg::StickerSetInfo>, String>),
     Docs {

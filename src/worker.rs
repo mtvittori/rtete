@@ -69,6 +69,7 @@ pub(crate) async fn send_job(
                         reactions: Vec::new(),
                         date: 0,
                         reply_to: None,
+                        reply_quote: None,
                         fwd: None,
                         edited: true,
                     },
@@ -223,6 +224,13 @@ pub(crate) fn run_worker(
                         .await
                         .map_err(|e| e.to_string());
                     let _ = out.send(Response::HistOlder { peer, rows });
+                }),
+                Request::Quoted { peer_ref, peer, ids } => tokio::spawn(async move {
+                    let rows = tg::load_by_id(&cl, peer_ref, &ids)
+                        .await
+                        .map(|found| ids.iter().copied().zip(found).collect())
+                        .map_err(|e| e.to_string());
+                    let _ = out.send(Response::Quoted { peer, rows });
                 }),
                 Request::Sets => tokio::spawn(async move {
                     // se fallisce resta None: riaprire con Tab ritenta,

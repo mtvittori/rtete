@@ -128,6 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             app.refresh_preview_queue(&req_tx);
         }
         app.request_older(&req_tx);
+        app.request_quoted(&req_tx);
 
         // immagini. Kitty: a=p a ogni frame; il dato entra UNA volta sola per
         // path (t=f: il terminale legge il file da solo) e a fine frame le

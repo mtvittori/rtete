@@ -5,6 +5,8 @@
 //! vengono proiettate in `Cmd::Place` che il ciclo principale esegue con il
 //! kitty graphics protocol dopo ogni frame ratatui.
 
+use std::collections::{HashMap, VecDeque};
+
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::symbols::border;
@@ -115,16 +117,116 @@ pub fn msg_label(time: &str, name: &str) -> String {
     format!("{time} {trunc:<NAME_W$} │ ")
 }
 
-/// Marcatori in testa al testo: risposta e inoltro.
+/// Marcatore in testa al testo: inoltro. La risposta ha una riga sua sopra
+/// il messaggio (`reply_line`).
 fn row_lead(row: &tg::HistoryRow) -> String {
     let mut out = String::new();
-    if let Some(r) = row.reply_to {
-        out.push_str(&format!("↩#{r} "));
-    }
     if let Some(f) = &row.fwd {
         out.push_str(&format!("⤳ {f}: "));
     }
     out
+}
+
+/// Nome dell'autore di una riga: il proprio per i messaggi in uscita.
+fn author<'a>(row: &'a tg::HistoryRow, me: &'a str) -> &'a str {
+    if row.outgoing {
+        if me.is_empty() {
+            "Io"
+        } else {
+            me
+        }
+    } else if row.from.is_empty() {
+        "Lui"
+    } else {
+        row.from.as_str()
+    }
+}
+
+/// Contenuto di una riga in breve, su una riga sola, per la citazione.
+fn row_summary(row: &tg::HistoryRow) -> String {
+    let text = match &row.kind {
+        tg::RowKind::Text(t) => t.clone(),
+        tg::RowKind::Sticker { emoji, .. } => format!("sticker {emoji}"),
+        tg::RowKind::Photo { caption, gif, .. } => {
+            let what = if *gif { "🎞 gif" } else { "📷 foto" };
+            if caption.is_empty() {
+                what.to_string()
+            } else {
+                format!("{what} {caption}")
+            }
+        }
+        tg::RowKind::Doc { name, .. } => format!("📄 {name}"),
+        tg::RowKind::Audio { name, voice, .. } => {
+            if *voice {
+                "🎙 vocale".to_string()
+            } else {
+                format!("🎧 {name}")
+            }
+        }
+        tg::RowKind::Note(t) | tg::RowKind::Service(t) => t.clone(),
+    };
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Righe di citazione massime sopra una risposta: oltre, "…" in fondo.
+const QUOTE_ROWS: usize = 3;
+
+/// Righe di citazione sopra una risposta, a capo entro `width` caratteri e al
+/// massimo `QUOTE_ROWS`: "↱ Autore: messaggio citato", le righe seguenti
+/// rientrate sotto il testo dopo "↱ ". Il messaggio citato si cerca
+/// nella cronologia caricata, poi fra quelli chiesti a parte (`quoted`);
+/// finché non arriva resta il marcatore (o la citazione parziale, che
+/// Telegram manda insieme alla risposta).
+fn reply_line(
+    row: &tg::HistoryRow,
+    rows: &VecDeque<tg::HistoryRow>,
+    quoted: Option<&HashMap<i32, Option<tg::HistoryRow>>>,
+    me: &str,
+    width: usize,
+) -> Option<Vec<String>> {
+    let id = row.reply_to?;
+    let fetched = quoted.and_then(|q| q.get(&id));
+    if matches!(fetched, Some(None)) && row.reply_quote.is_none() {
+        return Some(vec![fit("↱ messaggio eliminato".to_string(), width)]);
+    }
+    let orig = rows
+        .iter()
+        .find(|r| r.id == id)
+        .or_else(|| fetched.and_then(|f| f.as_ref()));
+    let body = row
+        .reply_quote
+        .as_deref()
+        .map(|q| format!("“{}”", q.split_whitespace().collect::<Vec<_>>().join(" ")))
+        .or_else(|| orig.map(row_summary));
+    let text = match (orig, body) {
+        (Some(o), Some(b)) => format!("{}: {b}", author(o, me)),
+        (None, Some(b)) => b,
+        _ => "…".to_string(),
+    };
+    let mut pieces = wrap(&text, width.saturating_sub(2).max(1));
+    if pieces.len() > QUOTE_ROWS {
+        pieces.truncate(QUOTE_ROWS);
+        let last = pieces.pop().unwrap_or_default();
+        // "…" deve entrare: se la riga è piena si toglie un carattere
+        pieces.push(fit(format!("{last}…"), width.saturating_sub(2)));
+    }
+    Some(
+        pieces
+            .into_iter()
+            .enumerate()
+            .map(|(i, p)| format!("{} {p}", if i == 0 { "↱" } else { " " }))
+            .collect(),
+    )
+}
+
+/// Taglia a `width` caratteri, con "…" in fondo se serve.
+fn fit(text: String, width: usize) -> String {
+    if text.chars().count() <= width {
+        return text;
+    }
+    let mut cut: String = text.chars().take(width.saturating_sub(1)).collect();
+    cut.push('…');
+    cut
 }
 
 /// Riga informativa mostrata alla selezione di un messaggio.
@@ -1163,17 +1265,20 @@ impl App {
         let tz = jiff::tz::TimeZone::system();
         for row in rows {
             // etichetta: nome proprio per i messaggi in uscita, mittente per gli altri
-            let name = if row.outgoing {
-                if self.me.is_empty() {
-                    "Io"
-                } else {
-                    self.me.as_str()
-                }
-            } else if row.from.is_empty() {
-                "Lui"
-            } else {
-                row.from.as_str()
-            };
+            let name = author(row, &self.me);
+            // risposta: la citazione sta sopra, nella colonna del testo
+            let quoted = self
+                .current_chat()
+                .and_then(|c| self.quoted.get(&c.peer_id));
+            let quote = reply_line(row, rows, quoted, &self.me, width.saturating_sub(LABEL_W + 3));
+            for q in quote.into_iter().flatten() {
+                lines.push(HistoryLine {
+                    text: format!("{} │ {q}", " ".repeat(LABEL_W)),
+                    color: FAINT,
+                    id: row.id,
+                    ..HistoryLine::sep()
+                });
+            }
             let label = msg_label(&fmt_hhmm(row.date, &tz), name);
             let name_style = if row.outgoing {
                 OUTGOING
@@ -1475,6 +1580,7 @@ mod tests {
             reactions: Vec::new(),
             date: 1_700_000_000,
             reply_to: Some(3),
+            reply_quote: None,
             fwd: Some("Anna".into()),
             edited: true,
         };
@@ -1483,6 +1589,64 @@ mod tests {
             m,
             "#7 — 22:13 — risposta a #3 — inoltrato da Anna — modificato — Esc per uscire"
         );
-        assert_eq!(row_lead(&row), "↩#3 ⤳ Anna: ");
+        assert_eq!(row_lead(&row), "⤳ Anna: ");
+    }
+
+    fn text_row(id: i32, outgoing: bool, from: &str, text: &str, reply_to: Option<i32>) -> tg::HistoryRow {
+        tg::HistoryRow {
+            id,
+            outgoing,
+            from: from.into(),
+            kind: tg::RowKind::Text(text.into()),
+            reactions: Vec::new(),
+            date: 0,
+            reply_to,
+            reply_quote: None,
+            fwd: None,
+            edited: false,
+        }
+    }
+
+    #[test]
+    fn reply_line_quotes_author_and_text() {
+        let rows: VecDeque<_> = [
+            text_row(1, true, "", "Spe faccio\n una prova", None),
+            text_row(2, false, "Bice", "ok", Some(1)),
+            text_row(3, false, "Bice", "boh", Some(99)),
+        ]
+        .into();
+        assert_eq!(reply_line(&rows[0], &rows, None, "Marco", 40), None);
+        assert_eq!(
+            reply_line(&rows[1], &rows, None, "Marco", 40).unwrap(),
+            vec!["↱ Marco: Spe faccio una prova"]
+        );
+        // lungo: va a capo rientrato, oltre QUOTE_ROWS righe chiude con "…"
+        assert_eq!(
+            reply_line(&rows[1], &rows, None, "Marco", 12).unwrap(),
+            vec!["↱ Marco: Spe", "  faccio una", "  prova"]
+        );
+        assert_eq!(
+            reply_line(&rows[1], &rows, None, "Marco", 9).unwrap(),
+            vec!["↱ Marco:", "  Spe", "  faccio…"]
+        );
+        // citato fuori dalla cronologia: in attesa, poi dalla cache o eliminato
+        assert_eq!(reply_line(&rows[2], &rows, None, "Marco", 40).unwrap(), vec!["↱ …"]);
+        let mut quoted = HashMap::new();
+        quoted.insert(99, Some(text_row(99, false, "Gark", "vecchio", None)));
+        assert_eq!(
+            reply_line(&rows[2], &rows, Some(&quoted), "Marco", 40).unwrap(),
+            vec!["↱ Gark: vecchio"]
+        );
+        quoted.insert(99, None);
+        assert_eq!(
+            reply_line(&rows[2], &rows, Some(&quoted), "Marco", 40).unwrap(),
+            vec!["↱ messaggio eliminato"]
+        );
+        let mut partial = text_row(4, false, "Bice", "sì", Some(1));
+        partial.reply_quote = Some("una  prova".into());
+        assert_eq!(
+            reply_line(&partial, &rows, None, "Marco", 40).unwrap(),
+            vec!["↱ Marco: “una prova”"]
+        );
     }
 }

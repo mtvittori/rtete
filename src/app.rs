@@ -132,6 +132,13 @@ pub struct App {
     pub older_done: HashSet<PeerId>,
     /// ↑ è arrivato alla riga più vecchia: il ciclo chiede la pagina prima
     pub want_older: bool,
+    /// messaggi citati fuori dalla cronologia caricata, per chat e id:
+    /// `None` = eliminato. Solo per la riga di citazione delle risposte.
+    pub quoted: HashMap<PeerId, HashMap<i32, Option<tg::HistoryRow>>>,
+    /// chat con una richiesta `Quoted` in volo
+    pub quoted_busy: HashSet<PeerId>,
+    /// chat la cui ultima richiesta `Quoted` è fallita: prossimo tentativo
+    pub quoted_failed: HashMap<PeerId, (Instant, u32)>,
     pub quit: bool,
 }
 
@@ -287,6 +294,7 @@ impl App {
             if row.date == 0 {
                 row.date = old.date;
                 row.reply_to = old.reply_to;
+                row.reply_quote = old.reply_quote.take();
                 row.fwd = old.fwd.take();
                 row.reactions = std::mem::take(&mut old.reactions);
             }
@@ -388,6 +396,11 @@ impl App {
             .unwrap_or(false)
     }
 
+    /// idem per i messaggi citati: request_quoted gira a ogni frame
+    pub(crate) fn quoted_failed(&mut self, peer: PeerId) {
+        bump_backoff(&mut self.quoted_failed, peer);
+    }
+
     pub(crate) fn docs_failed(&mut self, set_id: i64) {
         bump_backoff(&mut self.docs_failed, set_id);
     }
@@ -438,6 +451,42 @@ impl App {
         self.older_busy.insert(peer);
         self.status = "carico messaggi precedenti…".into();
         let _ = req.send(Request::HistOlder { peer_ref, peer, before });
+    }
+
+    /// Chiede i messaggi citati dalle risposte della chat aperta che non
+    /// sono né nella cronologia né già chiesti (una richiesta alla volta per
+    /// chat; dopo un errore si riprova col backoff di `quoted_failed`).
+    pub(crate) fn request_quoted(&mut self, req: &mpsc::UnboundedSender<Request>) {
+        let Some(chat) = self.current_chat() else {
+            return;
+        };
+        let (peer_ref, peer) = (chat.peer_ref, chat.peer_id);
+        let cooling = self
+            .quoted_failed
+            .get(&peer)
+            .is_some_and(|&(until, _)| Instant::now() < until);
+        if cooling || self.quoted_busy.contains(&peer) {
+            return;
+        }
+        let Some(ring) = self.histories.get(&peer) else {
+            return;
+        };
+        let known = self.quoted.get(&peer);
+        let mut ids: Vec<i32> = ring
+            .iter()
+            .filter_map(|r| r.reply_to)
+            .filter(|id| !ring.iter().any(|r| r.id == *id))
+            .filter(|id| !known.is_some_and(|k| k.contains_key(id)))
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        // GetMessages accetta fino a 100 id
+        ids.truncate(100);
+        if ids.is_empty() {
+            return;
+        }
+        self.quoted_busy.insert(peer);
+        let _ = req.send(Request::Quoted { peer_ref, peer, ids });
     }
 
     pub(crate) fn refresh_preview_queue(&mut self, req: &mpsc::UnboundedSender<Request>) {

@@ -958,6 +958,21 @@ pub(crate) async fn handle_response(
                 }
             }
         }
+        Response::Quoted { peer, rows } => {
+            app.quoted_busy.remove(&peer);
+            match rows {
+                Ok(rows) => {
+                    app.quoted_failed.remove(&peer);
+                    app.quoted.entry(peer).or_default().extend(rows);
+                }
+                Err(e) => {
+                    app.quoted_failed(peer);
+                    if app.current_chat().map(|c| c.peer_id) == Some(peer) {
+                        app.status = format!("messaggi citati: {e}");
+                    }
+                }
+            }
+        }
         Response::Sets(res) => match res {
             Ok(sets) => {
                 let had_none = app.sets.is_none();

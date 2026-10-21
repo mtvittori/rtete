@@ -42,6 +42,9 @@ pub struct HistoryRow {
     pub date: i64,
     /// id del messaggio a cui questo risponde.
     pub reply_to: Option<i32>,
+    /// citazione parziale scelta da chi risponde (`quote_text`): se c'è, la
+    /// riga di citazione mostra questa invece dell'inizio del messaggio.
+    pub reply_quote: Option<String>,
     /// origine di un inoltro (nome dell'autore originale o "inoltrato").
     pub fwd: Option<String>,
     pub edited: bool,
@@ -59,6 +62,13 @@ impl HistoryRow {
             reactions: collect_reactions(&m.raw),
             date: m.date().as_second(),
             reply_to: m.reply_to_message_id(),
+            reply_quote: match &m.raw {
+                tl::enums::Message::Message(tl::types::Message {
+                    reply_to: Some(tl::enums::MessageReplyHeader::Header(h)),
+                    ..
+                }) => h.quote_text.clone().filter(|q| !q.trim().is_empty()),
+                _ => None,
+            },
             fwd: m.forward_header().map(|h| {
                 let tl::enums::MessageFwdHeader::Header(h) = h;
                 h.from_name.unwrap_or_else(|| "inoltrato".into())
@@ -750,6 +760,19 @@ pub async fn load_history_before(
     }
     rows.reverse();
     Ok(rows)
+}
+
+/// Messaggi per id, nell'ordine di `ids`; `None` per quelli eliminati.
+pub async fn load_by_id(
+    client: &Client,
+    peer_ref: ChatRef,
+    ids: &[i32],
+) -> Result<Vec<Option<HistoryRow>>, InvocationError> {
+    let found = client.get_messages_by_id(peer_ref, ids).await?;
+    Ok(found
+        .into_iter()
+        .map(|m| m.map(|m| HistoryRow::from_message(&m, sender_name(&m))))
+        .collect())
 }
 
 /// One installed sticker set.
