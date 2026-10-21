@@ -27,6 +27,32 @@ pub(crate) fn backoff_secs(prev: u32) -> Duration {
     Duration::from_secs(secs.min(60))
 }
 
+/// Registra un fallimento (`failed` per gli asset chiave stringa,
+/// `docs_failed` per i set) e fissa il prossimo tentativo col backoff
+/// esponenziale di `backoff_secs`: 1s, 2s, 4s… fino a 60s.
+fn bump_backoff<K: Eq + std::hash::Hash>(map: &mut HashMap<K, (Instant, u32)>, key: K) {
+    let prev = map.remove(&key).map(|(_, n)| n).unwrap_or(0);
+    map.insert(key, (Instant::now() + backoff_secs(prev), prev + 1));
+}
+
+/// Scala il mio voto dall'emoji indicata (true = il mio voto c'era);
+/// l'item sparisce se il conteggio resta a zero.
+fn retract(row: &mut tg::HistoryRow, mine_on: impl Fn(&tg::ReactionItem) -> bool) -> bool {
+    match row.reactions.iter().position(mine_on) {
+        // l'item passa solo se resta a zero (prima il retain toglieva
+        // l'intera voce anche se altri hanno messo la stessa reazione)
+        Some(i) => {
+            let entry = &mut row.reactions[i];
+            entry.count = entry.count.saturating_sub(1);
+            if entry.count <= 0 {
+                row.reactions.remove(i);
+            }
+            true
+        }
+        None => false,
+    }
+}
+
 /// Comando grafico da eseguire dopo il frame ratatui.
 pub enum Cmd {
     Place {
@@ -35,6 +61,7 @@ pub enum Cmd {
     },
 }
 
+#[derive(Default)]
 pub struct App {
     pub contacts: Vec<tg::DialogInfo>,
     pub contact_cursor: usize,
@@ -126,29 +153,80 @@ impl App {
         self.histories.get(&chat.peer_id)
     }
 
-    pub(crate) fn push_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
-        let ring = self.histories.entry(peer_id).or_default();
-        // dedup: uno stesso messaggio arriva sia dalla conferma dell'invio
-        // sia dalle notifiche live di Telegram (anche dai nostri stessi invii)
-        if ring.iter().any(|r| r.id == row.id) {
-            return;
+    /// Guardia comune dei comandi sulla chat aperta (Ctrl-E/D/O/P/Y): azzera
+    /// lo status, esige nessun pannello aperto (ricerca/sticker), una chat
+    /// aperta e la sua cronologia caricata; altrimenti imposta la ragione
+    /// dello status e ritorna `None`.
+    pub(crate) fn chat_ready_ring(&mut self) -> Option<&VecDeque<tg::HistoryRow>> {
+        self.status.clear();
+        if self.show_search || self.show_sticker {
+            return None;
         }
-        ring.push_back(row);
-        while ring.len() > RING_CAP {
-            ring.pop_front();
+        let Some(chat) = self.current_chat() else {
+            self.status = "apri prima una chat".into();
+            return None;
+        };
+        match self.histories.get(&chat.peer_id) {
+            Some(ring) => Some(ring),
+            None => {
+                self.status = "cronologia non ancora caricata".into();
+                None
+            }
         }
     }
 
+    /// La riga scelta da un comando: quella sotto il cursore di selezione
+    /// (se soddisfa `pred`), altrimenti l'ultima di `ring` che la soddisfa.
+    pub(crate) fn picked_row(
+        ring: &VecDeque<tg::HistoryRow>,
+        cursor: Option<i32>,
+        pred: impl Fn(&tg::HistoryRow) -> bool,
+    ) -> Option<&tg::HistoryRow> {
+        cursor
+            .and_then(|cid| ring.iter().rev().find(|r| r.id == cid && pred(r)))
+            .or_else(|| ring.iter().rev().find(|r| pred(r)))
+    }
+
+    /// Disarma l'eliminazione in attesa di conferma (qualunque tasto che
+    /// non sia Invio la disarma, come in Telegram).
+    pub(crate) fn disarm_delete(&mut self) {
+        self.del_arm = false;
+        self.del_id = None;
+    }
+
+    /// Scarta la foto degli appunti in attesa invio e rimuove il suo file
+    /// temporaneo (usa `take`: la foto non è più inviabile).
+    pub(crate) fn discard_pending_photo(&mut self) {
+        if let Some(p) = self.pending_photo.take() {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+
+    pub(crate) fn push_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
+        self.push_each(peer_id, std::iter::once(row));
+    }
+
     pub(crate) fn push_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) {
+        self.push_each(peer_id, rows);
+    }
+
+    /// Inserisce niente, una (o tante) righe in fondo alla cronologia una
+    /// volta sola: dedup (uno stesso messaggio arriva sia dalla conferma
+    /// dell'invio sia dalle notifiche live di Telegram, anche dai nostri
+    /// stessi invii) e tetto RING_CAP.
+    fn push_each<I>(&mut self, peer_id: PeerId, rows: I)
+    where
+        I: IntoIterator<Item = tg::HistoryRow>,
+    {
         let ring = self.histories.entry(peer_id).or_default();
         for row in rows {
             if ring.iter().any(|r| r.id == row.id) {
                 continue;
             }
             ring.push_back(row);
-        }
-        while ring.len() > RING_CAP {
-            ring.pop_front();
+            while ring.len() > RING_CAP {
+                ring.pop_front();
+            }
         }
     }
 
@@ -247,33 +325,11 @@ impl App {
         // Telegram senza Premium ammette una sola reazione per messaggio:
         // se il mio voto sta già su questa emoji la tolgo; se sta su
         // un'altra cambia bersaglio; il mio voto non resta mai su due item
-        if let Some(i) = row
-            .reactions
-            .iter()
-            .position(|r| r.mine && r.emoticon == emoticon)
-        {
-            // il mio voto cala; l'item passa solo se resta a zero
-            // (prima il retain toglieva l'intera voce anche se altri hanno
-            // messo la stessa reazione)
-            let entry = &mut row.reactions[i];
-            entry.count = entry.count.saturating_sub(1);
-            if entry.count <= 0 {
-                row.reactions.remove(i);
-            }
+        if retract(row, |r| r.mine && r.emoticon == emoticon) {
             return;
         }
         // cambio bersaglio: il mio voto vecchio cala (item via se resta a zero)
-        if let Some(i) = row
-            .reactions
-            .iter()
-            .position(|r| r.mine && r.emoticon != emoticon)
-        {
-            let entry = &mut row.reactions[i];
-            entry.count = entry.count.saturating_sub(1);
-            if entry.count <= 0 {
-                row.reactions.remove(i);
-            }
-        }
+        retract(row, |r| r.mine && r.emoticon != emoticon);
         match row.reactions.iter_mut().find(|r| r.emoticon == emoticon) {
             Some(item) => {
                 item.count += 1;
@@ -315,9 +371,7 @@ impl App {
     /// ogni cambio di layout: senza questo un singolo download guasto (rete
     /// assente, webp corrotto) verrebbe rilanciato all'infinito.
     pub(crate) fn conversion_failed(&mut self, key: String) {
-        let prev = self.failed.remove(&key).map(|(_, n)| n).unwrap_or(0);
-        self.failed
-            .insert(key, (Instant::now() + backoff_secs(prev), prev + 1));
+        bump_backoff(&mut self.failed, key);
     }
 
     /// idem per i download di set: senza pausa, ogni freccia sul set
@@ -331,9 +385,7 @@ impl App {
     }
 
     pub(crate) fn docs_failed(&mut self, set_id: i64) {
-        let prev = self.docs_failed.remove(&set_id).map(|(_, n)| n).unwrap_or(0);
-        self.docs_failed
-            .insert(set_id, (Instant::now() + backoff_secs(prev), prev + 1));
+        bump_backoff(&mut self.docs_failed, set_id);
     }
 
     pub(crate) fn docs_fine(&mut self, set_id: i64) {
@@ -354,9 +406,7 @@ impl App {
         }
         due
     }
-}
 
-impl App {
     /// Se ↑ ha toccato il fondo della storia in memoria, chiede la pagina
     /// precedente (una per volta, mai oltre l'inizio o RING_CAP).
     pub(crate) fn request_older(&mut self, req: &mpsc::UnboundedSender<Request>) {

@@ -135,11 +135,8 @@ pub(crate) fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
     match hit {
         ClipboardHit::Image(bytes, mime) => match clipboard_png_file(&bytes, mime) {
             Some((path, kb)) => {
-                if let Some(old) = app.pending_photo.take() {
-                    let _ = std::fs::remove_file(old);
-                }
-                app.del_arm = false;
-                app.del_id = None;
+                app.discard_pending_photo();
+                app.disarm_delete();
                 app.pending_photo = Some(path.display().to_string());
                 app.status = format!(
                     "foto ({kb} KB) pronta — Invio invia, il testo del compose è la didascalia"
@@ -156,8 +153,7 @@ pub(crate) fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
                 let cap = app.compose_cap().saturating_sub(app.compose.chars().count());
                 let clean = paste_text(&text, true, cap);
                 app.compose.push_str(&clean);
-                app.del_arm = false;
-                app.del_id = None;
+                app.disarm_delete();
                 let n = clean.chars().count();
                 app.status = format!("appunti: {n} caratteri incollati");
             } else {
@@ -238,8 +234,7 @@ pub(crate) fn clipboard_png_file(bytes: &[u8], mime: &str) -> Option<(std::path:
 /// ciclo; il risultato torna come Response::Clipboard mentre l'utente
 /// continua a usare il client (luce a volte i processi si inceppano).
 pub(crate) fn ctrl_paste(app: &mut App, res: &mpsc::UnboundedSender<Response>) {
-    app.del_arm = false;
-    app.del_id = None;
+    app.disarm_delete();
     if !(app.show_search || (app.open.is_some() && app.editing.is_none())) {
         return;
     }

@@ -14,7 +14,6 @@ mod tg;
 mod view;
 mod worker;
 
-use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 
 use crossterm::event::EventStream;
@@ -56,41 +55,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Carico le conversazioni…");
     let mut app = App {
         contacts: tg::load_dialogs(&client).await?,
-        contact_cursor: 0,
-        open: None,
-        histories: HashMap::new(),
-        compose: String::new(),
-        status: String::new(),
-        show_sticker: false,
-        set_level: false,
-        set_cursor: 0,
-        sticker_cursor: 0,
-        sets: None,
-        set_docs: HashMap::new(),
-        docs_failed: HashMap::new(),
-        open_set: None,
-        previews: HashMap::new(),
-        pending: HashSet::new(),
-        failed: HashMap::new(),
         me: tg::own_name(&client).await,
-        msg_cursor: None,
-        del_id: None,
-        editing: None,
-        del_arm: false,
-        show_search: false,
-        search_q: String::new(),
-        search_cursor: 0,
-        search_results: None,
-        mouse_map: Vec::new(),
-        link_map: Vec::new(),
-        pending_photo: None,
-        react_open: false,
-        react_idx: 0,
-        read_mark: None,
-        older_busy: HashSet::new(),
-        older_done: HashSet::new(),
-        want_older: false,
-        quit: false,
+        ..App::default()
     };
 
     // ---------------- canali di servizio -------------------------------

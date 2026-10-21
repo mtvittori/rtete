@@ -87,7 +87,7 @@ pub(crate) async fn handle_event(
                             app.search_results = None;
                             app.search_cursor = 0;
                             app.search_q.clear();
-                            app.del_arm = false;
+                            app.disarm_delete();
                         }
                         _ => {}
                     }
@@ -139,9 +139,7 @@ pub(crate) async fn handle_event(
                         app.react_open = false;
                     } else if app.pending_photo.is_some() {
                         app.status = "appunti: foto scartata".into();
-                        if let Some(p) = app.pending_photo.take() {
-                            let _ = std::fs::remove_file(p);
-                        }
+                        app.discard_pending_photo();
                         app.compose.clear();
                     } else if app.editing.is_some() {
                         app.status = "modifica annullata".into();
@@ -149,8 +147,7 @@ pub(crate) async fn handle_event(
                         app.compose.clear();
                     } else if app.del_arm {
                         app.status = "cancellazione annullata".into();
-                        app.del_arm = false;
-                        app.del_id = None;
+                        app.disarm_delete();
                     } else if app.msg_cursor.is_some() {
                         app.status = "selezione chiusa".into();
                         app.msg_cursor = None;
@@ -179,12 +176,9 @@ pub(crate) async fn handle_event(
                 // Tab apre/chiude il pannello sticker: 's' torna una lettera
                 KeyCode::Tab if !app.show_search && !app.del_arm => {
                     app.editing = None;
-                    app.del_arm = false;
-                    app.del_id = None;
+                    app.disarm_delete();
                     app.react_open = false;
-                    if let Some(p) = app.pending_photo.take() {
-                        let _ = std::fs::remove_file(p);
-                    }
+                    app.discard_pending_photo();
                     app.show_sticker = !app.show_sticker;
                     app.set_level = false;
                     if app.show_sticker {
@@ -197,8 +191,7 @@ pub(crate) async fn handle_event(
                 }
                 KeyCode::Enter => on_enter(app, req).await,
                 KeyCode::Backspace => {
-                    app.del_arm = false;
-                    app.del_id = None;
+                    app.disarm_delete();
                     if app.show_search {
                         app.search_q.pop();
                     } else {
@@ -215,8 +208,7 @@ pub(crate) async fn handle_event(
                     }
                 }
                 KeyCode::Char(c) if !app.show_sticker && !app.react_open => {
-                    app.del_arm = false;
-                    app.del_id = None;
+                    app.disarm_delete();
                     if app.show_search {
                         app.search_q.push(c);
                     } else if app.compose.chars().count() < app.compose_cap() {
@@ -238,8 +230,7 @@ pub(crate) async fn handle_event(
             }
         }
         Event::Paste(text) => {
-            app.del_arm = false;
-            app.del_id = None;
+            app.disarm_delete();
             if app.show_search {
                 let clean = paste_text(&text, false, 200);
                 app.search_q.push_str(&clean);
@@ -251,6 +242,15 @@ pub(crate) async fn handle_event(
         }
         _ => {}
     }
+}
+
+/// Segna la chat come letta con la richiesta fuori dal flusso eventi:
+/// lo spawn async parte subito ma l'input non aspetta la rete.
+fn mark_read(client: &grammers_client::Client, peer_ref: tg::ChatRef) {
+    let cl = client.clone();
+    tokio::spawn(async move {
+        let _ = cl.mark_as_read(peer_ref).await;
+    });
 }
 
 /// Ruota/trackpad: nel pannello ricerca scorre i risultati; nella chat,
@@ -290,9 +290,7 @@ pub(crate) fn ctrl_edit(app: &mut App) {
         return;
     }
     // l'edit riprende il compose: scarta un'eventuale foto pendente
-    if let Some(p) = app.pending_photo.take() {
-        let _ = std::fs::remove_file(p);
-    }
+    app.discard_pending_photo();
     let Some(chat) = app.current_chat() else {
         app.status = "apri prima una chat".into();
         return;
@@ -303,24 +301,15 @@ pub(crate) fn ctrl_edit(app: &mut App) {
         return;
     };
     // se c'è un cursore e punta a un tuo messaggio di testo, usa quello
-    let chosen = app.msg_cursor.and_then(|cid| {
-        ring.iter()
-            .rev()
-            .find(|r| r.id == cid && r.outgoing && matches!(r.kind, tg::RowKind::Text(_)))
+    // (cursor letto prima della chiamata col prestito mutabile di App)
+    let cursor = app.msg_cursor;
+    let found = App::picked_row(ring, cursor, |r| {
+        r.outgoing && matches!(r.kind, tg::RowKind::Text(_))
+    })
+    .and_then(|r| match &r.kind {
+        tg::RowKind::Text(t) => Some((r.id, t.clone())),
+        _ => None,
     });
-    let found = match chosen {
-        Some(r) => Some((
-            r.id,
-            match &r.kind {
-                tg::RowKind::Text(t) => t.clone(),
-                _ => String::new(),
-            },
-        )),
-        None => ring.iter().rev().find_map(|r| match &r.kind {
-            tg::RowKind::Text(text) if r.outgoing => Some(r.id).map(|id| (id, text.clone())),
-            _ => None,
-        }),
-    };
     match found {
         Some((id, text)) => {
             app.editing = Some(id);
@@ -334,21 +323,12 @@ pub(crate) fn ctrl_edit(app: &mut App) {
 
 /// Arma la cancellazione dell'ultimo tuo messaggio (conferma con Invio).
 pub(crate) fn ctrl_delete(app: &mut App) {
-    app.status.clear();
-    if app.show_search || app.show_sticker {
-        return;
-    }
-    let Some(chat) = app.current_chat() else {
-        app.status = "apri prima una chat".into();
-        return;
-    };
-    let Some(ring) = app.histories.get(&chat.peer_id) else {
-        app.status = "cronologia non ancora caricata".into();
+    let cursor = app.msg_cursor;
+    let Some(ring) = app.chat_ready_ring() else {
         return;
     };
     // cursore attivo? cancella QUEL messaggio (solo se tuo: outgoing)
-    let target = match app
-        .msg_cursor
+    let target = match cursor
         .and_then(|cid| ring.iter().find(|r| r.id == cid))
     {
         Some(r) if r.outgoing => Some(r.id),
@@ -370,24 +350,12 @@ pub(crate) fn ctrl_delete(app: &mut App) {
 
 /// Riproduce l'ultimo audio (vocale o brano) della chat aperta.
 pub(crate) fn ctrl_play(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
-    app.status.clear();
-    if app.show_search || app.show_sticker {
-        return;
-    }
-    let Some(chat) = app.current_chat() else {
-        app.status = "apri prima una chat".into();
-        return;
-    };
-    let Some(ring) = app.histories.get(&chat.peer_id) else {
-        app.status = "cronologia non ancora caricata".into();
+    // cursore pre-letto: la ring arriva col prestito mutabile di App
+    let cursor = app.msg_cursor;
+    let Some(ring) = app.chat_ready_ring() else {
         return;
     };
     // cursore attivo? riproduci QUEL audio; altrimenti l'ultimo
-    let chosen = app.msg_cursor.and_then(|cid| {
-        ring.iter()
-            .rev()
-            .find(|r| r.id == cid && matches!(r.kind, tg::RowKind::Audio { .. }))
-    });
     let to_job = |r: &tg::HistoryRow| match &r.kind {
         tg::RowKind::Audio {
             media, name, voice, ..
@@ -407,9 +375,10 @@ pub(crate) fn ctrl_play(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
         }
         _ => None,
     };
-    let found = chosen
-        .and_then(to_job)
-        .or_else(|| ring.iter().rev().find_map(to_job));
+    let found = App::picked_row(ring, cursor, |r| {
+        matches!(r.kind, tg::RowKind::Audio { .. })
+    })
+    .and_then(to_job);
     match found {
         Some((media, fname, label)) => {
             app.status = format!("scarico «{label}» e la riproduco…");
@@ -421,35 +390,19 @@ pub(crate) fn ctrl_play(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
 
 /// Salva su disco l'ultimo documento (o foto) della chat aperta.
 pub(crate) fn ctrl_save(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
-    app.status.clear();
-    if app.show_search || app.show_sticker {
-        return;
-    }
-    let Some(chat) = app.current_chat() else {
-        app.status = "apri prima una chat".into();
-        return;
-    };
-    let ring = app.histories.get(&chat.peer_id);
-    let Some(ring) = ring else {
-        app.status = "cronologia non ancora caricata".into();
+    // cursore pre-letto: la ring arriva col prestito mutabile di App
+    let cursor = app.msg_cursor;
+    let Some(ring) = app.chat_ready_ring() else {
         return;
     };
     // cursore attivo? salva QUEL documento; altrimenti l'ultimo della cronologia
-    let chosen = app.msg_cursor.and_then(|cid| {
-        ring.iter()
-            .rev()
-            .find(|r| r.id == cid && matches!(r.kind, tg::RowKind::Doc { .. }))
+    let found = App::picked_row(ring, cursor, |r| {
+        matches!(r.kind, tg::RowKind::Doc { .. })
+    })
+    .and_then(|r| match &r.kind {
+        tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
+        _ => None,
     });
-    let found = match chosen {
-        Some(r) => match &r.kind {
-            tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
-            _ => None,
-        },
-        None => ring.iter().rev().find_map(|r| match &r.kind {
-            tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
-            _ => None,
-        }),
-    };
     match found {
         Some((media, name)) => {
             // la pulizia del nome sta nel worker (sanitize_file_name): qui
@@ -495,12 +448,9 @@ pub(crate) fn click_select(app: &mut App, m: crossterm::event::MouseEvent) {
         .iter()
         .find(|(y, _)| *y == m.row)
         .map(|(_, id)| *id);
-    match hit {
-        Some(id) if id != 0 => {
-            app.msg_cursor = Some(id);
-            app.status = format!("selezionato #{id} — Esc esce");
-        }
-        _ => {}
+    if let Some(id) = hit.filter(|id| *id != 0) {
+        app.msg_cursor = Some(id);
+        app.status = format!("selezionato #{id} — Esc esce");
     }
 }
 
@@ -626,24 +576,27 @@ pub(crate) fn grid_left(app: &mut App) {
 /// Dentro il pannello: destra nella griglia, o ingresso nel set sotto il cursore.
 pub(crate) fn grid_right(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     app.status.clear();
-    if !app.set_level {
-        if let Some(sets) = app.sets.as_ref() {
-            if let Some(set) = sets.get(app.set_cursor) {
-                app.set_level = true;
-                app.open_set = Some(set.set_id);
-                app.sticker_cursor = 0;
-                // già qui, o in attesa di backoff da un errore recente? via
-                if !app.set_docs.contains_key(&set.set_id) && !app.docs_cooling(set.set_id) {
-                    app.status = format!("scarico il set {}…", set.title);
-                    let _ = req.send(Request::SetDocs {
-                        set_id: set.set_id,
-                        short: set.short_name.clone(),
-                    });
-                }
-            }
-        }
-    } else {
+    if app.set_level {
         app.sticker_cursor = (app.sticker_cursor + 1).min(grid_max(app));
+    } else {
+        enter_set(app, req);
+    }
+}
+
+/// Ingresso nel set sotto il cursore: pagina griglia vuota (o in attesa di
+/// backoff) resta senza richiesta; parte solo se i doc non sono già in RAM.
+fn enter_set(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
+    let Some(set) = app.sets.as_ref().and_then(|s| s.get(app.set_cursor)) else {
+        return;
+    };
+    let (set_id, short, title) = (set.set_id, set.short_name.clone(), set.title.clone());
+    app.set_level = true;
+    app.open_set = Some(set_id);
+    app.sticker_cursor = 0;
+    // già qui, o in attesa di backoff da un errore recente? via
+    if !app.set_docs.contains_key(&set_id) && !app.docs_cooling(set_id) {
+        app.status = format!("scarico il set {title}…");
+        let _ = req.send(Request::SetDocs { set_id, short });
     }
 }
 
@@ -686,21 +639,7 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
     if app.show_sticker {
         let docs = app.open_set.and_then(|id| app.set_docs.get(&id)).cloned();
         if !app.set_level {
-            if let Some(sets) = app.sets.as_ref() {
-                if let Some(set) = sets.get(app.set_cursor) {
-                    app.set_level = true;
-                    app.open_set = Some(set.set_id);
-                    app.sticker_cursor = 0;
-                    // già qui, o in attesa di backoff da un errore recente? via
-                    if !app.set_docs.contains_key(&set.set_id) && !app.docs_cooling(set.set_id) {
-                        app.status = format!("scarico il set {}…", set.title);
-                        let _ = req.send(Request::SetDocs {
-                            set_id: set.set_id,
-                            short: set.short_name.clone(),
-                        });
-                    }
-                }
-            }
+            enter_set(app, req);
         } else if let Some(docs) = docs {
             if let Some(chat) = app.current_chat() {
                 if let Some(media) = docs.get(app.sticker_cursor) {
@@ -733,8 +672,7 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
             });
             app.status = "carico la cronologia…".into();
             app.editing = None;
-            app.del_arm = false;
-            app.del_id = None;
+            app.disarm_delete();
             app.msg_cursor = None;
             app.pending_photo = None;
             app.show_search = false;
@@ -883,11 +821,7 @@ pub(crate) async fn handle_update(
                     // la chat aperta è a fuoco: i nuovi arrivati sono letti
                     // (prima mark_as_read partiva solo al load della storia)
                     if let Some(chat) = app.current_chat() {
-                        let peer_ref = chat.peer_ref;
-                        let cl = client.clone();
-                        tokio::spawn(async move {
-                            let _ = cl.mark_as_read(peer_ref).await;
-                        });
+                        mark_read(client, chat.peer_ref);
                     }
                 }
             } else if !outgoing {
@@ -979,11 +913,7 @@ pub(crate) async fn handle_response(
                     }
                 }
                 if let Some(chat) = app.current_chat() {
-                    let peer_ref = chat.peer_ref;
-                    let cl = client.clone();
-                    tokio::spawn(async move {
-                        let _ = cl.mark_as_read(peer_ref).await;
-                    });
+                    mark_read(client, chat.peer_ref);
                 }
                 let medias: Vec<Media> = app
                     .histories
