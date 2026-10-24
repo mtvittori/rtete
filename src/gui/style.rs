@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 use std::time::SystemTime;
 
-use iced::widget::{button, container};
+use iced::widget::{button, container, text_input};
 use iced::{border, color, Background, Border, Color, Theme};
 
 #[derive(Clone, Copy)]
@@ -103,7 +103,7 @@ fn hex(v: &str) -> Option<Color> {
     Some(Color::from_rgb8((n >> 16) as u8, (n >> 8) as u8, n as u8))
 }
 
-fn mix(a: Color, b: Color, t: f32) -> Color {
+pub fn mix(a: Color, b: Color, t: f32) -> Color {
     Color::from_rgb(
         a.r + (b.r - a.r) * t,
         a.g + (b.g - a.g) * t,
@@ -271,5 +271,43 @@ pub fn danger(_: &Theme, _: button::Status) -> button::Style {
         text_color: Color::WHITE,
         border: border::rounded(8),
         ..Default::default()
+    }
+}
+
+/// campi di testo: angoli tondi come bolle e pulsanti, bordo che si
+/// accende con il fuoco
+pub fn input(_: &Theme, status: text_input::Status) -> text_input::Style {
+    let p = p();
+    let edge = match status {
+        text_input::Status::Focused { .. } => p.accent,
+        text_input::Status::Hovered => mix(p.selected, p.text, 0.2),
+        _ => p.selected,
+    };
+    text_input::Style {
+        background: Background::Color(mix(p.bg, Color::BLACK, 0.15)),
+        border: Border {
+            radius: border::radius(12),
+            width: 1.0,
+            color: edge,
+        },
+        icon: p.muted,
+        placeholder: p.muted,
+        value: p.text,
+        selection: mix(p.selected, p.accent, 0.4),
+    }
+}
+
+/// riquadro della citazione: più scuro della bolla, così autore e testo
+/// si leggono su qualunque tema
+pub fn quote_box(outgoing: bool) -> impl Fn(&Theme) -> container::Style {
+    move |_| {
+        let p = p();
+        let base = if outgoing { p.bubble_out } else { p.bubble_in };
+        container::Style {
+            background: Some(Background::Color(mix(base, Color::BLACK, 0.28))),
+            text_color: Some(p.text),
+            border: border::rounded(8),
+            ..Default::default()
+        }
     }
 }

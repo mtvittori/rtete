@@ -188,6 +188,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
                 .into()
         });
     let search = text_input("Cerca chat…", &g.filter)
+        .style(style::input)
         .on_input(Msg::Filter)
         .padding(9);
     let gear = button(text("⚙").size(18))
@@ -540,6 +541,7 @@ fn quote<'a>(app: &'a App, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
     let what = r.reply_quote.clone().unwrap_or(what);
     let what = ellipsize(what.lines().next().unwrap_or(""), QUOTE_CHARS);
     let tint = if who.is_empty() { p.link } else { style::name_color(&who) };
+    let tint = style::mix(tint, iced::Color::WHITE, 0.2);
     let mut lines = Column::new().spacing(1);
     if !who.is_empty() {
         lines = lines.push(
@@ -550,7 +552,9 @@ fn quote<'a>(app: &'a App, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
                 .wrapping(text::Wrapping::None),
         );
     }
-    lines = lines.push(text(what).size(12).color(p.muted).wrapping(text::Wrapping::None));
+    // testo quasi pieno: il grigio «muted» sullo sfondo della bolla si perdeva
+    let body = iced::Color { a: 0.85, ..p.text };
+    lines = lines.push(text(what).size(12).color(body).wrapping(text::Wrapping::None));
     let bar = container(space())
         .width(3)
         .height(if who.is_empty() { 16 } else { 32 })
@@ -559,7 +563,7 @@ fn quote<'a>(app: &'a App, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
         .padding([4, 8])
         .max_width(BUBBLE_W - 30.0)
         .clip(true)
-        .style(style::pill(iced::Color { a: 0.18, ..tint }))
+        .style(style::quote_box(r.outgoing))
         .into()
 }
 
@@ -814,6 +818,7 @@ fn composer(app: &App) -> Element<'_, Msg> {
                 .on_press(Msg::Stickers)
                 .style(style::flat(app.show_sticker)),
             text_input(placeholder, &app.compose)
+                .style(style::input)
                 .id(COMPOSE)
                 .on_input(Msg::Compose)
                 .on_submit(Msg::Submit)
@@ -1055,6 +1060,7 @@ fn forward_picker(g: &Gui) -> Element<'_, Msg> {
             ]
             .align_y(Center),
             text_input("Cerca chat…", &g.fwd_filter)
+                .style(style::input)
                 .id(FWD_SEARCH)
                 .on_input(Msg::FwdFilter)
                 .padding(9),
