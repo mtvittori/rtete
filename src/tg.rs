@@ -27,6 +27,145 @@ pub struct DialogInfo {
     pub unread: usize,
     /// chat fissata in alto (preferiti): resta sopra le altre.
     pub pinned: bool,
+    /// ultimo messaggio, per l'anteprima nella lista chat.
+    pub last: Option<LastMsg>,
+    /// i miei messaggi fino a questo id sono stati letti (spunte doppie).
+    pub read_out: i32,
+    /// canale (solo gli amministratori scrivono), non gruppo.
+    pub broadcast: bool,
+    /// foto profilo o della chat (id per la cache e il download).
+    pub photo_id: Option<i64>,
+    /// ultimo accesso (solo chat private).
+    pub seen: Seen,
+}
+
+/// Lo stato di un utente come lo mostra Telegram.
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+pub enum Seen {
+    #[default]
+    Unknown,
+    /// online fino a (secondi Unix)
+    Online(i64),
+    /// ultimo accesso (secondi Unix)
+    Offline(i64),
+    Recently,
+    LastWeek,
+    LastMonth,
+}
+
+impl Seen {
+    pub fn from_raw(s: &tl::enums::UserStatus) -> Self {
+        match s {
+            tl::enums::UserStatus::Online(o) => Seen::Online(o.expires as i64),
+            tl::enums::UserStatus::Offline(o) => Seen::Offline(o.was_online as i64),
+            tl::enums::UserStatus::Recently(_) => Seen::Recently,
+            tl::enums::UserStatus::LastWeek(_) => Seen::LastWeek,
+            tl::enums::UserStatus::LastMonth(_) => Seen::LastMonth,
+            tl::enums::UserStatus::Empty => Seen::Unknown,
+        }
+    }
+
+    /// online adesso (l'«online» scade da solo dopo `expires`)
+    pub fn online(&self, now: i64) -> bool {
+        matches!(self, Seen::Online(until) if *until > now)
+    }
+}
+
+/// Foto e stato di un peer, per la lista chat.
+pub fn peer_extras(peer: &grammers_client::peer::Peer) -> (Option<i64>, Seen) {
+    use grammers_client::peer::Peer;
+    match peer {
+        Peer::User(u) => (u.photo().map(|p| p.photo_id), Seen::from_raw(u.status())),
+        Peer::Group(g) => (g.photo().map(|p| p.photo_id), Seen::Unknown),
+        Peer::Channel(c) => (c.photo().map(|p| p.photo_id), Seen::Unknown),
+        Peer::Community(c) => (c.photo().map(|p| p.photo_id), Seen::Unknown),
+    }
+}
+
+pub fn is_broadcast(peer: &grammers_client::peer::Peer) -> bool {
+    matches!(peer, grammers_client::peer::Peer::Channel(c) if c.raw.broadcast)
+}
+
+/// Dove sta in cache la foto profilo piccola.
+pub fn avatar_path(photo_id: i64) -> PathBuf {
+    media_dir().join("avatars").join(format!("{photo_id}.jpg"))
+}
+
+/// Scarica la foto profilo piccola (160px) se non è già in cache.
+pub async fn download_avatar(client: &Client, peer: ChatRef, photo_id: i64) -> Result<PathBuf, String> {
+    let dest = avatar_path(photo_id);
+    if dest.exists() {
+        return Ok(dest);
+    }
+    if let Some(dir) = dest.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let photo = grammers_client::media::ChatPhoto {
+        raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
+            tl::types::InputPeerPhotoFileLocation {
+                big: false,
+                peer: peer.into(),
+                photo_id,
+            },
+        ),
+    };
+    // scarica in un temporaneo: un file a metà non deve sembrare in cache
+    let part = dest.with_extension("part");
+    client
+        .download_media(&photo, &part)
+        .await
+        .map_err(|e| e.to_string())?;
+    std::fs::rename(&part, &dest).map_err(|e| e.to_string())?;
+    Ok(dest)
+}
+
+/// Cosa sta facendo l'altro («sta scrivendo…»); `None` = ha smesso.
+pub fn typing_label(a: &tl::enums::SendMessageAction) -> Option<&'static str> {
+    use tl::enums::SendMessageAction as A;
+    match a {
+        A::SendMessageCancelAction => None,
+        A::SendMessageRecordAudioAction | A::SendMessageUploadAudioAction(_) => {
+            Some("registra un vocale")
+        }
+        A::SendMessageRecordVideoAction
+        | A::SendMessageUploadVideoAction(_)
+        | A::SendMessageRecordRoundAction
+        | A::SendMessageUploadRoundAction(_) => Some("invia un video"),
+        A::SendMessageUploadPhotoAction(_) => Some("invia una foto"),
+        A::SendMessageUploadDocumentAction(_) => Some("invia un file"),
+        A::SendMessageChooseStickerAction => Some("sceglie uno sticker"),
+        _ => Some("sta scrivendo"),
+    }
+}
+
+/// L'anteprima dell'ultimo messaggio di una chat.
+#[derive(Clone)]
+pub struct LastMsg {
+    pub id: i32,
+    pub text: String,
+    pub outgoing: bool,
+    /// secondi Unix (0 = ignoto)
+    pub date: i64,
+}
+
+impl LastMsg {
+    pub fn from_row(r: &HistoryRow) -> Self {
+        Self {
+            id: r.id,
+            text: r.kind.summary(),
+            outgoing: r.outgoing,
+            date: r.date,
+        }
+    }
+
+    pub fn from_message(m: &grammers_client::message::Message) -> Self {
+        Self {
+            id: m.id(),
+            text: row_kind(m.media(), m.text().to_string()).summary(),
+            outgoing: m.outgoing(),
+            date: m.date().as_second(),
+        }
+    }
 }
 
 /// One message rendered in the history pane.
@@ -155,6 +294,28 @@ pub enum RowKind {
     /// etichetta informativa: video, vocale, contatti, sondaggi…
     Note(String),
     Service(String),
+}
+
+impl RowKind {
+    /// Una riga sola che descrive il messaggio: anteprime e citazioni.
+    pub fn summary(&self) -> String {
+        match self {
+            RowKind::Text(t) => t.lines().next().unwrap_or("").to_string(),
+            RowKind::Sticker { emoji, .. } => format!("{emoji} sticker"),
+            RowKind::Photo { caption, gif, .. } => {
+                let what = if *gif { "GIF" } else { "🖼 foto" };
+                if caption.is_empty() {
+                    what.into()
+                } else {
+                    format!("{what} {caption}")
+                }
+            }
+            RowKind::Doc { name, .. } => format!("📄 {name}"),
+            RowKind::Audio { voice: true, .. } => "🎤 messaggio vocale".into(),
+            RowKind::Audio { name, .. } => format!("🎵 {name}"),
+            RowKind::Note(s) | RowKind::Service(s) => s.clone(),
+        }
+    }
 }
 
 /// Caption ripulita: righe collassate, tagliata a lunghezza ragionevole.
@@ -587,13 +748,14 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
         let peer = dialog.peer().clone();
         let name = peer.name().unwrap_or("senza nome").to_string();
         let is_group = !matches!(peer, grammers_client::peer::Peer::User(_));
+        let (photo_id, seen) = peer_extras(&peer);
         let read_unread = match &dialog.raw {
             tl::enums::Dialog::Dialog(raw) => raw.unread_count.max(0) as usize,
             _ => 0,
         };
-        let pinned = match &dialog.raw {
-            tl::enums::Dialog::Dialog(raw) => raw.pinned,
-            _ => false,
+        let (pinned, read_out) = match &dialog.raw {
+            tl::enums::Dialog::Dialog(raw) => (raw.pinned, raw.read_outbox_max_id),
+            _ => (false, 0),
         };
         out.push(DialogInfo {
             name,
@@ -602,6 +764,11 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
             is_group,
             unread: read_unread,
             pinned,
+            last: dialog.last_message.as_ref().map(LastMsg::from_message),
+            read_out,
+            photo_id,
+            seen,
+            broadcast: is_broadcast(&peer),
         });
     }
     Ok(out)
@@ -619,13 +786,19 @@ pub async fn dialog_from_message(
         Some(p) => p.clone(),
         None => client.resolve_peer(peer_ref).await.ok()?,
     };
+    let (photo_id, seen) = peer_extras(&peer);
     Some(DialogInfo {
+        broadcast: is_broadcast(&peer),
+        photo_id,
+        seen,
         name: peer.name().unwrap_or("senza nome").to_string(),
         is_group: !matches!(peer, grammers_client::peer::Peer::User(_)),
         peer_id: m.peer_id(),
         peer_ref,
         unread: 0,
         pinned: false,
+        last: Some(LastMsg::from_message(m)),
+        read_out: 0,
     })
 }
 
@@ -1026,9 +1199,192 @@ pub fn same_peer(a: PeerId, b: PeerId) -> bool {
     a == b
 }
 
+/// Un link Telegram (`tg://…` o `https://t.me/…`) che si apre dentro rtete.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TgLink {
+    /// chat pubblica per username, eventualmente su un messaggio
+    Public { name: String, post: Option<i32> },
+    /// canale/supergruppo privato per id (t.me/c/ID/POST)
+    Private { channel: i64, post: Option<i32> },
+    /// invito a una chat privata (t.me/+HASH, joinchat, tg://join)
+    Invite(String),
+}
+
+/// Riconosce i link di Telegram; `None` per tutto il resto (va al browser).
+pub fn parse_link(url: &str) -> Option<TgLink> {
+    let url = url.trim();
+    let query = |q: &str, key: &str| {
+        q.split('&')
+            .filter_map(|kv| kv.split_once('='))
+            .find(|(k, _)| *k == key)
+            .map(|(_, v)| v.to_string())
+    };
+    if let Some(rest) = url.strip_prefix("tg://") {
+        let (what, q) = rest.split_once('?').unwrap_or((rest, ""));
+        return match what.trim_end_matches('/') {
+            "resolve" => Some(TgLink::Public {
+                name: query(q, "domain")?,
+                post: query(q, "post").and_then(|p| p.parse().ok()),
+            }),
+            "join" => Some(TgLink::Invite(query(q, "invite")?)),
+            "privatepost" => Some(TgLink::Private {
+                channel: query(q, "channel")?.parse().ok()?,
+                post: query(q, "post").and_then(|p| p.parse().ok()),
+            }),
+            _ => None,
+        };
+    }
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url);
+    let path = rest
+        .strip_prefix("t.me/")
+        .or_else(|| rest.strip_prefix("telegram.me/"))
+        .or_else(|| rest.strip_prefix("www.t.me/"))?;
+    let path = path.split(['?', '#']).next().unwrap_or("");
+    let mut parts = path.split('/').filter(|p| !p.is_empty());
+    let first = parts.next()?;
+    let second = parts.next();
+    if let Some(hash) = first.strip_prefix('+') {
+        return Some(TgLink::Invite(hash.to_string()));
+    }
+    match first {
+        "joinchat" => Some(TgLink::Invite(second?.to_string())),
+        "c" => Some(TgLink::Private {
+            channel: second?.parse().ok()?,
+            post: parts.next().and_then(|p| p.parse().ok()),
+        }),
+        "s" => Some(TgLink::Public { name: second?.to_string(), post: None }),
+        // pagine di servizio, non chat
+        "addstickers" | "addemoji" | "share" | "proxy" | "socks" | "login" | "setlanguage"
+        | "addtheme" | "bg" | "invoice" | "boost" => None,
+        name => Some(TgLink::Public {
+            name: name.to_string(),
+            post: second.and_then(|p| p.parse().ok()),
+        }),
+    }
+}
+
+/// Esito della risoluzione di un link.
+pub enum LinkHit {
+    /// chat da aprire (dialogo nuovo se non era fra i tuoi)
+    Chat { dialog: DialogInfo, post: Option<i32> },
+    /// invito a una chat di cui sei già membro
+    Already(PeerId),
+    /// invito da accettare: titolo e membri per la conferma
+    Invite { hash: String, title: String, members: i32 },
+    /// invito accettato: la chat (se l'update la nomina)
+    Joined(Option<PeerId>),
+}
+
+fn chat_peer_id(chat: &tl::enums::Chat) -> Option<PeerId> {
+    match chat {
+        tl::enums::Chat::Chat(c) => PeerId::chat(c.id),
+        tl::enums::Chat::Forbidden(c) => PeerId::chat(c.id),
+        tl::enums::Chat::Channel(c) => PeerId::channel(c.id),
+        tl::enums::Chat::ChannelForbidden(c) => PeerId::channel(c.id),
+        tl::enums::Chat::Empty(_)
+        | tl::enums::Chat::Community(_)
+        | tl::enums::Chat::CommunityForbidden(_) => None,
+    }
+}
+
+/// Chat pubblica per username o anteprima di un invito.
+pub async fn resolve_link(client: &Client, link: TgLink) -> Result<LinkHit, String> {
+    match link {
+        TgLink::Public { name, post } => {
+            let peer = client
+                .resolve_username(&name)
+                .await
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("@{name} non esiste"))?;
+            let peer_ref = peer
+                .to_ref()
+                .await
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("@{name} non è raggiungibile"))?;
+            let (photo_id, seen) = peer_extras(&peer);
+            Ok(LinkHit::Chat {
+                dialog: DialogInfo {
+                    broadcast: is_broadcast(&peer),
+                    photo_id,
+                    seen,
+                    name: peer.name().unwrap_or(&name).to_string(),
+                    is_group: !matches!(peer, grammers_client::peer::Peer::User(_)),
+                    peer_id: peer.id(),
+                    peer_ref,
+                    unread: 0,
+                    pinned: false,
+                    last: None,
+                    read_out: 0,
+                },
+                post,
+            })
+        }
+        TgLink::Invite(hash) => {
+            let res = client
+                .invoke(&tl::functions::messages::CheckChatInvite { hash: hash.clone() })
+                .await
+                .map_err(|e| e.to_string())?;
+            match res {
+                tl::enums::ChatInvite::Already(a) => chat_peer_id(&a.chat)
+                    .map(LinkHit::Already)
+                    .ok_or_else(|| "chat dell'invito non valida".into()),
+                tl::enums::ChatInvite::Peek(p) => chat_peer_id(&p.chat)
+                    .map(LinkHit::Already)
+                    .ok_or_else(|| "chat dell'invito non valida".into()),
+                tl::enums::ChatInvite::Invite(i) => Ok(LinkHit::Invite {
+                    hash,
+                    title: i.title,
+                    members: i.participants_count,
+                }),
+            }
+        }
+        TgLink::Private { .. } => Err("chat privata: non è fra le tue".into()),
+    }
+}
+
+/// Accetta un invito: la chat entra fra i dialoghi.
+pub async fn join_invite(client: &Client, hash: String) -> Result<LinkHit, String> {
+    let res = client
+        .invoke(&tl::functions::messages::ImportChatInvite { hash })
+        .await
+        .map_err(|e| e.to_string())?;
+    let tl::enums::messages::ChatInviteJoinResult::Ok(ok) = res else {
+        return Err("questo invito si apre solo nell'app ufficiale".into());
+    };
+    let chats = match ok.updates {
+        tl::enums::Updates::Updates(u) => u.chats,
+        tl::enums::Updates::Combined(u) => u.chats,
+        _ => Vec::new(),
+    };
+    Ok(LinkHit::Joined(chats.iter().find_map(chat_peer_id)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---------- parse_link ----------
+    #[test]
+    fn parse_link_riconosce_i_formati() {
+        let public = |n: &str, p: Option<i32>| Some(TgLink::Public { name: n.into(), post: p });
+        assert_eq!(parse_link("https://t.me/durov"), public("durov", None));
+        assert_eq!(parse_link("t.me/durov/42"), public("durov", Some(42)));
+        assert_eq!(parse_link("https://t.me/s/canale"), public("canale", None));
+        assert_eq!(parse_link("tg://resolve?domain=durov&post=7"), public("durov", Some(7)));
+        assert_eq!(parse_link("https://t.me/+AbC_1"), Some(TgLink::Invite("AbC_1".into())));
+        assert_eq!(parse_link("https://t.me/joinchat/XyZ"), Some(TgLink::Invite("XyZ".into())));
+        assert_eq!(parse_link("tg://join?invite=XyZ"), Some(TgLink::Invite("XyZ".into())));
+        assert_eq!(
+            parse_link("https://t.me/c/123456/89"),
+            Some(TgLink::Private { channel: 123456, post: Some(89) })
+        );
+        assert_eq!(parse_link("https://t.me/addstickers/set"), None);
+        assert_eq!(parse_link("https://example.com/t.me/x"), None);
+        assert_eq!(parse_link("tg://settings"), None);
+    }
 
     // ---------- normalize_phone ----------
     #[test]

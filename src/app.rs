@@ -129,6 +129,16 @@ pub struct App {
     /// messaggi citati fuori dalla cronologia caricata, per chat e id:
     /// `None` = eliminato. Solo per la riga di citazione delle risposte.
     pub quoted: HashMap<PeerId, HashMap<i32, Option<tg::HistoryRow>>>,
+    /// foto profilo in cache: photo_id → file
+    pub avatars: HashMap<i64, PathBuf>,
+    /// foto chieste (in volo o fallite: non si richiedono a ogni giro)
+    pub avatar_asked: HashSet<i64>,
+    /// chi sta scrivendo, per chat: (fino a quando, «Nome sta scrivendo»)
+    pub typing: HashMap<PeerId, (Instant, String)>,
+    /// chat da aprire appena è nella lista (link risolto), col messaggio
+    pub link_open: Option<(PeerId, Option<i32>)>,
+    /// invito in attesa di conferma: (hash, titolo, membri)
+    pub invite: Option<(String, String, i32)>,
     /// chat con una richiesta `Quoted` in volo
     pub quoted_busy: HashSet<PeerId>,
     /// chat la cui ultima richiesta `Quoted` è fallita: prossimo tentativo
@@ -204,6 +214,37 @@ impl App {
     pub fn discard_pending_photo(&mut self) {
         if let Some(p) = self.pending_photo.take() {
             let _ = std::fs::remove_file(p);
+        }
+    }
+
+    /// Chiede le foto profilo che mancano (una volta per foto).
+    pub fn request_avatars(&mut self, req: &mpsc::UnboundedSender<Request>) {
+        for d in &self.contacts {
+            let Some(id) = d.photo_id else { continue };
+            if self.avatars.contains_key(&id) || !self.avatar_asked.insert(id) {
+                continue;
+            }
+            let path = tg::avatar_path(id);
+            if path.exists() {
+                self.avatars.insert(id, path);
+            } else {
+                let _ = req.send(Request::Avatar { peer_ref: d.peer_ref, photo_id: id });
+            }
+        }
+    }
+
+    /// «sta scrivendo» della chat, se non è scaduto.
+    pub fn typing_in(&self, peer: PeerId) -> Option<&str> {
+        self.typing
+            .get(&peer)
+            .filter(|(until, _)| Instant::now() < *until)
+            .map(|(_, what)| what.as_str())
+    }
+
+    /// Aggiorna l'anteprima della chat nella lista (messaggio nuovo o inviato).
+    pub fn set_last(&mut self, peer_id: PeerId, row: &tg::HistoryRow) {
+        if let Some(d) = self.contacts.iter_mut().find(|d| tg::same_peer(d.peer_id, peer_id)) {
+            d.last = Some(tg::LastMsg::from_row(row));
         }
     }
 
@@ -528,6 +569,11 @@ mod tests {
             is_group: false,
             unread: 0,
             pinned,
+            last: None,
+            read_out: 0,
+            photo_id: None,
+            seen: tg::Seen::Unknown,
+            broadcast: false,
         }
     }
 

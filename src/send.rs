@@ -90,6 +90,14 @@ pub enum Request {
         msg_id: i32,
         emoticon: Option<String>,
     },
+    /// link Telegram da risolvere (chat pubblica o invito)
+    Link(tg::TgLink),
+    /// accetta l'invito confermato
+    Join(String),
+    /// rilegge la lista dei dialoghi (dopo un ingresso in una chat)
+    Dialogs,
+    /// foto profilo piccola di una chat
+    Avatar { peer_ref: PeerRefT, photo_id: i64 },
 }
 
 /// Risposte dei worker: un solo canale verso il ciclo; ogni variante ha
@@ -123,6 +131,9 @@ pub enum Response {
     Saved(Result<String, String>),
     Played(Result<String, String>),
     Reacted(Result<(), String>),
+    Link(Result<tg::LinkHit, String>),
+    Dialogs(Result<Vec<tg::DialogInfo>, String>),
+    Avatar { photo_id: i64, path: Result<PathBuf, String> },
     /// il probe wl-clipboard ha girato a thread fuori dal ciclo eventi
     Clipboard(ClipboardHit),
 }

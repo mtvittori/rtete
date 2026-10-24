@@ -3,6 +3,7 @@
 //! (numero, codice) resta alla TUI: qui si riusa la sessione salvata.
 
 mod net;
+mod settings;
 mod style;
 mod ui;
 
@@ -17,6 +18,7 @@ use rtete::sync::{handle_response, handle_update};
 use rtete::tg;
 
 use crate::net::{Carrier, Link, NetEvent};
+use crate::settings::{Settings, ThemeChoice};
 
 pub const COMPOSE: &str = "compose";
 pub const HISTORY: &str = "history";
@@ -47,6 +49,15 @@ pub enum Msg {
     SendSticker(usize),
     Link(String),
     Key(keyboard::Event),
+    /// controllo periodico del tema Omarchy
+    Tick,
+    ToggleSettings,
+    SetTheme(ThemeChoice),
+    Scale(f32),
+    LinksInApp(bool),
+    TgHandler,
+    Join,
+    Gpu(bool),
 }
 
 pub enum Phase {
@@ -63,18 +74,33 @@ pub struct Gui {
     pub tz: jiff::tz::TimeZone,
     /// la vista è in fondo alla cronologia: i nuovi messaggi la seguono
     at_bottom: bool,
+    pub settings: Settings,
+    pub show_settings: bool,
+    /// chi apre i link tg:// (letto quando si aprono le impostazioni)
+    pub tg_handler: String,
+    /// ultima modifica vista del colors.toml di Omarchy
+    theme_stamp: Option<std::time::SystemTime>,
+    /// link arrivati prima della connessione
+    pending_links: Vec<String>,
 }
 
 fn main() -> iced::Result {
-    // renderer software: ~75 MB contro ~105 di wgpu, per una chat basta;
-    // ICED_BACKEND=wgpu lo rimette sulla GPU
-    if std::env::var_os("ICED_BACKEND").is_none() {
+    // GPU (wgpu) per uno scorrimento fluido; dalle impostazioni si passa
+    // al disegno software (tiny-skia, ~35 MB in meno). ICED_BACKEND vince.
+    if std::env::var_os("ICED_BACKEND").is_none() && !Settings::load().gpu {
         std::env::set_var("ICED_BACKEND", "tiny-skia");
     }
-    net::start();
+    let link = std::env::args().skip(1).find(|a| !a.starts_with('-'));
+    // istanza unica: la finestra già aperta riceve il link e viene a fuoco
+    if net::hand_off(link.as_deref()) {
+        focus_existing();
+        return Ok(());
+    }
+    net::start(link);
     iced::application(boot, Gui::update, ui::view)
         .title("RTete")
         .theme(|_: &Gui| style::theme())
+        .scale_factor(|g: &Gui| g.settings.scale)
         .subscription(Gui::subscription)
         .window(iced::window::Settings {
             size: iced::Size::new(1100.0, 760.0),
@@ -88,8 +114,29 @@ fn main() -> iced::Result {
         .run()
 }
 
+/// Porta a fuoco la finestra di RTete già aperta (Hyprland).
+fn focus_existing() {
+    let lua = r#"hl.dsp.focus({ window = "class:rtete-gui" })"#;
+    let ok = std::process::Command::new("hyprctl")
+        .args(["dispatch", lua])
+        .output()
+        .is_ok_and(|o| o.status.success() && !String::from_utf8_lossy(&o.stdout).contains("rror"));
+    if !ok {
+        let _ = std::process::Command::new("hyprctl")
+            .args(["dispatch", "focuswindow", "class:rtete-gui"])
+            .output();
+    }
+}
+
 fn boot() -> Gui {
+    let settings = Settings::load();
+    apply_theme(settings.theme);
     Gui {
+        settings,
+        show_settings: false,
+        tg_handler: String::new(),
+        theme_stamp: style::omarchy_stamp(),
+        pending_links: Vec::new(),
         app: App::default(),
         phase: Phase::Connecting("avvio…".into()),
         link: None,
@@ -99,12 +146,33 @@ fn boot() -> Gui {
     }
 }
 
+fn apply_theme(choice: ThemeChoice) {
+    let pal = match choice {
+        ThemeChoice::Omarchy => style::omarchy().unwrap_or(style::RTETE),
+        ThemeChoice::Rtete => style::RTETE,
+    };
+    style::set(pal);
+}
+
 impl Gui {
     fn subscription(&self) -> Subscription<Msg> {
-        Subscription::batch([
+        let mut subs = vec![
             Subscription::run(net::events).map(Msg::Net),
             keyboard::listen().map(Msg::Key),
-        ])
+        ];
+        // il tema Omarchy si ricontrolla ogni 2s; con qualcuno che scrive
+        // si ridisegna ogni secondo perché il «sta scrivendo» scada
+        let every = if !self.app.typing.is_empty() {
+            Some(1)
+        } else if self.settings.theme == ThemeChoice::Omarchy {
+            Some(2)
+        } else {
+            None
+        };
+        if let Some(s) = every {
+            subs.push(iced::time::every(std::time::Duration::from_secs(s)).map(|_| Msg::Tick));
+        }
+        Subscription::batch(subs)
     }
 
     fn req(&self) -> Option<tokio::sync::mpsc::UnboundedSender<Request>> {
@@ -134,8 +202,12 @@ impl Gui {
                 self.at_bottom = v.absolute_offset().y < 8.0;
                 if v.absolute_offset_reversed().y < 120.0 {
                     self.app.want_older = true;
+                    if let Some(req) = self.req() {
+                        self.app.request_older(&req);
+                    }
                 }
-                Task::none()
+                // arrivano a raffica: niente giro completo di after_change
+                return Task::none();
             }
             Msg::Older => {
                 self.app.want_older = true;
@@ -318,11 +390,70 @@ impl Gui {
                 Task::none()
             }
             Msg::Link(url) => {
-                let _ = std::process::Command::new("xdg-open")
-                    .arg(&url)
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
+                match tg::parse_link(&url).filter(|_| self.settings.links_in_app) {
+                    Some(link) => self.follow(link),
+                    None => {
+                        let _ = std::process::Command::new("xdg-open")
+                            .arg(&url)
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
+                            .spawn();
+                    }
+                }
+                Task::none()
+            }
+            Msg::Tick => {
+                let now = std::time::Instant::now();
+                self.app.typing.retain(|_, (until, _)| *until > now);
+                let stamp = style::omarchy_stamp();
+                if stamp != self.theme_stamp {
+                    self.theme_stamp = stamp;
+                    apply_theme(self.settings.theme);
+                }
+                Task::none()
+            }
+            Msg::ToggleSettings => {
+                self.show_settings = !self.show_settings;
+                if self.show_settings {
+                    self.tg_handler = settings::tg_handler();
+                }
+                Task::none()
+            }
+            Msg::SetTheme(choice) => {
+                self.settings.theme = choice;
+                apply_theme(choice);
+                self.theme_stamp = style::omarchy_stamp();
+                self.settings.save();
+                Task::none()
+            }
+            Msg::Scale(f) => {
+                self.settings.scale = (f * 20.0).round() / 20.0;
+                self.settings.save();
+                Task::none()
+            }
+            Msg::Gpu(on) => {
+                self.settings.gpu = on;
+                self.settings.save();
+                self.app.status = "vale dal prossimo avvio".into();
+                Task::none()
+            }
+            Msg::LinksInApp(on) => {
+                self.settings.links_in_app = on;
+                self.settings.save();
+                Task::none()
+            }
+            Msg::TgHandler => {
+                if !settings::set_tg_handler() {
+                    self.app.status = "xdg-mime non ha funzionato".into();
+                }
+                self.tg_handler = settings::tg_handler();
+                Task::none()
+            }
+            Msg::Join => {
+                if let (Some((hash, title, _)), Some(req)) = (self.app.invite.take(), self.req()) {
+                    let _ = req.send(Request::Join(hash));
+                    self.app.status = format!("entro in «{title}»…");
+                }
                 Task::none()
             }
             Msg::Key(keyboard::Event::KeyPressed { key, .. }) => {
@@ -334,13 +465,58 @@ impl Gui {
             Msg::Key(_) => Task::none(),
         };
         self.after_change();
+        // un link risolto: la chat si apre appena è nella lista
+        if let Some((pid, post)) = self.app.link_open {
+            if self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, pid)) {
+                self.app.link_open = None;
+                self.show_settings = false;
+                let open = self.open_chat(pid);
+                self.app.msg_cursor = post;
+                return Task::batch([task, open]);
+            }
+        }
         task
+    }
+
+    /// Un link Telegram: le chat private si cercano fra le proprie, il
+    /// resto lo risolve il worker (username, inviti).
+    fn follow(&mut self, link: tg::TgLink) {
+        if let tg::TgLink::Private { channel, post } = link {
+            let pid = PeerId::channel(channel);
+            match pid.filter(|p| self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, *p))) {
+                Some(p) => self.app.link_open = Some((p, post)),
+                None => self.app.status = "link a una chat privata che non è fra le tue".into(),
+            }
+            return;
+        }
+        if let Some(req) = self.req() {
+            let _ = req.send(Request::Link(link));
+            self.app.status = "apro il link…".into();
+        }
+    }
+
+    /// Link da fuori (argomento o altra istanza): come un click in chat,
+    /// ma sempre dentro RTete.
+    fn external_link(&mut self, url: String) {
+        if self.link.is_none() {
+            self.pending_links.push(url);
+            return;
+        }
+        match tg::parse_link(&url) {
+            Some(link) => self.follow(link),
+            None => self.app.status = format!("link non riconosciuto: {url}"),
+        }
     }
 
     /// Esc o ✕: chiude il primo pannello o annulla l'azione in corso.
     fn cancel(&mut self) {
+        if self.show_settings {
+            self.show_settings = false;
+            return;
+        }
         let a = &mut self.app;
-        if a.show_sticker {
+        if a.invite.take().is_some() {
+        } else if a.show_sticker {
             a.show_sticker = false;
         } else if a.del_arm {
             a.disarm_delete();
@@ -370,6 +546,7 @@ impl Gui {
         let req = link.req.clone();
         self.app.request_older(&req);
         self.app.request_quoted(&req);
+        self.app.request_avatars(&req);
         self.app.refresh_preview_queue(&req);
         if self.app.show_sticker && self.app.set_level {
             if let Some(docs) = self.app.open_set.and_then(|id| self.app.set_docs.get(&id)).cloned() {
@@ -400,6 +577,13 @@ impl Gui {
                 self.app.me = me;
                 self.link = Some(link);
                 self.phase = Phase::Ready;
+                for url in std::mem::take(&mut self.pending_links) {
+                    self.external_link(url);
+                }
+                Task::none()
+            }
+            NetEvent::Link(url) => {
+                self.external_link(url);
                 Task::none()
             }
             NetEvent::UpdateErr(e) => {
@@ -438,6 +622,7 @@ impl Gui {
             return Task::none();
         };
         self.app.contact_cursor = i;
+        self.show_settings = false;
         if self.app.open == Some(pid) {
             return operation::focus(COMPOSE);
         }

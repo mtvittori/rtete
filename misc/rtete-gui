@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # RTete GUI — client Telegram grafico (iced) di ~/Work/rtete.
+# Un link tg:// o t.me come argomento si apre nella finestra già aperta.
 # Gli errori finiscono su ~/.local/state/rtete-gui.err.log.
 # Con la TUI aperta non parte: le due condividerebbero la stessa sessione
 # sqlite (~/.local/share/rtete/rtete.db) nello stesso momento.
@@ -18,4 +19,4 @@ fi
 mkdir -m 700 -p "$HOME/.local/state"
 log="$HOME/.local/state/rtete-gui.err.log"
 touch "$log" && chmod 600 "$log"
-exec "$bin" 2>>"$log"
+exec "$bin" "$@" 2>>"$log"

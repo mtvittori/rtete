@@ -37,6 +37,8 @@ pub enum NetEvent {
     Update(Update),
     UpdateErr(String),
     Response(Response),
+    /// link Telegram da aprire (argomento o da un'altra istanza)
+    Link(String),
 }
 
 /// I messaggi di iced devono essere `Clone`: l'evento viaggia in una
@@ -56,8 +58,48 @@ impl std::fmt::Debug for Carrier {
     }
 }
 
+fn sock_path() -> std::path::PathBuf {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    dir.join("rtete-gui.sock")
+}
+
+/// Istanza unica: se RTete è già aperta le passa il link (o niente, solo
+/// per farsi trovare) e ritorna true; il chiamante allora esce.
+pub fn hand_off(link: Option<&str>) -> bool {
+    use std::io::Write;
+    let Ok(mut s) = std::os::unix::net::UnixStream::connect(sock_path()) else {
+        return false;
+    };
+    let _ = writeln!(s, "{}", link.unwrap_or(""));
+    true
+}
+
+/// Ascolta le istanze successive: ogni riga non vuota è un link da aprire.
+fn listen(tx: mpsc::UnboundedSender<NetEvent>) {
+    use std::io::BufRead;
+    let path = sock_path();
+    // un socket rimasto da un'uscita brusca: nessuno risponde (hand_off è
+    // già fallito), si può togliere
+    let _ = std::fs::remove_file(&path);
+    let Ok(listener) = std::os::unix::net::UnixListener::bind(&path) else {
+        return;
+    };
+    std::thread::spawn(move || {
+        for conn in listener.incoming().flatten() {
+            let mut line = String::new();
+            let _ = std::io::BufReader::new(conn).read_line(&mut line);
+            let line = line.trim();
+            if !line.is_empty() && tx.send(NetEvent::Link(line.to_string())).is_err() {
+                break;
+            }
+        }
+    });
+}
+
 /// Avvia il runtime e la connessione; gli eventi aspettano la subscription.
-pub fn start() {
+pub fn start(link: Option<String>) {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -65,6 +107,10 @@ pub fn start() {
         .expect("runtime tokio");
     let (tx, rx) = mpsc::unbounded_channel();
     *EVENTS.lock().unwrap() = Some(rx);
+    listen(tx.clone());
+    if let Some(l) = link {
+        let _ = tx.send(NetEvent::Link(l));
+    }
     rt.spawn(async move {
         if let Err(e) = run(tx.clone()).await {
             let _ = tx.send(NetEvent::Failed(e));
