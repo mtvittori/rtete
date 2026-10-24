@@ -27,6 +27,8 @@ const BUBBLE_W: f32 = 520.0;
 const STICKER_PX: f32 = 170.0;
 const PHOTO_PX: f32 = 320.0;
 const GRID_COLS: usize = 6;
+/// caratteri della citazione sopra una risposta
+const QUOTE_CHARS: usize = 44;
 const SIDEBAR_W: f32 = 310.0;
 const COMPACT_W: f32 = 76.0;
 /// sotto questa larghezza la lista chat mostra solo gli avatar
@@ -531,16 +533,33 @@ fn quote<'a>(app: &'a App, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
         Some(None) => (String::new(), "messaggio eliminato".into()),
         None => (String::new(), "…".into()),
     };
+    // come Telegram: barretta colorata, autore sopra, inizio del testo
+    // sotto; tutto tagliato con «…» e chiuso nella bolla (prima una
+    // citazione lunga usciva dai bordi)
+    let p = style::p();
     let what = r.reply_quote.clone().unwrap_or(what);
-    let what: String = what.chars().take(90).collect();
-    let line = if who.is_empty() {
-        format!("↱ {what}")
-    } else {
-        format!("↱ {who}: {what}")
-    };
-    container(text(line).size(12).color(style::p().link).wrapping(text::Wrapping::None))
-        .padding([2, 8])
-        .style(style::pill(iced::Color { a: 0.25, ..style::p().bg }))
+    let what = ellipsize(what.lines().next().unwrap_or(""), QUOTE_CHARS);
+    let tint = if who.is_empty() { p.link } else { style::name_color(&who) };
+    let mut lines = Column::new().spacing(1);
+    if !who.is_empty() {
+        lines = lines.push(
+            text(ellipsize(&who, QUOTE_CHARS))
+                .size(12)
+                .font(BOLD)
+                .color(tint)
+                .wrapping(text::Wrapping::None),
+        );
+    }
+    lines = lines.push(text(what).size(12).color(p.muted).wrapping(text::Wrapping::None));
+    let bar = container(space())
+        .width(3)
+        .height(if who.is_empty() { 16 } else { 32 })
+        .style(style::pill(tint));
+    container(row![bar, lines].spacing(7).align_y(Center))
+        .padding([4, 8])
+        .max_width(BUBBLE_W - 30.0)
+        .clip(true)
+        .style(style::pill(iced::Color { a: 0.18, ..tint }))
         .into()
 }
 
