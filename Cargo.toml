@@ -17,6 +17,19 @@ md5 = "0.8"
 rpassword = "7"
 jiff = "0.2.38"
 icy_sixel = "0.7.0"
+iced = { version = "0.14", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "wayland", "x11", "tokio", "image", "advanced", "thread-pool", "fira-sans"] }
+
+[features]
+gui = ["dep:iced"]
+
+[[bin]]
+name = "rtete"
+path = "src/main.rs"
+
+[[bin]]
+name = "rtete-gui"
+path = "src/gui/main.rs"
+required-features = ["gui"]
 
 [profile.release]
 opt-level = 2

@@ -1,0 +1,495 @@
+//! RTete GUI — la stessa RTete (grammers, worker, cache delle anteprime,
+//! stato `App`) con un'interfaccia iced al posto della TUI. L'accesso
+//! (numero, codice) resta alla TUI: qui si riusa la sessione salvata.
+
+mod net;
+mod style;
+mod ui;
+
+use grammers_client::session::types::PeerId;
+use iced::widget::{operation, scrollable};
+use iced::{keyboard, Subscription, Task};
+
+use rtete::app::App;
+use rtete::clipboard;
+use rtete::send::{Request, SendJob, SendKind};
+use rtete::sync::{handle_response, handle_update};
+use rtete::tg;
+
+use crate::net::{Carrier, Link, NetEvent};
+
+pub const COMPOSE: &str = "compose";
+pub const HISTORY: &str = "history";
+
+#[derive(Debug, Clone)]
+pub enum Msg {
+    Net(Carrier),
+    Open(PeerId),
+    Filter(String),
+    Compose(String),
+    Submit,
+    Scrolled(scrollable::Viewport),
+    Older,
+    Select(i32),
+    Reply(i32),
+    Edit(i32),
+    AskDelete(i32),
+    ConfirmDelete,
+    Cancel,
+    React(i32, &'static str),
+    Copy(i32),
+    Save(i32),
+    Play(i32),
+    PasteImage,
+    Stickers,
+    OpenSet(i64),
+    SetsBack,
+    SendSticker(usize),
+    Link(String),
+    Key(keyboard::Event),
+}
+
+pub enum Phase {
+    Connecting(String),
+    Failed(String),
+    Ready,
+}
+
+pub struct Gui {
+    pub app: App,
+    pub phase: Phase,
+    link: Option<Link>,
+    pub filter: String,
+    pub tz: jiff::tz::TimeZone,
+    /// la vista è in fondo alla cronologia: i nuovi messaggi la seguono
+    at_bottom: bool,
+}
+
+fn main() -> iced::Result {
+    // renderer software: ~75 MB contro ~105 di wgpu, per una chat basta;
+    // ICED_BACKEND=wgpu lo rimette sulla GPU
+    if std::env::var_os("ICED_BACKEND").is_none() {
+        std::env::set_var("ICED_BACKEND", "tiny-skia");
+    }
+    net::start();
+    iced::application(boot, Gui::update, ui::view)
+        .title("RTete")
+        .theme(|_: &Gui| style::theme())
+        .subscription(Gui::subscription)
+        .window(iced::window::Settings {
+            size: iced::Size::new(1100.0, 760.0),
+            // la classe che Hyprland vede (regole finestra, scorciatoie)
+            platform_specific: iced::window::settings::PlatformSpecific {
+                application_id: "rtete-gui".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .run()
+}
+
+fn boot() -> Gui {
+    Gui {
+        app: App::default(),
+        phase: Phase::Connecting("avvio…".into()),
+        link: None,
+        filter: String::new(),
+        tz: jiff::tz::TimeZone::system(),
+        at_bottom: true,
+    }
+}
+
+impl Gui {
+    fn subscription(&self) -> Subscription<Msg> {
+        Subscription::batch([
+            Subscription::run(net::events).map(Msg::Net),
+            keyboard::listen().map(Msg::Key),
+        ])
+    }
+
+    fn req(&self) -> Option<tokio::sync::mpsc::UnboundedSender<Request>> {
+        self.link.as_ref().map(|l| l.req.clone())
+    }
+
+    fn update(&mut self, msg: Msg) -> Task<Msg> {
+        let task = match msg {
+            Msg::Net(c) => match c.take() {
+                Some(ev) => self.on_net(ev),
+                None => Task::none(),
+            },
+            Msg::Open(pid) => self.open_chat(pid),
+            Msg::Filter(s) => {
+                self.filter = s;
+                Task::none()
+            }
+            Msg::Compose(s) => {
+                let cap = self.app.compose_cap();
+                self.app.compose = s.chars().take(cap).collect();
+                Task::none()
+            }
+            Msg::Submit => self.submit(),
+            Msg::Scrolled(v) => {
+                // ancorata in fondo: offset() = distanza dal fondo,
+                // reversed() = distanza dalla cima
+                self.at_bottom = v.absolute_offset().y < 8.0;
+                if v.absolute_offset_reversed().y < 120.0 {
+                    self.app.want_older = true;
+                }
+                Task::none()
+            }
+            Msg::Older => {
+                self.app.want_older = true;
+                Task::none()
+            }
+            Msg::Select(id) => {
+                self.app.msg_cursor = if self.app.msg_cursor == Some(id) { None } else { Some(id) };
+                self.app.disarm_delete();
+                Task::none()
+            }
+            Msg::Reply(id) => {
+                self.app.replying = Some(id);
+                self.app.editing = None;
+                self.app.msg_cursor = None;
+                self.app.disarm_delete();
+                operation::focus(COMPOSE)
+            }
+            Msg::Edit(id) => {
+                let text = self.app.open_history().and_then(|ring| {
+                    ring.iter().find(|r| r.id == id).and_then(|r| match &r.kind {
+                        tg::RowKind::Text(t) => Some(t.clone()),
+                        _ => None,
+                    })
+                });
+                match text {
+                    Some(t) => {
+                        self.app.discard_pending_photo();
+                        self.app.editing = Some(id);
+                        self.app.replying = None;
+                        self.app.msg_cursor = None;
+                        self.app.compose = t;
+                        Task::batch([operation::focus(COMPOSE), operation::move_cursor_to_end(COMPOSE)])
+                    }
+                    None => Task::none(),
+                }
+            }
+            Msg::AskDelete(id) => {
+                self.app.del_arm = true;
+                self.app.del_id = Some(id);
+                Task::none()
+            }
+            Msg::ConfirmDelete => {
+                let target = self.app.del_id.take();
+                self.app.del_arm = false;
+                if let (Some(id), Some(chat), Some(req)) =
+                    (target, self.app.current_chat(), self.req())
+                {
+                    let _ = req.send(Request::Del { peer_ref: chat.peer_ref, id });
+                    self.app.status = "cancello il messaggio…".into();
+                    if self.app.msg_cursor == Some(id) {
+                        self.app.msg_cursor = None;
+                    }
+                }
+                Task::none()
+            }
+            Msg::Cancel => {
+                self.cancel();
+                Task::none()
+            }
+            Msg::React(id, emoticon) => {
+                let mine_already = self
+                    .app
+                    .open_history()
+                    .and_then(|ring| ring.iter().find(|r| r.id == id))
+                    .is_some_and(|r| r.reactions.iter().any(|i| i.mine && i.emoticon == emoticon));
+                if let (Some(chat), Some(req)) = (self.app.current_chat(), self.req()) {
+                    let _ = req.send(Request::React {
+                        peer_ref: chat.peer_ref,
+                        msg_id: id,
+                        emoticon: (!mine_already).then(|| emoticon.to_string()),
+                    });
+                    // optimistic_react lavora sul cursore di selezione
+                    self.app.msg_cursor = Some(id);
+                    self.app.optimistic_react(emoticon);
+                }
+                Task::none()
+            }
+            Msg::Copy(id) => {
+                let text = self
+                    .app
+                    .open_history()
+                    .and_then(|ring| ring.iter().find(|r| r.id == id))
+                    .and_then(clipboard::copy_text);
+                match text {
+                    Some(t) => {
+                        self.app.status = "copiato negli appunti".into();
+                        iced::clipboard::write(t)
+                    }
+                    None => Task::none(),
+                }
+            }
+            Msg::Save(id) => {
+                let job = self.row_media(id, |k| match k {
+                    tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
+                    _ => None,
+                });
+                if let (Some((media, name)), Some(req)) = (job, self.req()) {
+                    self.app.status = format!("salvo «{name}» in ~/Downloads…");
+                    let _ = req.send(Request::Save { media, name });
+                }
+                Task::none()
+            }
+            Msg::Play(id) => {
+                let job = self.row_media(id, |k| match k {
+                    tg::RowKind::Audio { media, name, voice, .. } => {
+                        let label = if *voice { "voce".to_string() } else { name.clone() };
+                        let fname = if *voice {
+                            format!("voce-{}.ogg", tg::media_key(media))
+                        } else {
+                            tg::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
+                        };
+                        Some((media.clone(), fname, label))
+                    }
+                    _ => None,
+                });
+                if let (Some((media, fname, label)), Some(req)) = (job, self.req()) {
+                    self.app.status = format!("scarico «{label}» e la riproduco…");
+                    let _ = req.send(Request::Play { media, fname, label });
+                }
+                Task::none()
+            }
+            Msg::PasteImage => {
+                if let Some(link) = &self.link {
+                    clipboard::ctrl_paste(&mut self.app, &link.res);
+                }
+                operation::focus(COMPOSE)
+            }
+            Msg::Stickers => {
+                self.app.show_sticker = !self.app.show_sticker;
+                if self.app.show_sticker && self.app.sets.is_none() {
+                    if let Some(req) = self.req() {
+                        let _ = req.send(Request::Sets);
+                    }
+                    self.app.status = "carico i set di sticker…".into();
+                }
+                Task::none()
+            }
+            Msg::OpenSet(set_id) => {
+                self.app.open_set = Some(set_id);
+                self.app.set_level = true;
+                let short = self
+                    .app
+                    .sets
+                    .as_ref()
+                    .and_then(|s| s.iter().find(|s| s.set_id == set_id))
+                    .map(|s| s.short_name.clone());
+                if !self.app.set_docs.contains_key(&set_id) && !self.app.docs_cooling(set_id) {
+                    if let (Some(short), Some(req)) = (short, self.req()) {
+                        let _ = req.send(Request::SetDocs { set_id, short });
+                        self.app.status = "scarico il set…".into();
+                    }
+                }
+                Task::none()
+            }
+            Msg::SetsBack => {
+                self.app.set_level = false;
+                Task::none()
+            }
+            Msg::SendSticker(i) => {
+                let media = self
+                    .app
+                    .open_set
+                    .and_then(|id| self.app.set_docs.get(&id))
+                    .and_then(|docs| docs.get(i))
+                    .cloned();
+                if let (Some(media), Some(chat), Some(req)) =
+                    (media, self.app.current_chat(), self.req())
+                {
+                    let _ = req.send(Request::Send(SendJob {
+                        peer: chat.peer_ref,
+                        peer_id: chat.peer_id,
+                        kind: SendKind::Sticker(media),
+                        reply_to: self.app.replying,
+                    }));
+                    self.app.replying = None;
+                    self.app.show_sticker = false;
+                    self.app.status = "invio sticker…".into();
+                    return self.snap_bottom();
+                }
+                Task::none()
+            }
+            Msg::Link(url) => {
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(&url)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+                Task::none()
+            }
+            Msg::Key(keyboard::Event::KeyPressed { key, .. }) => {
+                if key == keyboard::Key::Named(keyboard::key::Named::Escape) {
+                    self.cancel();
+                }
+                Task::none()
+            }
+            Msg::Key(_) => Task::none(),
+        };
+        self.after_change();
+        task
+    }
+
+    /// Esc o ✕: chiude il primo pannello o annulla l'azione in corso.
+    fn cancel(&mut self) {
+        let a = &mut self.app;
+        if a.show_sticker {
+            a.show_sticker = false;
+        } else if a.del_arm {
+            a.disarm_delete();
+        } else if a.editing.take().is_some() {
+            a.compose.clear();
+        } else if a.replying.take().is_some() {
+        } else if a.pending_photo.is_some() {
+            a.discard_pending_photo();
+        } else {
+            a.msg_cursor = None;
+        }
+        a.status.clear();
+    }
+
+    fn row_media<T>(&self, id: i32, f: impl Fn(&tg::RowKind) -> Option<T>) -> Option<T> {
+        self.app
+            .open_history()
+            .and_then(|ring| ring.iter().find(|r| r.id == id))
+            .and_then(|r| f(&r.kind))
+    }
+
+    /// dopo ogni messaggio: pagine vecchie, citazioni, anteprime da convertire
+    fn after_change(&mut self) {
+        let Some(link) = &self.link else {
+            return;
+        };
+        let req = link.req.clone();
+        self.app.request_older(&req);
+        self.app.request_quoted(&req);
+        self.app.refresh_preview_queue(&req);
+        if self.app.show_sticker && self.app.set_level {
+            if let Some(docs) = self.app.open_set.and_then(|id| self.app.set_docs.get(&id)).cloned() {
+                self.app.ensure_previews(&req, docs.iter());
+            }
+        }
+    }
+
+    /// la cronologia è ancorata in fondo: l'offset 0 (START) è l'ultimo
+    /// messaggio, END sarebbe la cima
+    fn snap_bottom(&mut self) -> Task<Msg> {
+        self.at_bottom = true;
+        operation::snap_to(HISTORY, scrollable::RelativeOffset::START)
+    }
+
+    fn on_net(&mut self, ev: NetEvent) -> Task<Msg> {
+        match ev {
+            NetEvent::Status(s) => {
+                self.phase = Phase::Connecting(s);
+                Task::none()
+            }
+            NetEvent::Failed(e) => {
+                self.phase = Phase::Failed(e);
+                Task::none()
+            }
+            NetEvent::Ready { link, contacts, me } => {
+                self.app.contacts = contacts;
+                self.app.me = me;
+                self.link = Some(link);
+                self.phase = Phase::Ready;
+                Task::none()
+            }
+            NetEvent::UpdateErr(e) => {
+                self.app.status = format!("rete: {e}");
+                Task::none()
+            }
+            NetEvent::Update(u) => {
+                let Some(link) = &self.link else {
+                    return Task::none();
+                };
+                let client = link.client.clone();
+                // handle_update aspetta la rete solo per una chat mai vista
+                // (dialog_from_message); il contesto tokio serve agli spawn
+                let _rt = net::RT.get().map(|rt| rt.enter());
+                iced::futures::executor::block_on(handle_update(&mut self.app, &client, u));
+                Task::none()
+            }
+            NetEvent::Response(r) => {
+                let Some(link) = &self.link else {
+                    return Task::none();
+                };
+                let (client, req) = (link.client.clone(), link.req.clone());
+                let first_page = matches!(&r, rtete::send::Response::Hist { .. });
+                let _rt = net::RT.get().map(|rt| rt.enter());
+                iced::futures::executor::block_on(handle_response(&mut self.app, r, &client, &req));
+                if first_page || self.at_bottom {
+                    return self.snap_bottom();
+                }
+                Task::none()
+            }
+        }
+    }
+
+    fn open_chat(&mut self, pid: PeerId) -> Task<Msg> {
+        let Some(i) = self.app.contacts.iter().position(|c| tg::same_peer(c.peer_id, pid)) else {
+            return Task::none();
+        };
+        self.app.contact_cursor = i;
+        if self.app.open == Some(pid) {
+            return operation::focus(COMPOSE);
+        }
+        let chat = &self.app.contacts[i];
+        let (peer_ref, peer) = (chat.peer_ref, chat.peer_id);
+        self.app.open = Some(pid);
+        if let Some(req) = self.req() {
+            let _ = req.send(Request::Hist { peer_ref, peer });
+        }
+        let a = &mut self.app;
+        a.status = "carico la cronologia…".into();
+        a.editing = None;
+        a.replying = None;
+        a.disarm_delete();
+        a.msg_cursor = None;
+        a.discard_pending_photo();
+        a.compose.clear();
+        a.show_sticker = false;
+        Task::batch([self.snap_bottom(), operation::focus(COMPOSE)])
+    }
+
+    /// Invio nel campo di scrittura: foto in attesa, modifica o testo nuovo.
+    fn submit(&mut self) -> Task<Msg> {
+        let Some(req) = self.req() else {
+            return Task::none();
+        };
+        let Some((peer, peer_id)) = self.app.current_chat().map(|c| (c.peer_ref, c.peer_id)) else {
+            return Task::none();
+        };
+        let a = &mut self.app;
+        let kind = if let Some(path) = a.pending_photo.take() {
+            a.status = "invio la foto…".into();
+            SendKind::Photo { path, caption: std::mem::take(&mut a.compose) }
+        } else if let Some(id) = a.editing {
+            if a.compose.trim().is_empty() {
+                a.status = "testo vuoto: niente da modificare".into();
+                return Task::none();
+            }
+            a.editing = None;
+            a.status = "salvo la modifica…".into();
+            SendKind::EditText { id, text: std::mem::take(&mut a.compose) }
+        } else if !a.compose.trim().is_empty() {
+            a.status = "invio…".into();
+            SendKind::Text(std::mem::take(&mut a.compose))
+        } else {
+            return Task::none();
+        };
+        let reply_to = match kind {
+            SendKind::EditText { .. } => None,
+            _ => a.replying.take(),
+        };
+        let _ = req.send(Request::Send(SendJob { peer, peer_id, kind, reply_to }));
+        self.snap_bottom()
+    }
+}

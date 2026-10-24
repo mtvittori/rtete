@@ -23,6 +23,24 @@ cargo build --release
 
 Il binario finisce in `target/release/rtete`.
 
+## Versione grafica (iced)
+
+Accanto alla TUI c'è `rtete-gui`, la stessa RTete (rete, worker, cache
+degli sticker, stato) con un'interfaccia [iced](https://iced.rs): lista
+chat a sinistra, cronologia a bolle, sticker e foto come immagini vere.
+
+```
+cargo build --release --features gui --bin rtete-gui
+target/release/rtete-gui
+```
+
+L'accesso (numero, codice, 2FA) si fa una volta con `rtete` nel
+terminale: la GUI riusa credenziali e sessione salvate. Click su un
+messaggio per le azioni (reazioni, rispondi, modifica, copia, elimina),
+📎 incolla un'immagine dagli appunti, 😊 apre gli sticker, Esc annulla.
+Disegna in software (tiny-skia, ~75 MB di RAM); `ICED_BACKEND=wgpu` usa
+la GPU (~105 MB).
+
 ## Primo avvio
 
 ```
