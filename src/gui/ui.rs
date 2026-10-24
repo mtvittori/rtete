@@ -74,7 +74,7 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
             .into();
             match &g.viewer {
                 Some(path) => iced::widget::stack![main, photo_viewer(path)].into(),
-                None => main.into(),
+                None => main,
             }
         })
         .into(),
