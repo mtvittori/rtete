@@ -113,6 +113,11 @@ pub struct App {
     pub link_map: Vec<(u16, u16, u16, String)>,
     /// foto dagli appunti pronta da inviare (percorso del file in tmp).
     pub pending_photo: Option<String>,
+    /// file dell'utente pronto da inviare (selettore, appunti, trascinato):
+    /// a differenza della foto degli appunti non si cancella mai.
+    pub pending_file: Option<std::path::PathBuf>,
+    /// invio con upload in corso: nome mostrato finché non torna `Sent`.
+    pub uploading: Option<String>,
     /// pannello reazioni veloci aperto sul messaggio selezionato.
     pub react_open: bool,
     /// indice nella lista tg::QUICK_REACTIONS.
@@ -156,7 +161,7 @@ impl App {
     /// Limite di Telegram in caratteri: 4096 il testo, 1024 la didascalia
     /// di una foto.
     pub fn compose_cap(&self) -> usize {
-        if self.pending_photo.is_some() {
+        if self.pending_photo.is_some() || self.pending_file.is_some() {
             1024
         } else {
             4096
@@ -215,6 +220,7 @@ impl App {
         if let Some(p) = self.pending_photo.take() {
             let _ = std::fs::remove_file(p);
         }
+        self.pending_file = None;
     }
 
     /// Chiede le foto profilo che mancano (una volta per foto).

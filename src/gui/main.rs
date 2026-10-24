@@ -44,7 +44,15 @@ pub enum Msg {
     Copy(i32),
     Save(i32),
     Play(i32),
-    PasteImage,
+    /// 📎: selettore dei file del portale
+    Attach,
+    Picked(Option<std::path::PathBuf>),
+    /// file trascinato sulla finestra
+    Dropped(std::path::PathBuf),
+    /// Ctrl-V nel campo di scrittura (iced ha già incollato il testo)
+    Pasted(String),
+    /// Ctrl-V fuori dal campo di scrittura
+    PasteKey,
     Stickers,
     OpenSet(i64),
     SetsBack,
@@ -108,6 +116,10 @@ pub struct Gui {
     focused: bool,
     /// foto aperta nel visore
     pub viewer: Option<std::path::PathBuf>,
+    /// il compose prima dell'ultimo Ctrl-V nel campo: se gli appunti erano
+    /// un'immagine o dei file, il testo incollato da iced (un percorso, o
+    /// niente) si annulla
+    paste_undo: Option<String>,
 }
 
 fn main() -> iced::Result {
@@ -171,6 +183,7 @@ fn boot() -> Gui {
         epoch: std::time::Instant::now(),
         focused: true,
         viewer: None,
+        paste_undo: None,
         app: App::default(),
         phase: Phase::Connecting("avvio…".into()),
         link: None,
@@ -193,9 +206,18 @@ impl Gui {
         let mut subs = vec![
             Subscription::run(net::events).map(Msg::Net),
             keyboard::listen().map(Msg::Key),
-            iced::event::listen_with(|e, _, _| match e {
+            iced::event::listen_with(|e, status, _| match e {
                 iced::Event::Window(iced::window::Event::Focused) => Some(Msg::Focus(true)),
                 iced::Event::Window(iced::window::Event::Unfocused) => Some(Msg::Focus(false)),
+                iced::Event::Window(iced::window::Event::FileDropped(p)) => Some(Msg::Dropped(p)),
+                // nel campo di scrittura il Ctrl-V lo cattura text_input (on_paste)
+                iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. })
+                    if status == iced::event::Status::Ignored
+                        && modifiers.command()
+                        && key.as_ref() == keyboard::Key::Character("v") =>
+                {
+                    Some(Msg::PasteKey)
+                }
                 _ => None,
             }),
         ];
@@ -452,7 +474,34 @@ impl Gui {
                 }
                 Task::none()
             }
-            Msg::PasteImage => {
+            Msg::Attach => {
+                if self.app.open.is_none() || self.app.editing.is_some() {
+                    return Task::none();
+                }
+                // portale xdg (FileChooser di GTK): niente librerie GTK nel processo
+                let pick = rfd::AsyncFileDialog::new().set_title("Allega un file").pick_file();
+                Task::perform(pick, |f| Msg::Picked(f.map(|f| f.path().to_path_buf())))
+            }
+            Msg::Picked(Some(path)) | Msg::Dropped(path) => {
+                if self.app.open.is_some() && self.app.editing.is_none() {
+                    clipboard::attach_file(&mut self.app, path);
+                }
+                operation::focus(COMPOSE)
+            }
+            Msg::Picked(None) => operation::focus(COMPOSE),
+            Msg::Pasted(new) => {
+                if self.app.open.is_none() || self.app.editing.is_some() {
+                    self.app.compose = new;
+                    return Task::none();
+                }
+                self.paste_undo = Some(std::mem::replace(&mut self.app.compose, new));
+                if let Some(link) = &self.link {
+                    clipboard::ctrl_paste(&mut self.app, &link.res);
+                }
+                Task::none()
+            }
+            Msg::PasteKey => {
+                self.paste_undo = None;
                 if let Some(link) = &self.link {
                     clipboard::ctrl_paste(&mut self.app, &link.res);
                 }
@@ -656,7 +705,7 @@ impl Gui {
         } else if a.editing.take().is_some() {
             a.compose.clear();
         } else if a.replying.take().is_some() {
-        } else if a.pending_photo.is_some() {
+        } else if a.pending_photo.is_some() || a.pending_file.is_some() {
             a.discard_pending_photo();
         } else {
             a.msg_cursor = None;
@@ -750,6 +799,17 @@ impl Gui {
                     return Task::none();
                 };
                 let (client, req) = (link.client.clone(), link.req.clone());
+                if let rtete::send::Response::Clipboard(hit) = &r {
+                    match (hit, self.paste_undo.take()) {
+                        // il testo l'ha già messo iced nel campo
+                        (clipboard::ClipboardHit::Text(_) | clipboard::ClipboardHit::Empty, Some(_)) => {
+                            self.app.status.clear();
+                            return Task::none();
+                        }
+                        (_, Some(before)) => self.app.compose = before,
+                        (_, None) => {}
+                    }
+                }
                 let first_page = matches!(&r, rtete::send::Response::Hist { .. });
                 let _rt = net::RT.get().map(|rt| rt.enter());
                 iced::futures::executor::block_on(handle_response(&mut self.app, r, &client, &req));
@@ -824,8 +884,13 @@ impl Gui {
         };
         let a = &mut self.app;
         let kind = if let Some(path) = a.pending_photo.take() {
-            a.status = "invio la foto…".into();
+            a.status.clear();
+            a.uploading = Some("immagine dagli appunti".into());
             SendKind::Photo { path, caption: std::mem::take(&mut a.compose) }
+        } else if let Some(path) = a.pending_file.take() {
+            a.status.clear();
+            a.uploading = path.file_name().map(|n| n.to_string_lossy().into_owned());
+            SendKind::File { path: path.display().to_string(), caption: std::mem::take(&mut a.compose) }
         } else if let Some(id) = a.editing {
             if a.compose.trim().is_empty() {
                 a.status = "testo vuoto: niente da modificare".into();

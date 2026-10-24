@@ -64,6 +64,15 @@ pub async fn send_job(
                 Err(e) => Err(e.to_string()),
             }
         }
+        SendKind::File { path, caption } => {
+            let path = std::path::Path::new(&path);
+            let sent = if tg::is_photo_file(path) {
+                tg::send_photo(client, job.peer, path, &caption, job.reply_to).await
+            } else {
+                tg::send_document(client, job.peer, path, &caption, job.reply_to).await
+            };
+            sent.and_then(|m| row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)))
+        }
         SendKind::EditText { id, text } => {
             match tg::edit_text(client, job.peer, id, &text).await {
                 Ok(()) => Ok(SendDone::Edit(

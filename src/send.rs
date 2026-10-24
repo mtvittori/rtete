@@ -32,6 +32,9 @@ pub enum SendKind {
     Sticker(Media),
     /// foto dalla clipboard (file già salvato in tmp) con eventuale caption.
     Photo { path: String, caption: String },
+    /// file scelto dall'utente (selettore, appunti, trascinato): le
+    /// immagini partono come foto, il resto come documento; il file resta.
+    File { path: String, caption: String },
     /// modifica di un testo già inviato (id invariato).
     EditText {
         id: i32,

@@ -842,21 +842,62 @@ fn banners(app: &App) -> Element<'_, Msg> {
     if app.editing.is_some() {
         col = col.push(bar("✎ Modifica del messaggio — Invio salva".into(), None));
     }
-    if app.pending_photo.is_some() {
-        col = col.push(bar(
-            "🖼 Immagine dagli appunti pronta — scrivi una didascalia e premi Invio".into(),
-            None,
-        ));
+    if let Some(e) = attachment(app) {
+        col = col.push(e);
+    }
+    if let Some(name) = &app.uploading {
+        col = col.push(
+            container(
+                text(format!("⬆ Invio di «{name}» in corso…")).size(13).color(style::p().muted),
+            )
+            .padding([6, 16])
+            .width(Fill)
+            .style(style::fill(style::p().sidebar)),
+        );
     }
     col.into()
 }
 
+/// L'allegato in attesa: miniatura (se è un'immagine), nome e peso.
+fn attachment(app: &App) -> Option<Element<'_, Msg>> {
+    let (path, name) = match (&app.pending_photo, &app.pending_file) {
+        (Some(p), _) => (std::path::PathBuf::from(p), "Immagine dagli appunti".to_string()),
+        (None, Some(p)) => (
+            p.clone(),
+            p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        ),
+        (None, None) => return None,
+    };
+    let kb = std::fs::metadata(&path).map(|m| m.len() / 1024).unwrap_or(0);
+    let size = if kb >= 1024 { format!("{:.1} MB", kb as f64 / 1024.0) } else { format!("{kb} KB") };
+    let thumb: Element<'_, Msg> = if tg::is_photo_file(&path) {
+        image(image::Handle::from_path(&path)).height(72).into()
+    } else {
+        container(text("📄").size(36)).center(72).into()
+    };
+    let p = style::p();
+    let info = column![
+        text(ellipsize(&name, 60)).font(BOLD),
+        text(format!("{size} · scrivi una didascalia e premi Invio")).size(12).color(p.muted),
+    ]
+    .spacing(2)
+    .width(Fill);
+    let close = button(text("✕")).on_press(Msg::Cancel).style(style::flat(false));
+    Some(
+        container(row![thumb, info, close].spacing(12).align_y(Center))
+            .padding([8, 16])
+            .style(style::fill(p.sidebar))
+            .into(),
+    )
+}
+
 fn composer(app: &App) -> Element<'_, Msg> {
-    let placeholder = if app.pending_photo.is_some() { "Didascalia…" } else { "Scrivi un messaggio…" };
+    let attached = app.pending_photo.is_some() || app.pending_file.is_some();
+    let placeholder = if attached { "Didascalia…" } else { "Scrivi un messaggio…" };
     container(
         row![
             button(text("📎").size(18))
-                .on_press(Msg::PasteImage)
+                .on_press(Msg::Attach)
                 .style(style::flat(false)),
             button(text("😊").size(18))
                 .on_press(Msg::Stickers)
@@ -865,6 +906,7 @@ fn composer(app: &App) -> Element<'_, Msg> {
                 .style(style::input)
                 .id(COMPOSE)
                 .on_input(Msg::Compose)
+                .on_paste(Msg::Pasted)
                 .on_submit(Msg::Submit)
                 .padding(10)
                 .width(Fill),

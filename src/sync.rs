@@ -318,18 +318,21 @@ pub async fn handle_response(
                 Err(_why) => app.conversion_failed(key),
             }
         }
-        Response::Sent(res) => match res {
-            Ok(SendDone::New(peer_id, row)) => {
-                app.set_last(peer_id, &row);
-                app.push_row(peer_id, row);
-                app.status = String::new();
+        Response::Sent(res) => {
+            app.uploading = None;
+            match res {
+                Ok(SendDone::New(peer_id, row)) => {
+                    app.set_last(peer_id, &row);
+                    app.push_row(peer_id, row);
+                    app.status = String::new();
+                }
+                Ok(SendDone::Edit(peer_id, row)) => {
+                    app.replace_row(peer_id, row);
+                    app.status = "modifica salvata".into();
+                }
+                Err(err) => app.status = format!("invio: {err}"),
             }
-            Ok(SendDone::Edit(peer_id, row)) => {
-                app.replace_row(peer_id, row);
-                app.status = "modifica salvata".into();
-            }
-            Err(err) => app.status = format!("invio: {err}"),
-        },
+        }
         Response::Deleted(res) => match res {
             Ok(()) => app.status = "cancellato".into(),
             Err(err) => app.status = format!("cancellazione: {err}"),

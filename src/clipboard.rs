@@ -9,9 +9,11 @@ use crate::send::Response;
 use crate::tg;
 
 /// Esito del probe degli appunti (wl-clipboard gira a thread, fuori dal
-/// ciclo degli eventi): immagine con byte e mime, testo, oppure vuoto.
+/// ciclo degli eventi): immagine con byte e mime, file copiati dal file
+/// manager, testo, oppure vuoto.
 pub enum ClipboardHit {
     Image(Vec<u8>, &'static str),
+    Files(Vec<std::path::PathBuf>),
     Text(String),
     Empty,
 }
@@ -144,6 +146,15 @@ pub fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
             }
             None => app.status = "appunti: non leggo l'immagine".into(),
         },
+        ClipboardHit::Files(paths) => {
+            let n = paths.len();
+            if let Some(path) = paths.into_iter().next() {
+                attach_file(app, path);
+                if n > 1 {
+                    app.status.push_str(&format!(" (solo il primo di {n} file)"));
+                }
+            }
+        }
         ClipboardHit::Text(text) => {
             if app.show_search {
                 let clean = paste_text(&text, false, 200);
@@ -164,6 +175,52 @@ pub fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
     }
 }
 
+/// Un file del disco pronto da inviare: il testo del compose sarà la
+/// didascalia. Prende il posto di un'eventuale foto in attesa.
+pub fn attach_file(app: &mut App, path: std::path::PathBuf) {
+    if !path.is_file() {
+        app.status = format!("non è un file: {}", path.display());
+        return;
+    }
+    app.discard_pending_photo();
+    app.disarm_delete();
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let what = if tg::is_photo_file(&path) { "foto" } else { "file" };
+    app.status = format!("{what} «{name}» pronto — Invio invia, il testo del compose è la didascalia");
+    app.pending_file = Some(path);
+}
+
+/// I file di un text/uri-list (file manager): solo gli URI file:// locali,
+/// con i %XX decodificati.
+pub fn uri_list_paths(list: &str) -> Vec<std::path::PathBuf> {
+    list.lines()
+        .map(str::trim)
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.strip_prefix("file://"))
+        // file://host/percorso: l'host (di solito vuoto) va saltato
+        .filter_map(|l| l.find('/').map(|i| &l[i..]))
+        .map(|l| std::path::PathBuf::from(percent_decode(l)))
+        .collect()
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let Some(v) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 // ---------------- appunti (wl-clipboard) ------------------------------
 // Ctrl-V non blocca più il ciclo: il probe gira a thread e la conseguenza
 // arriva come Response::Clipboard, con lo stato della UI rilegto allora.
@@ -181,10 +238,18 @@ pub fn wl_paste_bytes(extra: &[&str]) -> Option<Vec<u8>> {
         .map(|o| o.stdout)
 }
 
-/// Tipi e byte degli appunti: prima l'immagine (png/jpeg), poi il testo.
+/// Tipi e byte degli appunti: prima i file copiati, poi l'immagine
+/// (png/jpeg), poi il testo.
 pub fn probe_clipboard() -> ClipboardHit {
     let types = String::from_utf8_lossy(&wl_paste_bytes(&["--list-types"]).unwrap_or_default())
         .into_owned();
+    if types.lines().any(|t| t.trim() == "text/uri-list") {
+        let list = wl_paste_bytes(&["--type", "text/uri-list"]).unwrap_or_default();
+        let paths = uri_list_paths(&String::from_utf8_lossy(&list));
+        if !paths.is_empty() {
+            return ClipboardHit::Files(paths);
+        }
+    }
     let mime = ["image/png", "image/jpeg"]
         .iter()
         .copied()
@@ -244,4 +309,23 @@ pub fn ctrl_paste(app: &mut App, res: &mpsc::UnboundedSender<Response>) {
         let hit = probe_clipboard();
         let _ = res.send(Response::Clipboard(hit));
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uri_list_paths_decodes_local_files() {
+        let list = "# commento\r\nfile:///home/m/Foto%20mare.jpg\r\nfile://host/tmp/a%2Fb\r\nhttps://x.it/y\r\n";
+        assert_eq!(
+            uri_list_paths(list),
+            vec![
+                std::path::PathBuf::from("/home/m/Foto mare.jpg"),
+                std::path::PathBuf::from("/tmp/a/b"),
+            ]
+        );
+        assert_eq!(percent_decode("100%"), "100%");
+        assert_eq!(percent_decode("%e2%82%ac%zz"), "€%zz");
+    }
 }

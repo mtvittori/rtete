@@ -1137,6 +1137,36 @@ pub async fn send_photo(
         .map_err(|e| e.to_string())
 }
 
+/// Invia un file locale come documento (nome e mime dal file), col testo
+/// come didascalia.
+pub async fn send_document(
+    client: &Client,
+    peer_ref: ChatRef,
+    path: &std::path::Path,
+    caption: &str,
+    reply_to: Option<i32>,
+) -> Result<grammers_client::message::Message, String> {
+    let uploaded = client
+        .upload_file(path)
+        .await
+        .map_err(|e| format!("upload: {e}"))?;
+    let mut msg = InputMessage::new().document(uploaded).reply_to(reply_to);
+    if !caption.trim().is_empty() {
+        msg = msg.text(caption);
+    }
+    client
+        .send_message(peer_ref, msg)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// PNG e JPEG partono come foto (compresse da Telegram), il resto come file.
+pub fn is_photo_file(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg"))
+}
+
 /// Modifica in place un testo già inviato (restituito id invariato).
 pub async fn edit_text(
     client: &Client,

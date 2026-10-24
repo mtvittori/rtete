@@ -678,6 +678,12 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
             ACCENT,
             Some(" \u{1f5bc} foto dagli appunti · Invio invia · testo = didascalia · Esc scarta ".into()),
         )
+    } else if let Some(path) = &app.pending_file {
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        (
+            ACCENT,
+            Some(format!(" \u{1f4ce} {name} · Invio invia · testo = didascalia · Esc scarta ")),
+        )
     } else if let Some(id) = app.editing {
         (
             ACCENT,

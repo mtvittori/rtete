@@ -139,7 +139,7 @@ pub(crate) async fn handle_event(
                     } else if app.react_open {
                         app.status = "reazioni: chiuse".into();
                         app.react_open = false;
-                    } else if app.pending_photo.is_some() {
+                    } else if app.pending_photo.is_some() || app.pending_file.is_some() {
                         app.status = "appunti: foto scartata".into();
                         app.discard_pending_photo();
                         app.compose.clear();
@@ -701,6 +701,7 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
             app.disarm_delete();
             app.msg_cursor = None;
             app.pending_photo = None;
+            app.pending_file = None;
             app.show_search = false;
             app.search_results = None;
             app.search_q.clear();
@@ -767,6 +768,28 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
             app.status = "invio la foto…".into();
         } else {
             app.pending_photo = Some(path);
+            app.status = "apri prima una chat".into();
+        }
+        return;
+    }
+
+    // file copiato dal file manager: come la foto, ma il file resta
+    if let Some(path) = app.pending_file.take() {
+        if let Some(chat) = app.current_chat() {
+            let (peer_ref, pid) = (chat.peer_ref, chat.peer_id);
+            let _ = req.send(Request::Send(SendJob {
+                peer: peer_ref,
+                peer_id: pid,
+                kind: SendKind::File {
+                    path: path.display().to_string(),
+                    caption: std::mem::take(&mut app.compose),
+                },
+                reply_to: app.replying.take(),
+            }));
+            app.editing = None;
+            app.status = "invio il file…".into();
+        } else {
+            app.pending_file = Some(path);
             app.status = "apri prima una chat".into();
         }
         return;
