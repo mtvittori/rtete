@@ -67,6 +67,8 @@ pub enum Msg {
     Frame(std::time::Instant),
     /// la finestra ha preso o perso il fuoco
     Focus(bool),
+    /// apre la foto nel visore
+    View(i32),
     Notify(bool),
     NotifyText(bool),
 }
@@ -104,6 +106,8 @@ pub struct Gui {
     pub epoch: std::time::Instant,
     /// finestra a fuoco: la chat aperta non notifica
     focused: bool,
+    /// foto aperta nel visore
+    pub viewer: Option<std::path::PathBuf>,
 }
 
 fn main() -> iced::Result {
@@ -166,6 +170,7 @@ fn boot() -> Gui {
         now: std::time::Instant::now(),
         epoch: std::time::Instant::now(),
         focused: true,
+        viewer: None,
         app: App::default(),
         phase: Phase::Connecting("avvio…".into()),
         link: None,
@@ -237,6 +242,15 @@ impl Gui {
         let task = match msg {
             Msg::Frame(at) => {
                 self.now = at;
+                return Task::none();
+            }
+            Msg::View(id) => {
+                // l'originale a piena risoluzione se c'è, sennò l'anteprima
+                self.viewer = self.row_media(id, |k| match k {
+                    tg::RowKind::Photo { media, .. } => rtete::loader::original(media)
+                        .or_else(|| self.app.previews.get(&tg::media_key(media)).cloned()),
+                    _ => None,
+                });
                 return Task::none();
             }
             Msg::Focus(on) => {
@@ -450,7 +464,10 @@ impl Gui {
                     if let Some(req) = self.req() {
                         let _ = req.send(Request::Sets);
                     }
-                    self.app.status = "carico i set di sticker…".into();
+                }
+                // come Telegram: la prima volta si apre sui preferiti
+                if self.app.show_sticker && self.app.open_set.is_none() {
+                    return self.handle(Msg::OpenSet(tg::FAVED_SET));
                 }
                 Task::none()
             }
@@ -462,7 +479,8 @@ impl Gui {
                     .sets
                     .as_ref()
                     .and_then(|s| s.iter().find(|s| s.set_id == set_id))
-                    .map(|s| s.short_name.clone());
+                    .map(|s| s.short_name.clone())
+                    .or_else(|| (set_id < 0).then(String::new));
                 if !self.app.set_docs.contains_key(&set_id) && !self.app.docs_cooling(set_id) {
                     if let (Some(short), Some(req)) = (short, self.req()) {
                         let _ = req.send(Request::SetDocs { set_id, short });
@@ -619,6 +637,9 @@ impl Gui {
 
     /// Esc o ✕: chiude il primo pannello o annulla l'azione in corso.
     fn cancel(&mut self) {
+        if self.viewer.take().is_some() {
+            return;
+        }
         if self.forwarding.take().is_some() {
             return;
         }

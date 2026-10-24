@@ -1024,6 +1024,31 @@ pub fn media_from_doc(doc: tl::enums::Document) -> Option<Media> {
 }
 
 /// Documenti di un set richiesti per short_name (on-demand nel pannello).
+/// Id finti per i «set» speciali: preferiti e usati di recente.
+pub const FAVED_SET: i64 = -1;
+pub const RECENT_SET: i64 = -2;
+
+/// Gli sticker preferiti (FAVED_SET) o recenti (RECENT_SET) dell'account.
+pub async fn fetch_special_docs(
+    client: &Client,
+    set_id: i64,
+) -> Result<Vec<tl::enums::Document>, InvocationError> {
+    if set_id == FAVED_SET {
+        match client.invoke(&tl::functions::messages::GetFavedStickers { hash: 0 }).await? {
+            tl::enums::messages::FavedStickers::Stickers(s) => Ok(s.stickers),
+            tl::enums::messages::FavedStickers::NotModified => Ok(Vec::new()),
+        }
+    } else {
+        match client
+            .invoke(&tl::functions::messages::GetRecentStickers { attached: false, hash: 0 })
+            .await?
+        {
+            tl::enums::messages::RecentStickers::Stickers(s) => Ok(s.stickers),
+            tl::enums::messages::RecentStickers::NotModified => Ok(Vec::new()),
+        }
+    }
+}
+
 pub async fn fetch_set_docs_by_name(
     client: &Client,
     short_name: &str,

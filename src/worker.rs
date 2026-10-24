@@ -253,8 +253,12 @@ pub fn run_worker(
                 Request::SetDocs { set_id, short } => tokio::spawn(async move {
                     // un errore NON marca il set come caricato: la
                     // griglia riparte al prossimo input, dopo il backoff
-                    let docs = tg::fetch_set_docs_by_name(&cl, &short)
-                        .await
+                    let docs = if set_id < 0 {
+                        tg::fetch_special_docs(&cl, set_id).await
+                    } else {
+                        tg::fetch_set_docs_by_name(&cl, &short).await
+                    };
+                    let docs = docs
                         .map(|docs| docs.into_iter().filter_map(tg::media_from_doc).collect())
                         .map_err(|e| e.to_string());
                     let _ = out.send(Response::Docs { set_id, docs });

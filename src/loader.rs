@@ -82,14 +82,8 @@ pub async fn convert_to_png(
     }
 }
 
-/// Scarica l'originale nella cache (se assente) e preleva il percorso con
-/// l'estensione reale.
-async fn raw_source(
-    client: &grammers_client::Client,
-    media: &grammers_client::media::Media,
-) -> Result<PathBuf, String> {
-    let key = crate::tg::media_key(media);
-    let ext = match media {
+fn raw_ext(media: &grammers_client::media::Media) -> &'static str {
+    match media {
         grammers_client::media::Media::Photo(_) => "jpg",
         grammers_client::media::Media::Document(doc) => match doc.mime_type().unwrap_or("") {
             "image/gif" => "gif",
@@ -99,7 +93,28 @@ async fn raw_source(
             _ => "bin",
         },
         _ => "bin",
-    };
+    }
+}
+
+/// L'originale in cache (foto a piena risoluzione per il visore), se c'è
+/// ed è un formato che si apre al volo (jpg/png).
+pub fn original(media: &grammers_client::media::Media) -> Option<PathBuf> {
+    let ext = raw_ext(media);
+    if !matches!(ext, "jpg" | "png") {
+        return None;
+    }
+    let path = cache_raw(&crate::tg::media_key(media), ext);
+    path.exists().then_some(path)
+}
+
+/// Scarica l'originale nella cache (se assente) e preleva il percorso con
+/// l'estensione reale.
+async fn raw_source(
+    client: &grammers_client::Client,
+    media: &grammers_client::media::Media,
+) -> Result<PathBuf, String> {
+    let key = crate::tg::media_key(media);
+    let ext = raw_ext(media);
     // video: basta la miniatura più grande, non il file intero
     if let grammers_client::media::Media::Document(doc) = media {
         if doc.mime_type().unwrap_or("").starts_with("video/") {

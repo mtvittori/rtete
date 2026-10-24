@@ -67,14 +67,51 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
             }
             // finestra stretta: la lista diventa una colonna di avatar
             let compact = size.width < COMPACT_BELOW;
-            row![
+            let main: Element<'_, Msg> = row![
                 sidebar(g, compact),
                 container(pane.push(right)).width(Fill).height(Fill)
             ]
-            .into()
+            .into();
+            match &g.viewer {
+                Some(path) => iced::widget::stack![main, photo_viewer(path)].into(),
+                None => main.into(),
+            }
         })
         .into(),
     }
+}
+
+/// Foto a tutta finestra: rotella per lo zoom, trascina per spostarla,
+/// Esc o ✕ per chiudere.
+fn photo_viewer(path: &std::path::Path) -> Element<'_, Msg> {
+    let p = style::p();
+    let bar = row![
+        space().width(Fill),
+        button(text("Apri fuori").size(13))
+            .on_press(Msg::Link(format!("file://{}", path.display())))
+            .style(style::flat(false)),
+        button(text("✕").size(18)).on_press(Msg::Cancel).style(style::flat(false)),
+    ]
+    .spacing(8)
+    .align_y(Center);
+    container(
+        column![
+            container(bar).padding(10),
+            image::viewer(image::Handle::from_path(path))
+                .width(Fill)
+                .height(Fill)
+                .min_scale(0.5)
+                .max_scale(8.0)
+                .scale_step(0.15),
+            container(text("rotella per lo zoom · trascina per spostare · Esc chiude").size(12).color(p.muted))
+                .center_x(Fill)
+                .padding(8),
+        ],
+    )
+    .width(Fill)
+    .height(Fill)
+    .style(style::fill(iced::Color { a: 0.94, ..style::mix(p.bg, iced::Color::BLACK, 0.6) }))
+    .into()
 }
 
 fn centered<'a>(c: Column<'a, Msg>) -> Element<'a, Msg> {
@@ -645,7 +682,14 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         },
         RowKind::Photo { media, caption, gif } => {
             let mut c = Column::new().spacing(6);
-            c = c.push(preview(app, media, PHOTO_PX).unwrap_or_else(|| {
+            // click sulla foto: visore a tutta finestra con zoom
+            let pic = preview(app, media, PHOTO_PX).map(|img| -> Element<'a, Msg> {
+                mouse_area(img)
+                    .on_press(Msg::View(r.id))
+                    .interaction(iced::mouse::Interaction::ZoomIn)
+                    .into()
+            });
+            c = c.push(pic.unwrap_or_else(|| {
                 text(if *gif { "GIF in caricamento…" } else { "🖼 foto in caricamento…" })
                     .color(style::p().muted)
                     .into()
@@ -835,33 +879,49 @@ fn composer(app: &App) -> Element<'_, Msg> {
 }
 
 fn stickers(app: &App) -> Element<'_, Msg> {
-    let inner: Element<'_, Msg> = match (&app.sets, app.set_level, app.open_set) {
-        (None, _, _) => text("carico i set…").color(style::p().muted).into(),
-        (Some(sets), false, _) | (Some(sets), true, None) => {
-            let items = sets.iter().map(|s| {
-                button(text(s.title.as_str()))
-                    .on_press(Msg::OpenSet(s.set_id))
-                    .width(Fill)
-                    .padding([6, 10])
-                    .style(style::flat(false))
-                    .into()
-            });
-            scrollable(Column::with_children(items).spacing(2)).height(Fill).into()
-        }
-        (Some(sets), true, Some(set_id)) => {
-            let title = sets
-                .iter()
-                .find(|s| s.set_id == set_id)
-                .map(|s| s.title.as_str())
-                .unwrap_or("");
-            let head = row![
-                button(text("←")).on_press(Msg::SetsBack).style(style::flat(false)),
-                text(title).font(BOLD),
-            ]
-            .spacing(8)
-            .align_y(Center);
+    // schede in alto come Telegram: preferiti, recenti, tutti i set
+    let here = app.open_set.filter(|_| app.set_level);
+    let tab = |label: &'static str, on: bool, m: Msg| {
+        button(text(label).size(13)).on_press(m).padding([4, 10]).style(style::flat(on))
+    };
+    let title = match here {
+        Some(tg::FAVED_SET) | Some(tg::RECENT_SET) | None => "",
+        Some(id) => app
+            .sets
+            .as_ref()
+            .and_then(|sets| sets.iter().find(|s| s.set_id == id))
+            .map(|s| s.title.as_str())
+            .unwrap_or(""),
+    };
+    let head = row![
+        tab("⭐ Preferiti", here == Some(tg::FAVED_SET), Msg::OpenSet(tg::FAVED_SET)),
+        tab("🕘 Recenti", here == Some(tg::RECENT_SET), Msg::OpenSet(tg::RECENT_SET)),
+        tab("☰ Set", here.is_none(), Msg::SetsBack),
+        text(title).font(BOLD).wrapping(text::Wrapping::None),
+    ]
+    .spacing(6)
+    .align_y(Center);
+    let inner: Element<'_, Msg> = match here {
+        None => match &app.sets {
+            None => text("carico i set…").color(style::p().muted).into(),
+            Some(sets) => {
+                let items = sets.iter().map(|s| {
+                    button(text(s.title.as_str()))
+                        .on_press(Msg::OpenSet(s.set_id))
+                        .width(Fill)
+                        .padding([6, 10])
+                        .style(style::flat(false))
+                        .into()
+                });
+                scrollable(Column::with_children(items).spacing(2)).height(Fill).into()
+            }
+        },
+        Some(set_id) => {
             let grid: Element<'_, Msg> = match app.set_docs.get(&set_id) {
                 None => text("scarico gli sticker…").color(style::p().muted).into(),
+                Some(docs) if docs.is_empty() => text("niente qui: aggiungi sticker ai preferiti da Telegram")
+                    .color(style::p().muted)
+                    .into(),
                 Some(docs) => {
                     let mut rows = Column::new().spacing(4);
                     for (r, chunk) in docs.chunks(GRID_COLS).enumerate() {
@@ -886,9 +946,10 @@ fn stickers(app: &App) -> Element<'_, Msg> {
                     scrollable(rows).height(Fill).width(Fill).into()
                 }
             };
-            column![head, grid].spacing(8).into()
+            grid
         }
     };
+    let inner: Element<'_, Msg> = column![head, inner].spacing(8).into();
     container(inner)
         .padding(10)
         .height(300)
