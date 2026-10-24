@@ -228,7 +228,9 @@ pub async fn handle_response(
                                 tg::RowKind::Sticker { media, animated, .. } => {
                                     if *animated { None } else { Some(media.clone()) }
                                 }
-                                tg::RowKind::Photo { media, .. } => Some(media.clone()),
+                                tg::RowKind::Photo { media, .. } | tg::RowKind::Video { media, .. } => {
+                    Some(media.clone())
+                }
                                 _ => None,
                             })
                             .collect()
@@ -388,6 +390,10 @@ pub async fn handle_response(
                 app.avatars.insert(photo_id, p);
             }
         }
+        Response::Forwarded(res) => match res {
+            Ok(to) => app.status = format!("inoltrato a {to}"),
+            Err(err) => app.status = format!("inoltro: {err}"),
+        },
         Response::Dialogs(res) => match res {
             Ok(mut list) => {
                 crate::app::pinned_first(&mut list);

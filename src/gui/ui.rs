@@ -17,7 +17,7 @@ use rtete::tg::{self, HistoryRow, RowKind};
 
 use crate::style;
 use crate::settings::ThemeChoice;
-use crate::{Gui, Msg, Phase, COMPOSE, HISTORY};
+use crate::{Gui, Msg, Phase, COMPOSE, FWD_SEARCH, HISTORY};
 
 const BOLD: Font = Font {
     weight: Weight::Bold,
@@ -27,6 +27,19 @@ const BUBBLE_W: f32 = 520.0;
 const STICKER_PX: f32 = 170.0;
 const PHOTO_PX: f32 = 320.0;
 const GRID_COLS: usize = 6;
+const SIDEBAR_W: f32 = 310.0;
+const COMPACT_W: f32 = 76.0;
+/// sotto questa larghezza la lista chat mostra solo gli avatar
+const COMPACT_BELOW: f32 = 760.0;
+
+/// Taglia con «…» a circa `max` caratteri (iced non ha l'ellissi).
+fn ellipsize(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let cut: String = s.chars().take(max.saturating_sub(1)).collect();
+    format!("{}…", cut.trim_end())
+}
 
 pub fn view(g: &Gui) -> Element<'_, Msg> {
     match &g.phase {
@@ -38,18 +51,27 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
             text("RTete non riesce a partire").size(22).font(BOLD),
             text(e.as_str()).color(style::p().danger),
         ]),
-        Phase::Ready => {
-            let right = if g.show_settings { settings(g) } else { chat(g) };
+        Phase::Ready => iced::widget::responsive(move |size| {
+            let right = if g.forwarding.is_some() {
+                forward_picker(g)
+            } else if g.show_settings {
+                settings(g)
+            } else {
+                chat(g)
+            };
             let mut pane = Column::new();
             if let Some((_, title, members)) = &g.app.invite {
                 pane = pane.push(invite(title, *members));
             }
+            // finestra stretta: la lista diventa una colonna di avatar
+            let compact = size.width < COMPACT_BELOW;
             row![
-                sidebar(g),
-                container(pane.push(right)).width(Length::FillPortion(5)).height(Fill)
+                sidebar(g, compact),
+                container(pane.push(right)).width(Fill).height(Fill)
             ]
             .into()
-        }
+        })
+        .into(),
     }
 }
 
@@ -62,7 +84,7 @@ fn centered<'a>(c: Column<'a, Msg>) -> Element<'a, Msg> {
 
 // ---------------------------------------------------------------- sidebar
 
-fn sidebar(g: &Gui) -> Element<'_, Msg> {
+fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
     let app = &g.app;
     let p = style::p();
     let needle = g.filter.to_lowercase();
@@ -73,6 +95,37 @@ fn sidebar(g: &Gui) -> Element<'_, Msg> {
         .filter(|d| needle.is_empty() || d.name.to_lowercase().contains(&needle))
         .map(|d| {
             let is_open = open.is_some_and(|o| tg::same_peer(o, d.peer_id));
+            if compact {
+                let mut face = iced::widget::Stack::new().push(avatar(app, d, 46.0));
+                if d.unread > 0 {
+                    face = face.push(
+                        container(
+                            container(text(d.unread.min(999).to_string()).size(10))
+                                .padding([0, 5])
+                                .style(style::pill(p.accent)),
+                        )
+                        .width(46)
+                        .align_x(iced::Right),
+                    );
+                }
+                return button(container(face).center_x(Fill))
+                    .on_press(Msg::Open(d.peer_id))
+                    .padding([6, 4])
+                    .width(Fill)
+                    .style(style::chat_item(is_open))
+                    .into();
+            }
+            // spazio per il nome: larghezza fissa meno avatar, ora, icone
+            let time = d.last.as_ref().map(|l| list_time(g, l.date)).unwrap_or_default();
+            let mut room = SIDEBAR_W - 46.0 - 52.0 - time.chars().count() as f32 * 7.5;
+            if d.last.as_ref().is_some_and(|l| l.outgoing) {
+                room -= 20.0;
+            }
+            if d.is_group {
+                room -= 20.0;
+            }
+            let name_max = (room / 8.6).max(4.0) as usize;
+            let preview_max = ((SIDEBAR_W - 46.0 - 80.0) / 7.2) as usize;
             // riga 1: (gruppo) nome … spunte e ora, come Telegram
             let mut top = Row::new().spacing(6).align_y(Center);
             if d.broadcast {
@@ -81,7 +134,7 @@ fn sidebar(g: &Gui) -> Element<'_, Msg> {
                 top = top.push(text("👥").size(12));
             }
             top = top.push(
-                container(text(d.name.as_str()).font(BOLD).wrapping(text::Wrapping::None))
+                container(text(ellipsize(&d.name, name_max)).font(BOLD).wrapping(text::Wrapping::None))
                     .width(Fill)
                     .clip(true),
             );
@@ -89,11 +142,11 @@ fn sidebar(g: &Gui) -> Element<'_, Msg> {
                 if last.outgoing {
                     top = top.push(ticks(last.id, d.read_out, 12.0));
                 }
-                top = top.push(text(list_time(g, last.date)).size(12).color(p.muted));
+                top = top.push(text(time).size(12).color(p.muted));
             }
             // riga 2: anteprima (o «sta scrivendo…») … badge o puntina
             let (preview, color) = match app.typing_in(d.peer_id) {
-                Some(t) => (format!("{t}…"), p.link),
+                Some(t) => (format!("{t}{}", dots(g)), p.link),
                 None => (
                     d.last
                         .as_ref()
@@ -104,7 +157,7 @@ fn sidebar(g: &Gui) -> Element<'_, Msg> {
                 ),
             };
             let mut bottom = row![container(
-                text(preview).size(13).color(color).wrapping(text::Wrapping::None)
+                text(ellipsize(&preview, preview_max)).size(13).color(color).wrapping(text::Wrapping::None)
             )
             .width(Fill)
             .clip(true)]
@@ -139,13 +192,17 @@ fn sidebar(g: &Gui) -> Element<'_, Msg> {
         .on_press(Msg::ToggleSettings)
         .padding([6, 10])
         .style(style::flat(g.show_settings));
+    let head: Element<'_, Msg> = if compact {
+        container(gear).center_x(Fill).padding(10).into()
+    } else {
+        container(row![gear, search].spacing(6).align_y(Center)).padding(10).into()
+    };
     container(column![
-        container(row![gear, search].spacing(6).align_y(Center)).padding(10),
+        head,
         scrollable(Column::with_children(items).padding(iced::Padding::ZERO.right(10)))
             .height(Fill),
     ])
-    .width(Length::FillPortion(2))
-    .max_width(360)
+    .width(if compact { COMPACT_W } else { SIDEBAR_W })
     .height(Fill)
     .style(style::fill(p.sidebar))
     .into()
@@ -253,8 +310,10 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
     .style(style::fill(style::p().header));
 
     let mut body = column![header, history(g)];
-    if app.show_sticker {
-        body = body.push(stickers(app));
+    // il pannello sale e scende: resta nel layout finché l'animazione corre
+    let panel_h = g.panel.interpolate(0.0, 300.0, g.now);
+    if panel_h > 0.5 {
+        body = body.push(container(stickers(app)).height(panel_h).clip(true));
     }
     body = body.push(banners(app)).push(composer(app));
     if !app.status.is_empty() {
@@ -273,7 +332,7 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
 fn subtitle<'a>(g: &Gui, chat: &tg::DialogInfo) -> Element<'a, Msg> {
     let p = style::p();
     if let Some(t) = g.app.typing_in(chat.peer_id) {
-        return text(format!("{t}…")).size(12).color(p.link).into();
+        return text(format!("{t}{}", dots(g))).size(12).color(p.link).into();
     }
     let now = jiff::Timestamp::now().as_second();
     let line = match chat.seen {
@@ -303,7 +362,7 @@ fn history(g: &Gui) -> Element<'_, Msg> {
             .into();
     };
     let peer = app.open.expect("chat aperta");
-    let mut col = Column::new().spacing(6).padding([12, 18]);
+    let mut col = Column::new().padding([12, 18]);
     if !app.older_done.contains(&peer) {
         let label = if app.older_busy.contains(&peer) {
             "carico…"
@@ -320,9 +379,11 @@ fn history(g: &Gui) -> Element<'_, Msg> {
         );
     }
     let mut last_day = None;
+    let mut prev: Option<&HistoryRow> = None;
     for r in ring {
         let day = local(g, r.date).map(|z| z.date());
-        if let Some(d) = day.filter(|_| day != last_day) {
+        let new_day = day.is_some() && day != last_day;
+        if let Some(d) = day.filter(|_| new_day) {
             last_day = day;
             col = col.push(
                 container(
@@ -331,10 +392,22 @@ fn history(g: &Gui) -> Element<'_, Msg> {
                         .style(style::pill(style::p().bubble_in)),
                 )
                 .center_x(Fill)
-                .padding([6, 0]),
+                .padding([10, 0]),
             );
         }
-        col = col.push(message(g, ring, r));
+        // come Telegram: i messaggi di fila dello stesso autore (entro 5
+        // minuti) stanno stretti e il nome compare solo sul primo
+        let first = new_day
+            || prev.is_none_or(|p| {
+                p.outgoing != r.outgoing
+                    || p.from != r.from
+                    || matches!(p.kind, RowKind::Service(_))
+                    || r.date - p.date > 300
+            });
+        col = col.push(
+            container(message(g, ring, r, first)).padding(iced::Padding::ZERO.top(if first { 10 } else { 2 })),
+        );
+        prev = Some(r);
     }
     scrollable(col)
         .id(HISTORY)
@@ -344,15 +417,39 @@ fn history(g: &Gui) -> Element<'_, Msg> {
         .into()
 }
 
-fn message<'a>(g: &'a Gui, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) -> Element<'a, Msg> {
+/// ora, «modificato» e spunte in fondo alla bolla
+fn meta<'a>(g: &Gui, r: &HistoryRow) -> Row<'a, Msg> {
+    let p = style::p();
+    let mut label = String::new();
+    if r.edited {
+        label.push_str("modificato ");
+    }
+    if let Some(z) = local(g, r.date) {
+        label.push_str(&z.strftime("%H:%M").to_string());
+    }
+    let mut m = row![text(label).size(11).color(p.muted)].spacing(3).align_y(Center);
+    if r.outgoing {
+        let read_out = g.app.current_chat().map_or(0, |c| c.read_out);
+        m = m.push(ticks(r.id, read_out, 11.0));
+    }
+    m
+}
+
+fn message<'a>(
+    g: &'a Gui,
+    ring: &'a VecDeque<HistoryRow>,
+    r: &'a HistoryRow,
+    first: bool,
+) -> Element<'a, Msg> {
     let app = &g.app;
+    let p = style::p();
     if let RowKind::Service(s) = &r.kind {
-        return container(text(s.as_str()).size(12).color(style::p().muted)).center_x(Fill).into();
+        return container(text(s.as_str()).size(12).color(p.muted)).center_x(Fill).into();
     }
     let selected = app.msg_cursor == Some(r.id);
-    let group = app.current_chat().is_some_and(|c| c.is_group);
+    let group = app.current_chat().is_some_and(|c| c.is_group && !c.broadcast);
     let mut content = Column::new().spacing(4);
-    if group && !r.outgoing && !r.from.is_empty() {
+    if first && group && !r.outgoing && !r.from.is_empty() {
         content = content.push(
             text(r.from.as_str())
                 .size(13)
@@ -363,13 +460,22 @@ fn message<'a>(g: &'a Gui, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
     if let Some(f) = &r.fwd {
         // senza autore noto il core mette «inoltrato»: niente doppione
         let label = if f == "inoltrato" { "↪ inoltrato".to_string() } else { format!("↪ inoltrato da {f}") };
-        content = content.push(text(label).size(12).color(style::p().link));
+        content = content.push(text(label).size(12).color(p.link));
     }
     if r.reply_to.is_some() {
         content = content.push(quote(app, ring, r));
     }
-    let bare = matches!(r.kind, RowKind::Sticker { animated: false, .. });
-    content = content.push(body(app, r));
+    let bare = matches!(r.kind, RowKind::Sticker { animated: false, .. } | RowKind::Video { round: true, .. });
+    // testo: l'ora sta in fondo a destra accanto all'ultima riga e la
+    // bolla è larga quanto il messaggio; media: l'ora va sotto
+    content = match &r.kind {
+        RowKind::Text(t) => content.push(
+            row![container(linked(t)).max_width(BUBBLE_W - 90.0), meta(g, r)]
+                .spacing(10)
+                .align_y(iced::Bottom),
+        ),
+        _ => content.push(column![body(g, r), meta(g, r)].spacing(4).align_x(Alignment::End)),
+    };
     if !r.reactions.is_empty() {
         let chips = r.reactions.iter().map(|it| {
             let emoticon = tg::QUICK_REACTIONS
@@ -385,36 +491,30 @@ fn message<'a>(g: &'a Gui, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
             }
             .into()
         });
-        content = content.push(Row::with_children(chips).spacing(4).wrap());
+        content = content.push(Row::with_children(chips).spacing(4));
     }
-    let mut meta = String::new();
-    if r.edited {
-        meta.push_str("modificato · ");
-    }
-    if let Some(z) = local(g, r.date) {
-        meta.push_str(&z.strftime("%H:%M").to_string());
-    }
-    let mut meta = row![text(meta).size(11).color(style::p().muted)].spacing(4).align_y(Center);
-    if r.outgoing {
-        let read_out = app.current_chat().map_or(0, |c| c.read_out);
-        meta = meta.push(ticks(r.id, read_out, 11.0));
-    }
-    content = content.push(container(meta).align_right(Fill));
 
     let bubble: Element<'a, Msg> = if bare {
-        container(content).max_width(BUBBLE_W).padding(4).into()
+        container(content).max_width(BUBBLE_W).padding(2).into()
     } else {
         container(content)
             .max_width(BUBBLE_W)
-            .padding([8, 12])
+            .padding([7, 11])
             .style(style::bubble(r.outgoing, selected))
             .into()
     };
-    let bubble = mouse_area(bubble).on_press(Msg::Select(r.id));
+    // click: azioni; doppio click: risposta al volo
+    let bubble = mouse_area(bubble)
+        .on_press(Msg::Select(r.id))
+        .on_double_click(Msg::Reply(r.id));
     let align = if r.outgoing { Alignment::End } else { Alignment::Start };
     let mut col = column![bubble].align_x(align).width(Fill);
     if selected {
-        col = col.push(actions(r));
+        // la barra si apre scendendo
+        let h = g.bar.interpolate(0.0, 160.0, g.now);
+        col = col.push(
+            container(actions(r)).max_height(h).clip(true).padding(iced::Padding::ZERO.top(4)),
+        );
     }
     col.into()
 }
@@ -462,8 +562,54 @@ fn preview<'a>(app: &App, media: &Media, px: f32) -> Option<Element<'a, Msg>> {
     )
 }
 
-fn body<'a>(app: &'a App, r: &'a HistoryRow) -> Element<'a, Msg> {
+fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
+    let app = &g.app;
     match &r.kind {
+        RowKind::Video { media, seconds, caption, round, .. } => {
+            let p = style::p();
+            let px = if *round { 220.0 } else { PHOTO_PX };
+            let thumb: Element<'a, Msg> = match app.previews.get(&tg::media_key(media)) {
+                Some(path) => {
+                    let img = image(image::Handle::from_path(path)).width(px);
+                    if *round {
+                        img.height(px)
+                            .content_fit(iced::ContentFit::Cover)
+                            .border_radius(px / 2.0)
+                            .into()
+                    } else {
+                        img.content_fit(iced::ContentFit::ScaleDown).border_radius(8).into()
+                    }
+                }
+                None => container(text("🎥").size(40))
+                    .width(px)
+                    .height(px * 0.6)
+                    .align_x(Center)
+                    .align_y(Center)
+                    .style(style::pill(p.bubble_in))
+                    .into(),
+            };
+            let play = button(text("▶").size(22).color(iced::Color::WHITE))
+                .on_press(Msg::Play(r.id))
+                .padding([10, 16])
+                .style(|_: &iced::Theme, _| button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55))),
+                    border: iced::border::rounded(100),
+                    ..Default::default()
+                });
+            let dur = container(text(tg::fmt_secs(*seconds)).size(11).color(iced::Color::WHITE))
+                .padding([1, 6])
+                .style(style::pill(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
+            let mut c = column![iced::widget::stack![
+                thumb,
+                container(play).center(Fill),
+                container(dur).padding(6).align_left(Fill).align_bottom(Fill),
+            ]]
+            .spacing(6);
+            if !caption.is_empty() {
+                c = c.push(linked(caption));
+            }
+            c.into()
+        }
         RowKind::Text(t) => linked(t),
         RowKind::Sticker { media, emoji, animated } => match (animated, preview(app, media, STICKER_PX)) {
             (false, Some(img)) => img,
@@ -575,6 +721,7 @@ fn actions(r: &HistoryRow) -> Element<'_, Msg> {
     if r.outgoing && matches!(r.kind, RowKind::Text(_)) {
         bar = bar.push(act("✎ Modifica", Msg::Edit(r.id)));
     }
+    bar = bar.push(act("↪ Inoltra", Msg::Forward(r.id)));
     bar = bar.push(act("⧉ Copia", Msg::Copy(r.id)));
     if r.outgoing {
         bar = bar.push(
@@ -584,7 +731,7 @@ fn actions(r: &HistoryRow) -> Element<'_, Msg> {
                 .style(style::flat(false)),
         );
     }
-    container(bar)
+    container(bar.wrap())
         .padding(4)
         .style(style::pill(style::p().sidebar))
         .into()
@@ -828,6 +975,13 @@ fn settings(g: &Gui) -> Element<'_, Msg> {
         iced::widget::toggler(s.gpu)
             .label("Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)")
             .on_toggle(Msg::Gpu),
+        section("NOTIFICHE"),
+        iced::widget::toggler(s.notify)
+            .label("Notifiche dei messaggi nuovi (non per le chat silenziate)")
+            .on_toggle(Msg::Notify),
+        iced::widget::toggler(s.notify_text)
+            .label("Mostra il testo del messaggio")
+            .on_toggle(Msg::NotifyText),
         section("LINK"),
         iced::widget::toggler(s.links_in_app)
             .label("Apri i link t.me e tg:// dentro RTete")
@@ -845,4 +999,54 @@ fn settings(g: &Gui) -> Element<'_, Msg> {
         .height(Fill)
         .style(style::fill(p.bg))
         .into()
+}
+
+/// i puntini di «sta scrivendo» che si riempiono (uno ogni 400 ms)
+fn dots(g: &Gui) -> &'static str {
+    let step = g.now.duration_since(g.epoch).as_millis() / 400;
+    ["", ".", "..", "..."][(step % 4) as usize]
+}
+
+fn forward_picker(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let app = &g.app;
+    let needle = g.fwd_filter.to_lowercase();
+    let items = app
+        .contacts
+        .iter()
+        .filter(|d| !d.broadcast || app.open.is_some_and(|o| tg::same_peer(o, d.peer_id)))
+        .filter(|d| needle.is_empty() || d.name.to_lowercase().contains(&needle))
+        .map(|d| {
+            button(
+                row![avatar(app, d, 36.0), text(d.name.as_str()).width(Fill)]
+                    .spacing(12)
+                    .align_y(Center),
+            )
+            .on_press(Msg::ForwardTo(d.peer_id))
+            .padding([6, 10])
+            .width(Fill)
+            .style(style::flat(false))
+            .into()
+        });
+    container(
+        column![
+            row![
+                text("Inoltra a…").size(20).font(BOLD).width(Fill),
+                button(text("✕")).on_press(Msg::Cancel).style(style::flat(false)),
+            ]
+            .align_y(Center),
+            text_input("Cerca chat…", &g.fwd_filter)
+                .id(FWD_SEARCH)
+                .on_input(Msg::FwdFilter)
+                .padding(9),
+            scrollable(Column::with_children(items).spacing(2)).height(Fill),
+        ]
+        .spacing(12)
+        .max_width(520),
+    )
+    .padding(24)
+    .center_x(Fill)
+    .height(Fill)
+    .style(style::fill(p.bg))
+    .into()
 }

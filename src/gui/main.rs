@@ -3,6 +3,7 @@
 //! (numero, codice) resta alla TUI: qui si riusa la sessione salvata.
 
 mod net;
+mod notify;
 mod settings;
 mod style;
 mod ui;
@@ -22,6 +23,7 @@ use crate::settings::{Settings, ThemeChoice};
 
 pub const COMPOSE: &str = "compose";
 pub const HISTORY: &str = "history";
+pub const FWD_SEARCH: &str = "fwd-search";
 
 #[derive(Debug, Clone)]
 pub enum Msg {
@@ -58,6 +60,15 @@ pub enum Msg {
     TgHandler,
     Join,
     Gpu(bool),
+    Forward(i32),
+    ForwardTo(PeerId),
+    FwdFilter(String),
+    /// un frame mentre un'animazione corre
+    Frame(std::time::Instant),
+    /// la finestra ha preso o perso il fuoco
+    Focus(bool),
+    Notify(bool),
+    NotifyText(bool),
 }
 
 pub enum Phase {
@@ -82,6 +93,17 @@ pub struct Gui {
     theme_stamp: Option<std::time::SystemTime>,
     /// link arrivati prima della connessione
     pending_links: Vec<String>,
+    /// messaggio da inoltrare: (chat di partenza, id)
+    pub forwarding: Option<(tg::ChatRef, i32)>,
+    pub fwd_filter: String,
+    /// animazioni: pannello sticker, barra azioni del messaggio scelto
+    pub panel: iced::Animation<bool>,
+    pub bar: iced::Animation<bool>,
+    /// l'istante del frame che si sta disegnando
+    pub now: std::time::Instant,
+    pub epoch: std::time::Instant,
+    /// finestra a fuoco: la chat aperta non notifica
+    focused: bool,
 }
 
 fn main() -> iced::Result {
@@ -115,7 +137,7 @@ fn main() -> iced::Result {
 }
 
 /// Porta a fuoco la finestra di RTete già aperta (Hyprland).
-fn focus_existing() {
+pub fn focus_existing() {
     let lua = r#"hl.dsp.focus({ window = "class:rtete-gui" })"#;
     let ok = std::process::Command::new("hyprctl")
         .args(["dispatch", lua])
@@ -137,6 +159,13 @@ fn boot() -> Gui {
         tg_handler: String::new(),
         theme_stamp: style::omarchy_stamp(),
         pending_links: Vec::new(),
+        forwarding: None,
+        fwd_filter: String::new(),
+        panel: iced::Animation::new(false).quick(),
+        bar: iced::Animation::new(false).quick(),
+        now: std::time::Instant::now(),
+        epoch: std::time::Instant::now(),
+        focused: true,
         app: App::default(),
         phase: Phase::Connecting("avvio…".into()),
         link: None,
@@ -159,18 +188,29 @@ impl Gui {
         let mut subs = vec![
             Subscription::run(net::events).map(Msg::Net),
             keyboard::listen().map(Msg::Key),
+            iced::event::listen_with(|e, _, _| match e {
+                iced::Event::Window(iced::window::Event::Focused) => Some(Msg::Focus(true)),
+                iced::Event::Window(iced::window::Event::Unfocused) => Some(Msg::Focus(false)),
+                _ => None,
+            }),
         ];
+        // frame a ogni ridisegno solo mentre un'animazione corre: ferma
+        // la finestra non consuma niente
+        let now = std::time::Instant::now();
+        if self.panel.is_animating(now) || self.bar.is_animating(now) {
+            subs.push(iced::window::frames().map(Msg::Frame));
+        }
         // il tema Omarchy si ricontrolla ogni 2s; con qualcuno che scrive
-        // si ridisegna ogni secondo perché il «sta scrivendo» scada
+        // ogni 400 ms, per i puntini e perché il «sta scrivendo» scada
         let every = if !self.app.typing.is_empty() {
-            Some(1)
+            Some(400)
         } else if self.settings.theme == ThemeChoice::Omarchy {
-            Some(2)
+            Some(2000)
         } else {
             None
         };
-        if let Some(s) = every {
-            subs.push(iced::time::every(std::time::Duration::from_secs(s)).map(|_| Msg::Tick));
+        if let Some(ms) = every {
+            subs.push(iced::time::every(std::time::Duration::from_millis(ms)).map(|_| Msg::Tick));
         }
         Subscription::batch(subs)
     }
@@ -180,7 +220,70 @@ impl Gui {
     }
 
     fn update(&mut self, msg: Msg) -> Task<Msg> {
+        self.now = std::time::Instant::now();
+        let (was_sticker, was_sel) = (self.app.show_sticker, self.app.msg_cursor);
+        let task = self.handle(msg);
+        // le animazioni partono dai cambi di stato, da qualunque messaggio
+        if self.app.show_sticker != was_sticker {
+            self.panel.go_mut(self.app.show_sticker, self.now);
+        }
+        if self.app.msg_cursor != was_sel && self.app.msg_cursor.is_some() {
+            self.bar = iced::Animation::new(false).quick().go(true, self.now);
+        }
+        task
+    }
+
+    fn handle(&mut self, msg: Msg) -> Task<Msg> {
         let task = match msg {
+            Msg::Frame(at) => {
+                self.now = at;
+                return Task::none();
+            }
+            Msg::Focus(on) => {
+                self.focused = on;
+                if let (true, Some(p)) = (on, self.app.open) {
+                    notify::dismiss(p);
+                }
+                return Task::none();
+            }
+            Msg::Notify(on) => {
+                self.settings.notify = on;
+                self.settings.save();
+                Task::none()
+            }
+            Msg::NotifyText(on) => {
+                self.settings.notify_text = on;
+                self.settings.save();
+                Task::none()
+            }
+            Msg::Forward(id) => {
+                if let Some(chat) = self.app.current_chat() {
+                    self.forwarding = Some((chat.peer_ref, id));
+                    self.fwd_filter.clear();
+                    self.app.msg_cursor = None;
+                    return operation::focus(FWD_SEARCH);
+                }
+                Task::none()
+            }
+            Msg::FwdFilter(s) => {
+                self.fwd_filter = s;
+                Task::none()
+            }
+            Msg::ForwardTo(pid) => {
+                let dest = self
+                    .app
+                    .contacts
+                    .iter()
+                    .find(|c| tg::same_peer(c.peer_id, pid))
+                    .map(|c| (c.peer_ref, c.name.clone()));
+                if let (Some((from, id)), Some((to, to_name)), Some(req)) =
+                    (self.forwarding.take(), dest, self.req())
+                {
+                    let _ = req.send(Request::Forward { from, id, to, to_name: to_name.clone() });
+                    self.app.status = format!("inoltro a {to_name}…");
+                }
+                Task::none()
+            }
             Msg::Net(c) => match c.take() {
                 Some(ev) => self.on_net(ev),
                 None => Task::none(),
@@ -319,13 +422,19 @@ impl Gui {
                         } else {
                             tg::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
                         };
-                        Some((media.clone(), fname, label))
+                        Some((media.clone(), fname, label, false))
                     }
+                    tg::RowKind::Video { media, .. } => Some((
+                        media.clone(),
+                        format!("video-{}.mp4", tg::media_key(media)),
+                        "video".to_string(),
+                        true,
+                    )),
                     _ => None,
                 });
-                if let (Some((media, fname, label)), Some(req)) = (job, self.req()) {
+                if let (Some((media, fname, label, video)), Some(req)) = (job, self.req()) {
                     self.app.status = format!("scarico «{label}» e la riproduco…");
-                    let _ = req.send(Request::Play { media, fname, label });
+                    let _ = req.send(Request::Play { media, fname, label, video });
                 }
                 Task::none()
             }
@@ -510,6 +619,9 @@ impl Gui {
 
     /// Esc o ✕: chiude il primo pannello o annulla l'azione in corso.
     fn cancel(&mut self) {
+        if self.forwarding.take().is_some() {
+            return;
+        }
         if self.show_settings {
             self.show_settings = false;
             return;
@@ -586,6 +698,7 @@ impl Gui {
                 self.external_link(url);
                 Task::none()
             }
+            NetEvent::OpenPeer(pid) => self.open_chat(pid),
             NetEvent::UpdateErr(e) => {
                 self.app.status = format!("rete: {e}");
                 Task::none()
@@ -595,10 +708,20 @@ impl Gui {
                     return Task::none();
                 };
                 let client = link.client.clone();
+                // messaggio in arrivo: chi e da dove, prima che l'update sparisca
+                let incoming = match &u {
+                    grammers_client::update::Update::NewMessage(m) if !m.outgoing() => {
+                        Some((m.peer_id(), tg::sender_name(m)))
+                    }
+                    _ => None,
+                };
                 // handle_update aspetta la rete solo per una chat mai vista
                 // (dialog_from_message); il contesto tokio serve agli spawn
                 let _rt = net::RT.get().map(|rt| rt.enter());
                 iced::futures::executor::block_on(handle_update(&mut self.app, &client, u));
+                if let Some((peer, from)) = incoming {
+                    self.notify(peer, from);
+                }
                 Task::none()
             }
             NetEvent::Response(r) => {
@@ -617,7 +740,33 @@ impl Gui {
         }
     }
 
+    /// Notifica di un messaggio nuovo: non per le chat silenziate né per
+    /// quella aperta mentre la finestra è a fuoco.
+    fn notify(&self, peer: PeerId, from: String) {
+        if !self.settings.notify || (self.focused && self.app.open == Some(peer)) {
+            return;
+        }
+        let Some(d) = self.app.contacts.iter().find(|d| tg::same_peer(d.peer_id, peer)) else {
+            return;
+        };
+        if d.muted {
+            return;
+        }
+        let text = match (&d.last, self.settings.notify_text) {
+            (Some(l), true) => l.text.clone(),
+            _ => "nuovo messaggio".to_string(),
+        };
+        let body = if d.is_group && !d.broadcast && !from.is_empty() {
+            format!("{from}: {text}")
+        } else {
+            text
+        };
+        let icon = d.photo_id.and_then(|id| self.app.avatars.get(&id));
+        notify::show(peer, &d.name, &body, icon.map(|p| p.as_path()));
+    }
+
     fn open_chat(&mut self, pid: PeerId) -> Task<Msg> {
+        notify::dismiss(pid);
         let Some(i) = self.app.contacts.iter().position(|c| tg::same_peer(c.peer_id, pid)) else {
             return Task::none();
         };

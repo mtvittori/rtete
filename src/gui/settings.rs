@@ -20,6 +20,10 @@ pub struct Settings {
     pub links_in_app: bool,
     /// disegno con la GPU (wgpu) invece che in software (tiny-skia)
     pub gpu: bool,
+    /// notifiche desktop dei messaggi nuovi
+    pub notify: bool,
+    /// il testo del messaggio nella notifica (altrimenti solo «nuovo messaggio»)
+    pub notify_text: bool,
 }
 
 impl Default for Settings {
@@ -29,6 +33,8 @@ impl Default for Settings {
             scale: 1.0,
             links_in_app: true,
             gpu: true,
+            notify: true,
+            notify_text: true,
         }
     }
 }
@@ -57,6 +63,8 @@ impl Settings {
                 }
                 ("link_in_app", v) => s.links_in_app = v == "true",
                 ("gpu", v) => s.gpu = v == "true",
+                ("notifiche", v) => s.notify = v == "true",
+                ("notifiche_testo", v) => s.notify_text = v == "true",
                 _ => {}
             }
         }
@@ -75,8 +83,8 @@ impl Settings {
         let _ = std::fs::write(
             p,
             format!(
-                "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\n",
-                self.scale, self.links_in_app, self.gpu
+                "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n",
+                self.scale, self.links_in_app, self.gpu, self.notify, self.notify_text
             ),
         );
     }

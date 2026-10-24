@@ -171,7 +171,9 @@ fn row_summary(row: &tg::HistoryRow) -> String {
                 format!("🎧 {name}")
             }
         }
-        tg::RowKind::Note(t) | tg::RowKind::Service(t) => t.clone(),
+        tg::RowKind::Note(t) | tg::RowKind::Service(t) | tg::RowKind::Video { note: t, .. } => {
+            t.clone()
+        }
     };
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -1470,7 +1472,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     last.links = scan_links(&last.text);
                 }
             }
-            tg::RowKind::Note(text) => {
+            tg::RowKind::Note(text) | tg::RowKind::Video { note: text, .. } => {
                 lines.push(HistoryLine {
                     text: format!("{label}🎥 {text}"),
                     color: ACCENT_DIM,

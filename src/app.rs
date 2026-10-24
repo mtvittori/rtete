@@ -538,7 +538,9 @@ impl App {
                         Some(media.clone())
                     }
                 }
-                tg::RowKind::Photo { media, .. } => Some(media.clone()),
+                tg::RowKind::Photo { media, .. } | tg::RowKind::Video { media, .. } => {
+                    Some(media.clone())
+                }
                 _ => None,
             }));
         }
@@ -574,6 +576,7 @@ mod tests {
             photo_id: None,
             seen: tg::Seen::Unknown,
             broadcast: false,
+            muted: false,
         }
     }
 

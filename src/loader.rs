@@ -100,6 +100,26 @@ async fn raw_source(
         },
         _ => "bin",
     };
+    // video: basta la miniatura più grande, non il file intero
+    if let grammers_client::media::Media::Document(doc) = media {
+        if doc.mime_type().unwrap_or("").starts_with("video/") {
+            let raw_path = cache_raw(&key, "jpg");
+            if !raw_path.exists() {
+                let thumb = doc
+                    .thumbs()
+                    .into_iter()
+                    .max_by_key(|t| t.size())
+                    .ok_or("video senza miniatura")?;
+                crate::tg::ensure_private_dir(&media_dir())
+                    .map_err(|e| format!("cache dir: {e}"))?;
+                client
+                    .download_media(&thumb, raw_path.clone())
+                    .await
+                    .map_err(|e| format!("download: {e}"))?;
+            }
+            return Ok(raw_path);
+        }
+    }
     let raw_path = cache_raw(&key, ext);
     if !raw_path.exists() {
         crate::tg::ensure_private_dir(&media_dir())

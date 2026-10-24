@@ -404,7 +404,7 @@ pub(crate) fn ctrl_play(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     match found {
         Some((media, fname, label)) => {
             app.status = format!("scarico «{label}» e la riproduco…");
-            let _ = req.send(Request::Play { media, fname, label });
+            let _ = req.send(Request::Play { media, fname, label, video: false });
         }
         None => app.status = "nessun audio nella cronologia caricata".into(),
     }

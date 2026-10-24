@@ -123,6 +123,7 @@ pub async fn save_job(
 /// un processo qualsiasi). La generazione gira su un watch: un nuovo
 /// Ctrl-P avanza il valore, il task vecchio chiude figlio e temporanei
 /// e non manda l'Ok postumo che sovrascriveva lo stato sbagliato.
+#[allow(clippy::too_many_arguments)]
 pub async fn play_job(
     client: &grammers_client::Client,
     media: &Media,
@@ -130,6 +131,7 @@ pub async fn play_job(
     mut stop_rx: tokio::sync::watch::Receiver<u64>,
     gen: u64,
     label: String,
+    video: bool,
     out: mpsc::UnboundedSender<Response>,
 ) {
     let _ = out.send(Response::Played(Ok(format!("▶ {label}"))));
@@ -159,11 +161,12 @@ pub async fn play_job(
         .map(|f| f == std::ffi::OsStr::new("mpv"))
         .unwrap_or(false);
     let mut cmd = tokio::process::Command::new(&p);
-    if is_mpv {
-        cmd.args(["--no-video", "--no-terminal", "--really-quiet"]);
-    } else {
-        cmd.args(["-nodisp", "-autoexit", "-loglevel", "quiet"]);
-    }
+    match (is_mpv, video) {
+        (true, true) => cmd.args(["--no-terminal", "--really-quiet", "--title=RTete"]),
+        (true, false) => cmd.args(["--no-video", "--no-terminal", "--really-quiet"]),
+        (false, true) => cmd.args(["-autoexit", "-loglevel", "quiet"]),
+        (false, false) => cmd.args(["-nodisp", "-autoexit", "-loglevel", "quiet"]),
+    };
     cmd.arg(&target);
     cmd.stdout(std::process::Stdio::null());
     cmd.stderr(std::process::Stdio::null());
@@ -300,7 +303,15 @@ pub fn run_worker(
                     let res = save_job(&cl, media, name).await;
                     let _ = out.send(Response::Saved(res));
                 }),
-                Request::Play { media, fname, label } => {
+                Request::Forward { from, id, to, to_name } => tokio::spawn(async move {
+                    let res = cl
+                        .forward_messages(to, &[id], from)
+                        .await
+                        .map(|_| to_name)
+                        .map_err(|e| e.to_string());
+                    let _ = out.send(Response::Forwarded(res));
+                }),
+                Request::Play { media, fname, label, video } => {
                     // sveglia il player vecchio (se c'è): lui chiude
                     // figlio e temporanei e non manda l'Ok postumo
                     let gen = NEXT_PLAY.fetch_add(1, Ordering::Relaxed) + 1;
@@ -313,7 +324,7 @@ pub fn run_worker(
                     // non si pestano i propri file
                     let target = tg::tmp_dir().join(format!("play-{gen}-{fname}"));
                     tokio::spawn(async move {
-                        play_job(&cl, &media, target, wait, gen, label, out).await;
+                        play_job(&cl, &media, target, wait, gen, label, video, out).await;
                     })
                 }
             };

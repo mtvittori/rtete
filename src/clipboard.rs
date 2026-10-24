@@ -21,7 +21,7 @@ pub enum ClipboardHit {
 pub fn copy_text(r: &tg::HistoryRow) -> Option<String> {
     match &r.kind {
         tg::RowKind::Text(t) => Some(t.clone()),
-        tg::RowKind::Note(t) | tg::RowKind::Service(t) => {
+        tg::RowKind::Note(t) | tg::RowKind::Service(t) | tg::RowKind::Video { note: t, .. } => {
             let t = t.trim();
             (!t.is_empty()).then(|| t.to_string())
         }

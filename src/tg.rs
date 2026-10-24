@@ -33,6 +33,8 @@ pub struct DialogInfo {
     pub read_out: i32,
     /// canale (solo gli amministratori scrivono), non gruppo.
     pub broadcast: bool,
+    /// silenziata: niente notifiche.
+    pub muted: bool,
     /// foto profilo o della chat (id per la cache e il download).
     pub photo_id: Option<i64>,
     /// ultimo accesso (solo chat private).
@@ -291,7 +293,15 @@ pub enum RowKind {
         /// true: vocale (ogg opus senza nome).
         voice: bool,
     },
-    /// etichetta informativa: video, vocale, contatti, sondaggi…
+    /// video (anche tondo): miniatura in GUI, `note` è l'etichetta per la TUI.
+    Video {
+        media: Media,
+        seconds: u32,
+        caption: String,
+        round: bool,
+        note: String,
+    },
+    /// etichetta informativa: vocale, contatti, sondaggi…
     Note(String),
     Service(String),
 }
@@ -313,6 +323,9 @@ impl RowKind {
             RowKind::Doc { name, .. } => format!("📄 {name}"),
             RowKind::Audio { voice: true, .. } => "🎤 messaggio vocale".into(),
             RowKind::Audio { name, .. } => format!("🎵 {name}"),
+            RowKind::Video { round: true, .. } => "📹 videomessaggio".into(),
+            RowKind::Video { caption, .. } if !caption.is_empty() => format!("🎥 {caption}"),
+            RowKind::Video { .. } => "🎥 video".into(),
             RowKind::Note(s) | RowKind::Service(s) => s.clone(),
         }
     }
@@ -757,6 +770,13 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
             tl::enums::Dialog::Dialog(raw) => (raw.pinned, raw.read_outbox_max_id),
             _ => (false, 0),
         };
+        let muted = match &dialog.raw {
+            tl::enums::Dialog::Dialog(raw) => {
+                let tl::enums::PeerNotifySettings::Settings(n) = &raw.notify_settings;
+                n.mute_until.is_some_and(|t| t as i64 > jiff::Timestamp::now().as_second())
+            }
+            _ => false,
+        };
         out.push(DialogInfo {
             name,
             peer_ref: dialog.peer_ref(),
@@ -769,6 +789,7 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
             photo_id,
             seen,
             broadcast: is_broadcast(&peer),
+            muted,
         });
     }
     Ok(out)
@@ -788,6 +809,7 @@ pub async fn dialog_from_message(
     };
     let (photo_id, seen) = peer_extras(&peer);
     Some(DialogInfo {
+        muted: false,
         broadcast: is_broadcast(&peer),
         photo_id,
         seen,
@@ -844,7 +866,14 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
                 };
             }
             if mime.starts_with("video/") {
-                return RowKind::Note(media_note(&doc, &text));
+                let round = matches!(&doc.raw, tl::types::MessageMediaDocument { round: true, .. });
+                return RowKind::Video {
+                    seconds: doc.duration().unwrap_or(0.0) as u32,
+                    caption: cap,
+                    round,
+                    note: media_note(&doc, &text),
+                    media: media.unwrap(),
+                };
             }
             if mime.starts_with("audio/") {
                 return RowKind::Audio {
@@ -1307,6 +1336,7 @@ pub async fn resolve_link(client: &Client, link: TgLink) -> Result<LinkHit, Stri
             let (photo_id, seen) = peer_extras(&peer);
             Ok(LinkHit::Chat {
                 dialog: DialogInfo {
+                    muted: false,
                     broadcast: is_broadcast(&peer),
                     photo_id,
                     seen,

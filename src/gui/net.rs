@@ -17,6 +17,14 @@ use rtete::{app, loader, tg, worker};
 pub static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 /// il ricevitore degli eventi di rete: la subscription lo prende una volta
 static EVENTS: Mutex<Option<mpsc::UnboundedReceiver<NetEvent>>> = Mutex::new(None);
+/// per chi manda eventi da fuori dal ciclo di rete (click sulle notifiche)
+static SENDER: OnceLock<mpsc::UnboundedSender<NetEvent>> = OnceLock::new();
+
+pub fn open_peer(peer: grammers_client::session::types::PeerId) {
+    if let Some(tx) = SENDER.get() {
+        let _ = tx.send(NetEvent::OpenPeer(peer));
+    }
+}
 
 pub struct Link {
     pub client: Client,
@@ -39,6 +47,8 @@ pub enum NetEvent {
     Response(Response),
     /// link Telegram da aprire (argomento o da un'altra istanza)
     Link(String),
+    /// click su una notifica: apri la chat
+    OpenPeer(grammers_client::session::types::PeerId),
 }
 
 /// I messaggi di iced devono essere `Clone`: l'evento viaggia in una
@@ -107,6 +117,7 @@ pub fn start(link: Option<String>) {
         .expect("runtime tokio");
     let (tx, rx) = mpsc::unbounded_channel();
     *EVENTS.lock().unwrap() = Some(rx);
+    let _ = SENDER.set(tx.clone());
     listen(tx.clone());
     if let Some(l) = link {
         let _ = tx.send(NetEvent::Link(l));

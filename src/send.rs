@@ -84,6 +84,15 @@ pub enum Request {
         media: Media,
         fname: String,
         label: String,
+        /// true: apre la finestra video (mpv), false: solo audio
+        video: bool,
+    },
+    /// inoltra un messaggio da una chat a un'altra
+    Forward {
+        from: PeerRefT,
+        id: i32,
+        to: PeerRefT,
+        to_name: String,
     },
     React {
         peer_ref: PeerRefT,
@@ -132,6 +141,7 @@ pub enum Response {
     Played(Result<String, String>),
     Reacted(Result<(), String>),
     Link(Result<tg::LinkHit, String>),
+    Forwarded(Result<String, String>),
     Dialogs(Result<Vec<tg::DialogInfo>, String>),
     Avatar { photo_id: i64, path: Result<PathBuf, String> },
     /// il probe wl-clipboard ha girato a thread fuori dal ciclo eventi
