@@ -1,4 +1,4 @@
-//! Stato applicativo: `App`, i suoi metodi di aggiornamento e il comando grafico `Cmd`.
+//! Stato applicativo: `App` e i suoi metodi di aggiornamento.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
@@ -22,11 +22,11 @@ pub const STICKER_COLS: usize = 4;
 
 /// Dopo `prev` fallimenti, il prossimo tentativo tra 1, 2, 4… fino a 60s:
 /// backoff esponenziale unico per conversioni e richieste di rete.
-pub(crate) fn pinned_first(contacts: &mut [tg::DialogInfo]) {
+pub fn pinned_first(contacts: &mut [tg::DialogInfo]) {
     contacts.sort_by_key(|d| !d.pinned);
 }
 
-pub(crate) fn backoff_secs(prev: u32) -> Duration {
+pub fn backoff_secs(prev: u32) -> Duration {
     let secs = 1u64 << prev.min(6); // u64: nessun overflow
     Duration::from_secs(secs.min(60))
 }
@@ -55,14 +55,6 @@ fn retract(row: &mut tg::HistoryRow, mine_on: impl Fn(&tg::ReactionItem) -> bool
         }
         None => false,
     }
-}
-
-/// Comando grafico da eseguire dopo il frame ratatui.
-pub enum Cmd {
-    Place {
-        rect: ratatui::layout::Rect,
-        path: PathBuf,
-    },
 }
 
 #[derive(Default)]
@@ -170,7 +162,7 @@ impl App {
     /// lo status, esige nessun pannello aperto (ricerca/sticker), una chat
     /// aperta e la sua cronologia caricata; altrimenti imposta la ragione
     /// dello status e ritorna `None`.
-    pub(crate) fn chat_ready_ring(&mut self) -> Option<&VecDeque<tg::HistoryRow>> {
+    pub fn chat_ready_ring(&mut self) -> Option<&VecDeque<tg::HistoryRow>> {
         self.status.clear();
         if self.show_search || self.show_sticker {
             return None;
@@ -190,7 +182,7 @@ impl App {
 
     /// La riga scelta da un comando: quella sotto il cursore di selezione
     /// (se soddisfa `pred`), altrimenti l'ultima di `ring` che la soddisfa.
-    pub(crate) fn picked_row(
+    pub fn picked_row(
         ring: &VecDeque<tg::HistoryRow>,
         cursor: Option<i32>,
         pred: impl Fn(&tg::HistoryRow) -> bool,
@@ -202,24 +194,24 @@ impl App {
 
     /// Disarma l'eliminazione in attesa di conferma (qualunque tasto che
     /// non sia Invio la disarma, come in Telegram).
-    pub(crate) fn disarm_delete(&mut self) {
+    pub fn disarm_delete(&mut self) {
         self.del_arm = false;
         self.del_id = None;
     }
 
     /// Scarta la foto degli appunti in attesa invio e rimuove il suo file
     /// temporaneo (usa `take`: la foto non è più inviabile).
-    pub(crate) fn discard_pending_photo(&mut self) {
+    pub fn discard_pending_photo(&mut self) {
         if let Some(p) = self.pending_photo.take() {
             let _ = std::fs::remove_file(p);
         }
     }
 
-    pub(crate) fn push_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
+    pub fn push_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
         self.push_each(peer_id, std::iter::once(row));
     }
 
-    pub(crate) fn push_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) {
+    pub fn push_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) {
         self.push_each(peer_id, rows);
     }
 
@@ -246,7 +238,7 @@ impl App {
     /// Porta la chat in cima alla lista come fa Telegram a ogni messaggio,
     /// ma sotto le chat fissate (preferiti); se è nuova la inserisce
     /// (`fresh`). Il cursore resta sulla stessa chat.
-    pub(crate) fn bump_chat(&mut self, peer_id: PeerId, fresh: Option<tg::DialogInfo>) {
+    pub fn bump_chat(&mut self, peer_id: PeerId, fresh: Option<tg::DialogInfo>) {
         let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
         let pinned_len = self.contacts.iter().take_while(|c| c.pinned).count();
         match self.contacts.iter().position(|c| tg::same_peer(c.peer_id, peer_id)) {
@@ -271,7 +263,7 @@ impl App {
     /// Messaggi più vecchi caricati con lo scorrimento all'indietro (oldest
     /// first): vanno in testa al ring, senza superare RING_CAP. Ritorna
     /// quante righe sono entrate davvero.
-    pub(crate) fn prepend_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) -> usize {
+    pub fn prepend_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) -> usize {
         let ring = self.histories.entry(peer_id).or_default();
         let room = RING_CAP.saturating_sub(ring.len());
         let fresh: Vec<tg::HistoryRow> = rows
@@ -288,7 +280,7 @@ impl App {
 
     /// Sostituisce (o inserisce in coda) una riga stessa-id: usato per gli
     /// edit e per il feedback locali.
-    pub(crate) fn replace_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
+    pub fn replace_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
         let ring = self.histories.entry(peer_id).or_default();
         if let Some(old) = ring.iter_mut().find(|r| r.id == row.id) {
             let mut row = row;
@@ -311,7 +303,7 @@ impl App {
 
     /// Sostituisce (o applica) le reazioni di un messaggio: update server
     /// o toggle locale ottimistico.
-    pub(crate) fn apply_reactions(&mut self, peer_id: PeerId, msg_id: i32, items: Vec<tg::ReactionItem>) {
+    pub fn apply_reactions(&mut self, peer_id: PeerId, msg_id: i32, items: Vec<tg::ReactionItem>) {
         let Some(ring) = self.histories.get_mut(&peer_id) else {
             return;
         };
@@ -322,7 +314,7 @@ impl App {
 
     /// Toggle locale immediato di una reazione sull'ultimo cursore (il
     /// server conferma poi con l'update vero e proprio).
-    pub(crate) fn optimistic_react(&mut self, emoticon: &str) {
+    pub fn optimistic_react(&mut self, emoticon: &str) {
         let Some(chat) = self.current_chat() else {
             return;
         };
@@ -359,7 +351,7 @@ impl App {
 
     /// Coda le conversioni degli sticker visibili non in cache. Un asset
     /// appena fallito non parte di nuovo finché il backoff non scade.
-    pub(crate) fn ensure_previews<'a>(
+    pub fn ensure_previews<'a>(
         &mut self,
         req: &mpsc::UnboundedSender<Request>,
         medias: impl IntoIterator<Item = &'a Media>,
@@ -384,14 +376,14 @@ impl App {
     /// esponenziale: 1s, 2s, 4s… fino a 60s. refresh_preview_queue gira a
     /// ogni cambio di layout: senza questo un singolo download guasto (rete
     /// assente, webp corrotto) verrebbe rilanciato all'infinito.
-    pub(crate) fn conversion_failed(&mut self, key: String) {
+    pub fn conversion_failed(&mut self, key: String) {
         bump_backoff(&mut self.failed, key);
     }
 
     /// idem per i download di set: senza pausa, ogni freccia sul set
     /// rilanciava la richiesta e un set guasto martellava la rete; un
     /// errore non deve neanche marca il set come "caricato" (vuoto eterno)
-    pub(crate) fn docs_cooling(&self, set_id: i64) -> bool {
+    pub fn docs_cooling(&self, set_id: i64) -> bool {
         self.docs_failed
             .get(&set_id)
             .map(|&(until, _)| Instant::now() < until)
@@ -399,21 +391,21 @@ impl App {
     }
 
     /// idem per i messaggi citati: request_quoted gira a ogni frame
-    pub(crate) fn quoted_failed(&mut self, peer: PeerId) {
+    pub fn quoted_failed(&mut self, peer: PeerId) {
         bump_backoff(&mut self.quoted_failed, peer);
     }
 
-    pub(crate) fn docs_failed(&mut self, set_id: i64) {
+    pub fn docs_failed(&mut self, set_id: i64) {
         bump_backoff(&mut self.docs_failed, set_id);
     }
 
-    pub(crate) fn docs_fine(&mut self, set_id: i64) {
+    pub fn docs_fine(&mut self, set_id: i64) {
         self.docs_failed.remove(&set_id);
     }
 
     /// true una volta ogni READ_MARK_GAP (o alla prima richiesta): limita i
     /// mark_as_read quando nella chat aperta arrivano raffiche di messaggi.
-    pub(crate) fn read_mark_due(&mut self) -> bool {
+    pub fn read_mark_due(&mut self) -> bool {
         const READ_MARK_GAP: Duration = Duration::from_secs(2);
         let now = Instant::now();
         let due = self
@@ -428,7 +420,7 @@ impl App {
 
     /// Se ↑ ha toccato il fondo della storia in memoria, chiede la pagina
     /// precedente (una per volta, mai oltre l'inizio o RING_CAP).
-    pub(crate) fn request_older(&mut self, req: &mpsc::UnboundedSender<Request>) {
+    pub fn request_older(&mut self, req: &mpsc::UnboundedSender<Request>) {
         if !std::mem::take(&mut self.want_older) {
             return;
         }
@@ -458,7 +450,7 @@ impl App {
     /// Chiede i messaggi citati dalle risposte della chat aperta che non
     /// sono né nella cronologia né già chiesti (una richiesta alla volta per
     /// chat; dopo un errore si riprova col backoff di `quoted_failed`).
-    pub(crate) fn request_quoted(&mut self, req: &mpsc::UnboundedSender<Request>) {
+    pub fn request_quoted(&mut self, req: &mpsc::UnboundedSender<Request>) {
         let Some(chat) = self.current_chat() else {
             return;
         };
@@ -491,7 +483,7 @@ impl App {
         let _ = req.send(Request::Quoted { peer_ref, peer, ids });
     }
 
-    pub(crate) fn refresh_preview_queue(&mut self, req: &mpsc::UnboundedSender<Request>) {
+    pub fn refresh_preview_queue(&mut self, req: &mpsc::UnboundedSender<Request>) {
         let mut medias: Vec<Media> = Vec::new();
         if let Some(ring) = self.open_history() {
             medias.extend(ring.iter().filter_map(|r| match &r.kind {

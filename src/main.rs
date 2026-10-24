@@ -2,19 +2,15 @@
 //! grammers (MTProto puro-Rust, niente TDLib), ratatui per l'interfaccia e il
 //! kitty graphics protocol (o sixel su foot) per mostrare gli sticker.
 
-mod app;
-mod clipboard;
 mod events;
 mod gfx;
 mod kitty;
-mod loader;
-mod send;
 mod sixel;
 mod styles;
 mod term;
-mod tg;
 mod view;
-mod worker;
+
+use rtete::{app, clipboard, loader, send, tg, worker};
 
 use std::sync::atomic::Ordering;
 
@@ -25,8 +21,10 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use tokio::sync::mpsc;
 
-use crate::app::{App, Cmd};
-use crate::events::{handle_event, handle_response, handle_update};
+use crate::app::App;
+use crate::view::Cmd;
+use crate::events::handle_event;
+use rtete::sync::{handle_response, handle_update};
 use crate::send::{Request, Response};
 use crate::term::{panic_hook, TUI_UP, TermGuard};
 

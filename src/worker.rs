@@ -13,7 +13,7 @@ use crate::loader;
 use crate::send::{Request, Response, SendDone, SendJob, SendKind};
 use crate::tg;
 
-pub(crate) fn row_from_msg(m: grammers_client::message::Message) -> Result<(PeerId, tg::HistoryRow), String> {
+pub fn row_from_msg(m: grammers_client::message::Message) -> Result<(PeerId, tg::HistoryRow), String> {
     let peer_id = m.peer_id();
     let from = tg::sender_name(&m);
     let mut row = tg::HistoryRow::from_message(&m, from);
@@ -22,10 +22,10 @@ pub(crate) fn row_from_msg(m: grammers_client::message::Message) -> Result<(Peer
 }
 
 /// generazione progressiva del player audio (niente pid esterni)
-pub(crate) static NEXT_PLAY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static NEXT_PLAY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Individua un comando nel PATH senza dipendenze esterne.
-pub(crate) fn which(cmd: &str) -> bool {
+pub fn which(cmd: &str) -> bool {
     std::env::var("PATH")
         .unwrap_or_default()
         .split(':')
@@ -34,7 +34,7 @@ pub(crate) fn which(cmd: &str) -> bool {
 
 /// Un invio testi/foto/sticker o l'edit di un messaggio (era il vecchio
 /// worker: solo estratto in funzione, il dispatcher lo esegue per job).
-pub(crate) async fn send_job(
+pub async fn send_job(
     client: &grammers_client::Client,
     job: SendJob,
 ) -> Result<SendDone, String> {
@@ -89,7 +89,7 @@ pub(crate) async fn send_job(
 
 /// Un salvataggio: scarica in .part e sposta col nome libero (mai
 /// sovrascritture, mai parziali col nome finale).
-pub(crate) async fn save_job(
+pub async fn save_job(
     client: &grammers_client::Client,
     media: Media,
     name: String,
@@ -123,7 +123,7 @@ pub(crate) async fn save_job(
 /// un processo qualsiasi). La generazione gira su un watch: un nuovo
 /// Ctrl-P avanza il valore, il task vecchio chiude figlio e temporanei
 /// e non manda l'Ok postumo che sovrascriveva lo stato sbagliato.
-pub(crate) async fn play_job(
+pub async fn play_job(
     client: &grammers_client::Client,
     media: &Media,
     target: PathBuf,
@@ -194,7 +194,7 @@ pub(crate) async fn play_job(
 /// Dispatcher: un task per job (i lavori di rete vanno in parallelo);
 /// la sola conversione resta limitata a due in trasmissione con un
 /// semaforo, come i due vecchi worker (RAM piatta).
-pub(crate) fn run_worker(
+pub fn run_worker(
     client: grammers_client::Client,
     mut req_rx: mpsc::UnboundedReceiver<Request>,
     res_tx: mpsc::UnboundedSender<Response>,

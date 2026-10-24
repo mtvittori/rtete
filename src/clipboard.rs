@@ -10,7 +10,7 @@ use crate::tg;
 
 /// Esito del probe degli appunti (wl-clipboard gira a thread, fuori dal
 /// ciclo degli eventi): immagine con byte e mime, testo, oppure vuoto.
-pub(crate) enum ClipboardHit {
+pub enum ClipboardHit {
     Image(Vec<u8>, &'static str),
     Text(String),
     Empty,
@@ -18,7 +18,7 @@ pub(crate) enum ClipboardHit {
 
 /// Testo "copiabile" di una riga: testo, caption (foto/doc/audio), emoji
 /// degli sticker, note di servizio. None se la riga non ha testo.
-pub(crate) fn copy_text(r: &tg::HistoryRow) -> Option<String> {
+pub fn copy_text(r: &tg::HistoryRow) -> Option<String> {
     match &r.kind {
         tg::RowKind::Text(t) => Some(t.clone()),
         tg::RowKind::Note(t) | tg::RowKind::Service(t) => {
@@ -45,7 +45,7 @@ pub(crate) fn copy_text(r: &tg::HistoryRow) -> Option<String> {
 }
 
 /// preferisce la caption; in mancanza il nome (per gli allegati).
-pub(crate) fn pick_caption<'a>(caption: &'a str, name: &'a str) -> &'a str {
+pub fn pick_caption<'a>(caption: &'a str, name: &'a str) -> &'a str {
     let c = caption.trim();
     if c.is_empty() {
         name.trim()
@@ -57,7 +57,7 @@ pub(crate) fn pick_caption<'a>(caption: &'a str, name: &'a str) -> &'a str {
 /// Super/Ctrl-Y: copia negli appunti il messaggio selezionato (o senza
 /// selezione, l'ultimo messaggio con testo della chat). wl-copy si serve
 /// da sé in background: nessuna libreria in-process.
-pub(crate) fn ctrl_copy(app: &mut App) {
+pub fn ctrl_copy(app: &mut App) {
     app.status.clear();
     if app.show_search || app.show_sticker {
         return;
@@ -104,7 +104,7 @@ pub(crate) fn ctrl_copy(app: &mut App) {
 /// Pulisce il testo incollato: via i caratteri di controllo, le nuove
 /// righe restano nel compose (messaggi multi-riga) e diventano spazi
 /// nella ricerca. `cap` limita i caratteri (Telegram: 4096).
-pub(crate) fn paste_text(raw: &str, keep_nl: bool, cap: usize) -> String {
+pub fn paste_text(raw: &str, keep_nl: bool, cap: usize) -> String {
     let mut out = String::new();
     for ch in raw.chars() {
         if out.chars().count() >= cap {
@@ -131,7 +131,7 @@ pub(crate) fn paste_text(raw: &str, keep_nl: bool, cap: usize) -> String {
 
 /// Consegna del probe degli appunti (girava a thread fuori dal ciclo):
 /// lo stato della UI viene rileto qui, non al momento del Ctrl-V.
-pub(crate) fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
+pub fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
     match hit {
         ClipboardHit::Image(bytes, mime) => match clipboard_png_file(&bytes, mime) {
             Some((path, kb)) => {
@@ -169,7 +169,7 @@ pub(crate) fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
 // arriva come Response::Clipboard, con lo stato della UI rilegto allora.
 
 /// wl-paste con argomenti extra: `None` se il processo manca o fallisce.
-pub(crate) fn wl_paste_bytes(extra: &[&str]) -> Option<Vec<u8>> {
+pub fn wl_paste_bytes(extra: &[&str]) -> Option<Vec<u8>> {
     let mut cmd = std::process::Command::new("wl-paste");
     for a in extra {
         cmd.arg(a);
@@ -182,7 +182,7 @@ pub(crate) fn wl_paste_bytes(extra: &[&str]) -> Option<Vec<u8>> {
 }
 
 /// Tipi e byte degli appunti: prima l'immagine (png/jpeg), poi il testo.
-pub(crate) fn probe_clipboard() -> ClipboardHit {
+pub fn probe_clipboard() -> ClipboardHit {
     let types = String::from_utf8_lossy(&wl_paste_bytes(&["--list-types"]).unwrap_or_default())
         .into_owned();
     let mime = ["image/png", "image/jpeg"]
@@ -203,7 +203,7 @@ pub(crate) fn probe_clipboard() -> ClipboardHit {
 }
 
 /// L'immagine degli appunti in file in tmp (0600): (percorso, KB).
-pub(crate) fn clipboard_png_file(bytes: &[u8], mime: &str) -> Option<(std::path::PathBuf, usize)> {
+pub fn clipboard_png_file(bytes: &[u8], mime: &str) -> Option<(std::path::PathBuf, usize)> {
     use std::io::Write as _;
     if bytes.is_empty() {
         return None;
@@ -233,7 +233,7 @@ pub(crate) fn clipboard_png_file(bytes: &[u8], mime: &str) -> Option<(std::path:
 /// Ctrl-V non blocca la UI: il probe wl-paste gira a thread fuori dal
 /// ciclo; il risultato torna come Response::Clipboard mentre l'utente
 /// continua a usare il client (luce a volte i processi si inceppano).
-pub(crate) fn ctrl_paste(app: &mut App, res: &mpsc::UnboundedSender<Response>) {
+pub fn ctrl_paste(app: &mut App, res: &mpsc::UnboundedSender<Response>) {
     app.disarm_delete();
     if !(app.show_search || (app.open.is_some() && app.editing.is_none())) {
         return;

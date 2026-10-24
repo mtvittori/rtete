@@ -8,18 +8,18 @@ use grammers_client::session::types::PeerId;
 use crate::clipboard::ClipboardHit;
 use crate::tg;
 
-pub(crate) type PeerRefT = grammers_client::session::types::PeerRef;
+pub type PeerRefT = grammers_client::session::types::PeerRef;
 
-pub(crate) struct SendJob {
-    pub(crate) peer: PeerRefT,
-    pub(crate) peer_id: PeerId,
-    pub(crate) kind: SendKind,
+pub struct SendJob {
+    pub peer: PeerRefT,
+    pub peer_id: PeerId,
+    pub kind: SendKind,
     /// risposta a questo messaggio (Ctrl-R); ignorato dalle modifiche
-    pub(crate) reply_to: Option<i32>,
+    pub reply_to: Option<i32>,
 }
 
 /// esito: nuovo messaggio o modifica confermata
-pub(crate) enum SendDone {
+pub enum SendDone {
     New(PeerId, tg::HistoryRow),
     Edit(PeerId, tg::HistoryRow),
 }
@@ -27,7 +27,7 @@ pub(crate) enum SendDone {
 // I payload servono interi sui canali mpsc: il boxing aggiungerebbe solo
 // allocazioni, la dimensione dell'enum non è un collo di bottiglia.
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum SendKind {
+pub enum SendKind {
     Text(String),
     Sticker(Media),
     /// foto dalla clipboard (file già salvato in tmp) con eventuale caption.
@@ -43,7 +43,7 @@ pub(crate) enum SendKind {
 /// Richieste verso i worker: un solo canale in ingresso (prima dieci
 /// coppie mpsc e un `waiting_pick` che girava a mano pescando dal primo
 /// canale che rispondeva, con `.expect("servizio chiuso")` ovunque).
-pub(crate) enum Request {
+pub enum Request {
     Hist {
         peer_ref: PeerRefT,
         peer: PeerId,
@@ -97,7 +97,7 @@ pub(crate) enum Request {
 // Come SendKind: i payload viaggiano interi, il boxing aggiungerebbe solo
 // allocazioni.
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum Response {
+pub enum Response {
     Hist {
         peer: PeerId,
         rows: Result<Vec<tg::HistoryRow>, String>,
