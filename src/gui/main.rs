@@ -91,6 +91,60 @@ pub enum Msg {
     Revoke(bool),
     /// il pulsante di conferma del popup
     ConfirmYes,
+    /// una pagina delle impostazioni
+    Page(SettingsPage),
+    PfFirst(String),
+    PfLast(String),
+    PfUser(String),
+    PfAbout(String),
+    PfSave,
+    /// selettore della nuova foto profilo
+    PfPhoto,
+    PfPhotoPicked(Option<std::path::PathBuf>),
+    AutoPhotos(bool),
+    VideoThumbs(bool),
+    Avatars(bool),
+    PhotoSize(u16),
+    CacheLimit(u32),
+    /// sfoltisce subito la cache al tetto scelto
+    PruneNow,
+    AskClear(CacheKind),
+    AskEndSession(Option<i64>),
+    /// scarica l'anteprima di una foto (download automatico spento)
+    LoadPreview(i32),
+    Quit,
+}
+
+/// Le pagine delle impostazioni, come in Telegram.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SettingsPage {
+    Main,
+    Account,
+    Appearance,
+    Notifications,
+    Media,
+    Storage,
+    Devices,
+    Links,
+}
+
+/// Le parti della cache che si possono svuotare.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CacheKind {
+    /// foto, sticker e miniature
+    Media,
+    Avatars,
+    Temp,
+}
+
+impl CacheKind {
+    pub fn dir(self) -> std::path::PathBuf {
+        match self {
+            CacheKind::Media => tg::media_dir(),
+            CacheKind::Avatars => tg::media_dir().join("avatars"),
+            CacheKind::Temp => tg::tmp_dir(),
+        }
+    }
 }
 
 /// L'azione in attesa di conferma nel popup.
@@ -98,10 +152,14 @@ pub enum Msg {
 pub enum Confirm {
     Block(bool),
     DeleteChat,
+    /// chiude una sessione, o tutte le altre con `None`
+    EndSession(Option<i64>),
+    ClearCache(CacheKind),
 }
 
 pub enum Phase {
-    Connecting(String),
+    /// passo dell'avvio (0..=2) e cosa sta succedendo
+    Connecting(u8, String),
     Failed(String),
     Ready,
 }
@@ -146,6 +204,11 @@ pub struct Gui {
     pub confirm: Option<Confirm>,
     /// eliminazione della chat privata anche per l'altro
     pub revoke: bool,
+    pub settings_page: SettingsPage,
+    /// il profilo in modifica (copiato da quello letto da Telegram)
+    pub pf: tg::MyProfile,
+    /// spazio della cache: media, foto profilo, temporanei (file, byte)
+    pub cache_usage: [(usize, u64); 3],
 }
 
 fn main() -> iced::Result {
@@ -160,7 +223,7 @@ fn main() -> iced::Result {
         focus_existing();
         return Ok(());
     }
-    net::start(link);
+    net::start(link, Settings::load().cache_mb as u64 * 1024 * 1024);
     iced::application(boot, Gui::update, ui::view)
         .title("RTete")
         .theme(|_: &Gui| style::theme())
@@ -196,7 +259,7 @@ fn boot() -> Gui {
     let settings = Settings::load();
     apply_theme(settings.theme);
     Gui {
-        settings,
+        settings: settings.clone(),
         show_settings: false,
         tg_handler: String::new(),
         theme_stamp: style::omarchy_stamp(),
@@ -214,8 +277,11 @@ fn boot() -> Gui {
         info_tab: tg::SharedTab::Media,
         confirm: None,
         revoke: false,
-        app: App::default(),
-        phase: Phase::Connecting("avvio…".into()),
+        settings_page: SettingsPage::Main,
+        pf: tg::MyProfile::default(),
+        cache_usage: [(0, 0); 3],
+        app: App { media_prefs: settings.media_prefs(), ..App::default() },
+        phase: Phase::Connecting(0, "avvio…".into()),
         link: None,
         filter: String::new(),
         tz: jiff::tz::TimeZone::system(),
@@ -259,7 +325,10 @@ impl Gui {
         }
         // il tema Omarchy si ricontrolla ogni 2s; con qualcuno che scrive
         // ogni 400 ms, per i puntini e perché il «sta scrivendo» scada
-        let every = if !self.app.typing.is_empty() {
+        let every = if matches!(self.phase, Phase::Connecting(..)) {
+            // la rotella della schermata di avvio
+            Some(80)
+        } else if !self.app.typing.is_empty() {
             Some(400)
         } else if self.settings.theme == ThemeChoice::Omarchy {
             Some(2000)
@@ -622,9 +691,121 @@ impl Gui {
                 self.show_settings = !self.show_settings;
                 if self.show_settings {
                     self.tg_handler = settings::tg_handler();
+                    self.settings_page = SettingsPage::Main;
+                    self.show_info = false;
+                    if let Some(req) = self.req() {
+                        let _ = req.send(Request::Profile);
+                    }
                 }
                 Task::none()
             }
+            Msg::Page(page) => {
+                self.settings_page = page;
+                match page {
+                    SettingsPage::Account => {
+                        if let Some(p) = &self.app.profile {
+                            self.pf = p.clone();
+                        }
+                    }
+                    SettingsPage::Devices => {
+                        if let Some(req) = self.req() {
+                            let _ = req.send(Request::Sessions);
+                        }
+                    }
+                    SettingsPage::Storage => self.measure_cache(),
+                    _ => {}
+                }
+                Task::none()
+            }
+            Msg::PfFirst(v) => {
+                self.pf.first = v.chars().take(64).collect();
+                Task::none()
+            }
+            Msg::PfLast(v) => {
+                self.pf.last = v.chars().take(64).collect();
+                Task::none()
+            }
+            Msg::PfUser(v) => {
+                self.pf.username = v.trim_start_matches('@').chars().take(32).collect();
+                Task::none()
+            }
+            Msg::PfAbout(v) => {
+                self.pf.about = v.chars().take(70).collect();
+                Task::none()
+            }
+            Msg::PfSave => {
+                if self.pf.first.trim().is_empty() {
+                    self.app.status = "il nome non può essere vuoto".into();
+                    return Task::none();
+                }
+                let old_username = self.app.profile.as_ref().map(|p| p.username.clone()).unwrap_or_default();
+                if let Some(req) = self.req() {
+                    let _ = req.send(Request::SaveProfile { profile: self.pf.clone(), old_username });
+                    self.app.status = "salvo il profilo…".into();
+                }
+                Task::none()
+            }
+            Msg::PfPhoto => {
+                let pick = rfd::AsyncFileDialog::new()
+                    .set_title("Nuova foto profilo")
+                    .add_filter("Immagini", &["jpg", "jpeg", "png"])
+                    .pick_file();
+                return Task::perform(pick, |f| Msg::PfPhotoPicked(f.map(|f| f.path().to_path_buf())));
+            }
+            Msg::PfPhotoPicked(Some(path)) => {
+                if let Some(req) = self.req() {
+                    let _ = req.send(Request::ProfilePhoto(path));
+                    self.app.status = "carico la foto profilo…".into();
+                }
+                Task::none()
+            }
+            Msg::PfPhotoPicked(None) => Task::none(),
+            Msg::AutoPhotos(on) => {
+                self.settings.auto_photos = on;
+                self.media_changed()
+            }
+            Msg::VideoThumbs(on) => {
+                self.settings.video_thumbs = on;
+                self.media_changed()
+            }
+            Msg::Avatars(on) => {
+                self.settings.avatars = on;
+                self.media_changed()
+            }
+            Msg::PhotoSize(px) => {
+                self.settings.photo_px = px;
+                self.settings.save();
+                Task::none()
+            }
+            Msg::CacheLimit(mb) => {
+                self.settings.cache_mb = mb;
+                self.settings.save();
+                Task::none()
+            }
+            Msg::PruneNow => {
+                rtete::loader::prune_cache_to(self.settings.cache_mb as u64 * 1024 * 1024);
+                // le anteprime tolte dal disco si riscaricano quando servono
+                self.app.previews.retain(|_, p| p.exists());
+                self.measure_cache();
+                self.app.status = "cache sfoltita".into();
+                Task::none()
+            }
+            Msg::AskClear(kind) => {
+                self.confirm = Some(Confirm::ClearCache(kind));
+                Task::none()
+            }
+            Msg::AskEndSession(hash) => {
+                self.confirm = Some(Confirm::EndSession(hash));
+                Task::none()
+            }
+            Msg::LoadPreview(id) => {
+                let media = self.row_media(id, |k| rtete::app::preview_media(k).cloned());
+                if let (Some(media), Some(req)) = (media, self.req()) {
+                    self.app.ensure_previews(&req, [&media]);
+                }
+                Task::none()
+            }
+            Msg::Quit => return iced::exit(),
             Msg::SetTheme(choice) => {
                 self.settings.theme = choice;
                 apply_theme(choice);
@@ -688,6 +869,19 @@ impl Gui {
                 self.revoke = on;
                 Task::none()
             }
+            Msg::ConfirmYes if matches!(self.confirm, Some(Confirm::EndSession(_) | Confirm::ClearCache(_))) => {
+                match self.confirm.take() {
+                    Some(Confirm::EndSession(hash)) => {
+                        if let Some(req) = self.req() {
+                            let _ = req.send(Request::EndSession(hash));
+                            self.app.status = "chiudo la sessione…".into();
+                        }
+                    }
+                    Some(Confirm::ClearCache(kind)) => self.clear_cache(kind),
+                    _ => {}
+                }
+                Task::none()
+            }
             Msg::ConfirmYes => {
                 let what = self.confirm.take();
                 let chat = self.app.current_chat().map(|c| (c.peer_ref, c.peer_id));
@@ -703,6 +897,7 @@ impl Gui {
                             self.show_info = false;
                             notify::dismiss(peer);
                         }
+                        Confirm::EndSession(_) | Confirm::ClearCache(_) => {}
                     }
                 }
                 Task::none()
@@ -813,6 +1008,46 @@ impl Gui {
             .and_then(|r| f(&r.kind))
     }
 
+    /// Le preferenze dei media cambiate: salvate e passate allo stato.
+    fn media_changed(&mut self) -> Task<Msg> {
+        self.settings.save();
+        self.app.media_prefs = self.settings.media_prefs();
+        Task::none()
+    }
+
+    fn measure_cache(&mut self) {
+        for (i, kind) in [CacheKind::Media, CacheKind::Avatars, CacheKind::Temp].into_iter().enumerate() {
+            self.cache_usage[i] = rtete::loader::dir_usage(&kind.dir());
+        }
+    }
+
+    /// Svuota una parte della cache; quello che serve si riscarica.
+    fn clear_cache(&mut self, kind: CacheKind) {
+        let a = &mut self.app;
+        match kind {
+            CacheKind::Media => {
+                rtete::loader::clear_dir(&kind.dir());
+                a.previews.clear();
+                a.failed.clear();
+            }
+            CacheKind::Avatars => {
+                rtete::loader::clear_dir(&kind.dir());
+                a.avatars.clear();
+                a.avatar_asked.clear();
+            }
+            CacheKind::Temp => {
+                // un invio o un allegato in attesa usano i temporanei
+                if a.uploading.is_some() || a.pending_photo.is_some() {
+                    a.status = "c'è un invio in corso: riprova dopo".into();
+                    return;
+                }
+                rtete::loader::clear_dir(&kind.dir());
+            }
+        }
+        a.status = "cache svuotata".into();
+        self.measure_cache();
+    }
+
     /// Chiede la scheda della chat aperta e i contenuti della scheda scelta;
     /// `fresh`: all'apertura si rileggono anche quelli già in memoria.
     fn load_info(&mut self, fresh: bool) {
@@ -855,8 +1090,8 @@ impl Gui {
 
     fn on_net(&mut self, ev: NetEvent) -> Task<Msg> {
         match ev {
-            NetEvent::Status(s) => {
-                self.phase = Phase::Connecting(s);
+            NetEvent::Status(step, s) => {
+                self.phase = Phase::Connecting(step, s);
                 Task::none()
             }
             NetEvent::Failed(e) => {
@@ -940,8 +1175,14 @@ impl Gui {
                     }
                 }
                 let first_page = matches!(&r, rtete::send::Response::Hist { .. });
+                let profile = matches!(&r, rtete::send::Response::Profile(Ok(_)));
                 let _rt = net::RT.get().map(|rt| rt.enter());
                 iced::futures::executor::block_on(handle_response(&mut self.app, r, &client, &req));
+                if profile {
+                    if let Some(p) = &self.app.profile {
+                        self.pf = p.clone();
+                    }
+                }
                 if first_page || self.at_bottom {
                     return self.snap_bottom();
                 }

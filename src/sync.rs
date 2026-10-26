@@ -240,20 +240,14 @@ pub async fn handle_response(
                 if let Some(chat) = app.current_chat() {
                     mark_read(client, chat.peer_ref);
                 }
+                let prefs = app.media_prefs;
                 let medias: Vec<Media> = app
                     .histories
                     .get(&peer)
                     .map(|ring| {
                         ring.iter()
-                            .filter_map(|r| match &r.kind {
-                                tg::RowKind::Sticker { media, animated, .. } => {
-                                    if *animated { None } else { Some(media.clone()) }
-                                }
-                                tg::RowKind::Photo { media, .. } | tg::RowKind::Video { media, .. } => {
-                    Some(media.clone())
-                }
-                                _ => None,
-                            })
+                            .filter(|r| prefs.auto(&r.kind))
+                            .filter_map(|r| crate::app::preview_media(&r.kind).cloned())
                             .collect()
                     })
                     .unwrap_or_default();
@@ -459,6 +453,36 @@ pub async fn handle_response(
                 app.status = "chat eliminata".into();
             }
             Err(err) => app.status = format!("eliminazione chat: {err}"),
+        },
+        Response::Profile(res) => match res {
+            Ok(p) => {
+                app.me = format!("{} {}", p.first, p.last).trim().to_string();
+                app.profile = Some(p);
+            }
+            Err(err) => app.status = format!("profilo: {err}"),
+        },
+        Response::ProfileSaved(res) => match res {
+            Ok(()) => {
+                app.status = "profilo aggiornato".into();
+                let _ = req.send(Request::Profile);
+            }
+            Err(err) => app.status = format!("profilo: {err}"),
+        },
+        Response::Sessions(res) => match res {
+            Ok(list) => app.sessions = Some(list),
+            Err(err) => app.status = format!("dispositivi: {err}"),
+        },
+        Response::SessionEnded(res) => match res {
+            Ok(hash) => {
+                if let Some(list) = app.sessions.as_mut() {
+                    list.retain(|s| s.current || hash.is_some_and(|h| h != s.hash));
+                }
+                app.status = match hash {
+                    Some(_) => "sessione chiusa".into(),
+                    None => "tutte le altre sessioni sono state chiuse".into(),
+                };
+            }
+            Err(err) => app.status = format!("dispositivi: {err}"),
         },
         Response::Dialogs(res) => match res {
             Ok(mut list) => {

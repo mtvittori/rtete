@@ -331,6 +331,24 @@ pub fn run_worker(
                         .map_err(|e| e.to_string());
                     let _ = out.send(Response::ChatDeleted { peer, res });
                 }),
+                Request::Profile => tokio::spawn(async move {
+                    let _ = out.send(Response::Profile(tg::my_profile(&cl).await));
+                }),
+                Request::SaveProfile { profile, old_username } => tokio::spawn(async move {
+                    let res = tg::save_profile(&cl, &profile, &old_username).await;
+                    let _ = out.send(Response::ProfileSaved(res));
+                }),
+                Request::ProfilePhoto(path) => tokio::spawn(async move {
+                    let res = tg::set_profile_photo(&cl, &path).await;
+                    let _ = out.send(Response::ProfileSaved(res));
+                }),
+                Request::Sessions => tokio::spawn(async move {
+                    let _ = out.send(Response::Sessions(tg::sessions(&cl).await));
+                }),
+                Request::EndSession(hash) => tokio::spawn(async move {
+                    let res = tg::end_session(&cl, hash).await.map(|()| hash);
+                    let _ = out.send(Response::SessionEnded(res));
+                }),
                 Request::Dialogs => tokio::spawn(async move {
                     let res = tg::load_dialogs(&cl).await.map_err(|e| e.to_string());
                     let _ = out.send(Response::Dialogs(res));

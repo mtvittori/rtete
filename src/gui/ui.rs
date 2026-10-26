@@ -17,7 +17,7 @@ use rtete::tg::{self, HistoryRow, RowKind};
 
 use crate::style;
 use crate::settings::ThemeChoice;
-use crate::{Confirm, Gui, Msg, Phase, COMPOSE, FWD_SEARCH, HISTORY};
+use crate::{CacheKind, Confirm, Gui, Msg, Phase, SettingsPage, COMPOSE, FWD_SEARCH, HISTORY};
 
 const BOLD: Font = Font {
     weight: Weight::Bold,
@@ -25,7 +25,6 @@ const BOLD: Font = Font {
 };
 const BUBBLE_W: f32 = 520.0;
 const STICKER_PX: f32 = 170.0;
-const PHOTO_PX: f32 = 320.0;
 const GRID_COLS: usize = 6;
 /// caratteri della citazione sopra una risposta
 const QUOTE_CHARS: usize = 44;
@@ -51,14 +50,8 @@ fn ellipsize(s: &str, max: usize) -> String {
 
 pub fn view(g: &Gui) -> Element<'_, Msg> {
     match &g.phase {
-        Phase::Connecting(s) => centered(column![
-            text("RTete").size(32).font(BOLD),
-            text(s.as_str()).color(style::p().muted),
-        ]),
-        Phase::Failed(e) => centered(column![
-            text("RTete non riesce a partire").size(22).font(BOLD),
-            text(e.as_str()).color(style::p().danger),
-        ]),
+        Phase::Connecting(step, s) => loading(g, *step, s),
+        Phase::Failed(e) => failed(e),
         Phase::Ready => iced::widget::responsive(move |size| {
             let info = g.show_info && g.app.current_chat().is_some();
             let right = if g.forwarding.is_some() {
@@ -132,8 +125,87 @@ fn photo_viewer(path: &std::path::Path) -> Element<'_, Msg> {
 fn centered<'a>(c: Column<'a, Msg>) -> Element<'a, Msg> {
     container(c.spacing(12).align_x(Center))
         .center(Fill)
+        .padding(16)
         .style(style::fill(style::p().bg))
         .into()
+}
+
+/// il marchio della schermata di avvio: una «R» sul colore d'accento
+fn logo<'a>(c: iced::Color) -> Element<'a, Msg> {
+    container(text("R").size(46).font(BOLD).color(iced::Color::WHITE))
+        .center(92)
+        .style(style::avatar(c))
+        .into()
+}
+
+/// La rotella: dodici puntini in cerchio, la scia sbiadisce dietro la
+/// testa (un giro al secondo, guidato dal Tick dell'avvio).
+fn spinner<'a>(g: &Gui, size: f32) -> Element<'a, Msg> {
+    const N: usize = 12;
+    let p = style::p();
+    let head = (g.now.duration_since(g.epoch).as_millis() / 83) as usize % N;
+    let dot = size * 0.14;
+    let r = (size - dot) / 2.0;
+    let mut wheel = iced::widget::Stack::new().width(size).height(size);
+    for i in 0..N {
+        let a = i as f32 / N as f32 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+        let age = (head + N - i) % N;
+        let c = iced::Color { a: (1.0 - age as f32 / N as f32).max(0.12), ..p.accent };
+        wheel = wheel.push(
+            container(container(space()).width(dot).height(dot).style(style::avatar(c))).padding(
+                iced::Padding { top: r + r * a.sin(), left: r + r * a.cos(), right: 0.0, bottom: 0.0 },
+            ),
+        );
+    }
+    wheel.into()
+}
+
+/// Schermata di avvio: marchio, rotella e i tre passi (fatti, in corso,
+/// da fare) con la riga di stato che arriva dalla rete.
+fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
+    let p = style::p();
+    const STEPS: [&str; 3] = ["Connessione a Telegram", "Verifica dell'account", "Caricamento delle chat"];
+    let mut steps = Column::new().spacing(8);
+    for (i, label) in STEPS.iter().enumerate() {
+        let (mark, color) = match (i as u8).cmp(&step) {
+            std::cmp::Ordering::Less => ("✓", p.link),
+            std::cmp::Ordering::Equal => ("●", p.text),
+            std::cmp::Ordering::Greater => ("○", p.muted),
+        };
+        steps = steps.push(
+            row![text(mark).size(13).color(color).width(18), text(*label).size(14).color(color)]
+                .spacing(8)
+                .align_y(Center),
+        );
+    }
+    let card = container(steps).padding([14, 22]).style(style::pill(p.sidebar));
+    centered(column![
+        logo(p.accent),
+        text("RTete").size(30).font(BOLD),
+        text("Telegram leggero per Linux").size(13).color(p.muted),
+        space().height(14),
+        spinner(g, 54.0),
+        text(status).size(13).color(p.muted),
+        space().height(6),
+        card,
+    ])
+}
+
+/// Avvio fallito: cosa è successo e come rimediare.
+fn failed(e: &str) -> Element<'_, Msg> {
+    let p = style::p();
+    centered(column![
+        container(text("!").size(46).font(BOLD).color(iced::Color::WHITE))
+            .center(92)
+            .style(style::avatar(p.danger)),
+        text("RTete non riesce a partire").size(22).font(BOLD),
+        container(text(e).color(p.danger).align_x(Center)).max_width(520),
+        text("Controlla la connessione; il primo accesso si fa con `rtete` nel terminale.")
+            .size(12)
+            .color(p.muted),
+        space().height(6),
+        button(text("Chiudi")).on_press(Msg::Quit).padding([8, 18]).style(style::primary),
+    ])
 }
 
 // ---------------------------------------------------------------- sidebar
@@ -292,7 +364,8 @@ fn list_time(g: &Gui, secs: i64) -> String {
 
 /// Foto profilo tonda (o iniziale su colore) con il pallino «online».
 fn avatar<'a>(app: &App, d: &tg::DialogInfo, size: f32) -> Element<'a, Msg> {
-    let face: Element<'a, Msg> = match d.photo_id.and_then(|id| app.avatars.get(&id)) {
+    let photo = d.photo_id.filter(|_| app.media_prefs.avatars);
+    let face: Element<'a, Msg> = match photo.and_then(|id| app.avatars.get(&id)) {
         Some(path) => image(image::Handle::from_path(path))
             .width(size)
             .height(size)
@@ -662,7 +735,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     match &r.kind {
         RowKind::Video { media, seconds, caption, round, .. } => {
             let p = style::p();
-            let px = if *round { 220.0 } else { PHOTO_PX };
+            let px = if *round { 220.0 } else { g.settings.photo_px as f32 };
             let thumb: Element<'a, Msg> = match app.previews.get(&tg::media_key(media)) {
                 Some(path) => {
                     let img = image(image::Handle::from_path(path)).width(px);
@@ -718,13 +791,21 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         RowKind::Photo { media, caption, gif } => {
             let mut c = Column::new().spacing(6);
             // click sulla foto: visore a tutta finestra con zoom
-            let pic = preview(app, media, PHOTO_PX).map(|img| -> Element<'a, Msg> {
+            let pic = preview(app, media, g.settings.photo_px as f32).map(|img| -> Element<'a, Msg> {
                 mouse_area(img)
                     .on_press(Msg::View(r.id))
                     .interaction(iced::mouse::Interaction::ZoomIn)
                     .into()
             });
             c = c.push(pic.unwrap_or_else(|| {
+                // download automatico spento: la foto arriva con un click
+                if !app.media_prefs.photos && !app.pending.contains(&tg::media_key(media)) {
+                    return button(text(if *gif { "⬇ Mostra la GIF" } else { "⬇ Mostra la foto" }).size(13))
+                        .on_press(Msg::LoadPreview(r.id))
+                        .padding([10, 16])
+                        .style(style::flat(true))
+                        .into();
+                }
                 text(if *gif { "GIF in caricamento…" } else { "🖼 foto in caricamento…" })
                     .color(style::p().muted)
                     .into()
@@ -1085,18 +1166,385 @@ fn invite<'a>(title: &str, members: i32) -> Element<'a, Msg> {
 
 fn settings(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
-    let s = &g.settings;
-    let section = |title: &'static str| text(title).size(13).font(BOLD).color(p.link);
-    let choice = |label: String, on: bool, m: Msg| {
-        button(text(label))
-            .on_press(m)
-            .padding([8, 14])
-            .style(style::flat(on))
+    let (title, body) = match g.settings_page {
+        SettingsPage::Main => ("Impostazioni", settings_main(g)),
+        SettingsPage::Account => ("Il mio account", settings_account(g)),
+        SettingsPage::Appearance => ("Aspetto", settings_appearance(g)),
+        SettingsPage::Notifications => ("Notifiche", settings_notifications(g)),
+        SettingsPage::Media => ("Immagini e media", settings_media(g)),
+        SettingsPage::Storage => ("Dati e archiviazione", settings_storage(g)),
+        SettingsPage::Devices => ("Dispositivi", settings_devices(g)),
+        SettingsPage::Links => ("Link", settings_links(g)),
     };
+    let mut head = Row::new().spacing(8).align_y(Center);
+    if g.settings_page != SettingsPage::Main {
+        head = head.push(
+            button(text("←").size(18))
+                .on_press(Msg::Page(SettingsPage::Main))
+                .padding([2, 10])
+                .style(style::flat(false)),
+        );
+    }
+    head = head
+        .push(text(title).size(22).font(BOLD).width(Fill))
+        .push(button(text("✕")).on_press(Msg::ToggleSettings).style(style::flat(false)));
+    let mut col = column![head, body].spacing(18).max_width(620);
+    if !g.app.status.is_empty() {
+        col = col.push(text(g.app.status.as_str()).size(12).color(p.muted));
+    }
+    container(scrollable(container(col).padding(28)).height(Fill))
+        .width(Fill)
+        .height(Fill)
+        .style(style::fill(p.bg))
+        .into()
+}
+
+fn section<'a>(title: &'static str) -> Element<'a, Msg> {
+    text(title).size(13).font(BOLD).color(style::p().link).into()
+}
+
+/// un pulsante di scelta fra alternative (tema, misura, tetto)
+fn choice<'a>(label: String, on: bool, m: Msg) -> Element<'a, Msg> {
+    button(text(label)).on_press(m).padding([8, 14]).style(style::flat(on)).into()
+}
+
+/// la mia foto profilo (o l'iniziale)
+fn my_photo<'a>(g: &Gui, size: f32) -> Element<'a, Msg> {
+    match g.app.profile.as_ref().and_then(|p| p.photo.as_ref()) {
+        Some(path) => image(image::Handle::from_path(path))
+            .width(size)
+            .height(size)
+            .content_fit(iced::ContentFit::Cover)
+            .border_radius(size / 2.0)
+            .into(),
+        None => initial(&g.app.me, size),
+    }
+}
+
+/// La prima pagina: il mio profilo in alto e l'elenco delle sezioni.
+fn settings_main(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let prof = g.app.profile.as_ref();
+    let mut who = column![text(g.app.me.as_str()).size(18).font(BOLD)].spacing(2);
+    if let Some(pr) = prof {
+        if !pr.phone.is_empty() {
+            who = who.push(text(pr.phone.as_str()).size(13).color(p.muted));
+        }
+        if !pr.username.is_empty() {
+            who = who.push(text(format!("@{}", pr.username)).size(13).color(p.link));
+        }
+    }
+    let card = button(row![my_photo(g, 64.0), who.width(Fill), text("›").size(20).color(p.muted)].spacing(14).align_y(Center))
+        .on_press(Msg::Page(SettingsPage::Account))
+        .width(Fill)
+        .padding(12)
+        .style(style::flat(false));
+    let entry = |icon: &'static str, label: &'static str, sub: &'static str, page: SettingsPage| -> Element<'_, Msg> {
+        button(
+            row![
+                text(icon).size(20).width(30),
+                column![text(label), text(sub).size(12).color(p.muted)].spacing(1).width(Fill),
+                text("›").size(18).color(p.muted),
+            ]
+            .spacing(10)
+            .align_y(Center),
+        )
+        .on_press(Msg::Page(page))
+        .width(Fill)
+        .padding([9, 12])
+        .style(style::flat(false))
+        .into()
+    };
+    let list = column![
+        entry("👤", "Il mio account", "nome, username, bio e foto", SettingsPage::Account),
+        entry("🎨", "Aspetto", "tema, dimensione, accelerazione GPU", SettingsPage::Appearance),
+        entry("🔔", "Notifiche", "avvisi dei messaggi nuovi", SettingsPage::Notifications),
+        entry("🖼", "Immagini e media", "download automatico, miniature, misura delle foto", SettingsPage::Media),
+        entry("💾", "Dati e archiviazione", "cache e spazio su disco", SettingsPage::Storage),
+        entry("💻", "Dispositivi", "sessioni attive dell'account", SettingsPage::Devices),
+        entry("🔗", "Link", "t.me e tg:// dentro RTete", SettingsPage::Links),
+    ]
+    .spacing(2);
+    column![
+        container(card).style(style::pill(p.sidebar)),
+        container(list).padding(4).style(style::pill(p.sidebar)),
+        text(format!("RTete {}", env!("CARGO_PKG_VERSION"))).size(12).color(p.muted),
+    ]
+    .spacing(16)
+    .into()
+}
+
+fn form_field<'a>(
+    label: &'static str,
+    placeholder: &'static str,
+    value: &'a str,
+    on: fn(String) -> Msg,
+) -> Element<'a, Msg> {
+    column![
+        text(label).size(12).color(style::p().muted),
+        text_input(placeholder, value).on_input(on).on_submit(Msg::PfSave).style(style::input).padding(9),
+    ]
+    .spacing(4)
+    .into()
+}
+
+/// Profilo: foto, nome, cognome, username e bio; il numero solo in lettura.
+fn settings_account(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let Some(saved) = g.app.profile.as_ref() else {
+        return text("carico il profilo…").color(p.muted).into();
+    };
+    let pf = &g.pf;
+    let changed = saved.first != pf.first
+        || saved.last != pf.last
+        || saved.username != pf.username
+        || saved.about != pf.about;
+    let photo = column![
+        my_photo(g, 96.0),
+        button(text("Cambia foto").size(13)).on_press(Msg::PfPhoto).style(style::flat(true)),
+    ]
+    .spacing(8)
+    .align_x(Center)
+    .width(Fill);
+    let mut bio = column![form_field("Bio", "Qualche parola su di te", &pf.about, Msg::PfAbout)].spacing(2);
+    bio = bio.push(
+        text(format!("{}/70 · la vedono tutti nel tuo profilo", pf.about.chars().count()))
+            .size(11)
+            .color(p.muted),
+    );
+    let mut user = column![form_field("Username", "username", &pf.username, Msg::PfUser)].spacing(2);
+    user = user.push(
+        text(if pf.username.is_empty() {
+            "senza username ti trova solo chi ha il tuo numero".to_string()
+        } else {
+            format!("link: t.me/{}", pf.username)
+        })
+        .size(11)
+        .color(p.muted),
+    );
+    let phone = if saved.phone.is_empty() { "nascosto".to_string() } else { saved.phone.clone() };
+    column![
+        photo,
+        row![
+            container(form_field("Nome", "Nome (obbligatorio)", &pf.first, Msg::PfFirst)).width(Fill),
+            container(form_field("Cognome", "Cognome", &pf.last, Msg::PfLast)).width(Fill),
+        ]
+        .spacing(12),
+        user,
+        bio,
+        info_field(text(phone).into(), "telefono · si cambia dall'app ufficiale"),
+        row![
+            space().width(Fill),
+            button(text("Salva"))
+                .on_press_maybe(changed.then_some(Msg::PfSave))
+                .padding([8, 18])
+                .style(style::primary),
+        ],
+    ]
+    .spacing(16)
+    .into()
+}
+
+fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let s = &g.settings;
     let omarchy_label = match style::omarchy_name() {
         Some(n) => format!("Tema Omarchy · {n}"),
         None => "Tema Omarchy".into(),
     };
+    column![
+        section("TEMA"),
+        row![
+            choice(omarchy_label, s.theme == ThemeChoice::Omarchy, Msg::SetTheme(ThemeChoice::Omarchy)),
+            choice("RTete scuro".into(), s.theme == ThemeChoice::Rtete, Msg::SetTheme(ThemeChoice::Rtete)),
+        ]
+        .spacing(8),
+        text("Con il tema Omarchy i colori seguono `omarchy theme set` mentre RTete è aperta.")
+            .size(12)
+            .color(p.muted),
+        section("DIMENSIONE"),
+        row![
+            text(format!("Interfaccia  {:.0}%", s.scale * 100.0)).width(170),
+            iced::widget::slider(0.7..=1.6, s.scale, Msg::Scale).step(0.05_f32),
+        ]
+        .spacing(12)
+        .align_y(Center),
+        section("DISEGNO"),
+        iced::widget::toggler(s.gpu)
+            .label("Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)")
+            .on_toggle(Msg::Gpu),
+    ]
+    .spacing(14)
+    .into()
+}
+
+fn settings_notifications(g: &Gui) -> Element<'_, Msg> {
+    let s = &g.settings;
+    column![
+        iced::widget::toggler(s.notify)
+            .label("Notifiche dei messaggi nuovi (non per le chat silenziate)")
+            .on_toggle(Msg::Notify),
+        iced::widget::toggler(s.notify_text)
+            .label("Mostra il testo del messaggio")
+            .on_toggle(Msg::NotifyText),
+        text("Una chat letta da un altro dispositivo toglie da sola la sua notifica.")
+            .size(12)
+            .color(style::p().muted),
+    ]
+    .spacing(14)
+    .into()
+}
+
+/// Download automatico, miniature e misura delle foto in chat.
+fn settings_media(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let s = &g.settings;
+    let sizes = Row::with_children(crate::settings::PHOTO_SIZES.iter().map(|&(px, label)| {
+        choice(format!("{label} · {px}px"), s.photo_px == px, Msg::PhotoSize(px))
+    }))
+    .spacing(8)
+    .wrap();
+    column![
+        section("DOWNLOAD AUTOMATICO"),
+        iced::widget::toggler(s.auto_photos)
+            .label("Scarica da solo le foto e le GIF delle chat")
+            .on_toggle(Msg::AutoPhotos),
+        text("Spento: al posto della foto compare «Mostra la foto», e si scarica con un click.")
+            .size(12)
+            .color(p.muted),
+        iced::widget::toggler(s.video_thumbs)
+            .label("Miniature dei video")
+            .on_toggle(Msg::VideoThumbs),
+        iced::widget::toggler(s.avatars)
+            .label("Foto profilo nella lista chat")
+            .on_toggle(Msg::Avatars),
+        section("MISURA DELLE FOTO IN CHAT"),
+        sizes,
+        text("Gli sticker restano sempre visibili; i media condivisi nella scheda della chat si scaricano quando la apri.")
+            .size(12)
+            .color(p.muted),
+    ]
+    .spacing(14)
+    .into()
+}
+
+/// Spazio occupato dalla cache, svuotamento e tetto.
+fn settings_storage(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let kinds = [
+        (CacheKind::Media, "Foto, sticker e miniature"),
+        (CacheKind::Avatars, "Foto profilo"),
+        (CacheKind::Temp, "File temporanei (audio, video, appunti)"),
+    ];
+    let mut usage = Column::new().spacing(10);
+    let mut total = 0u64;
+    for (i, (kind, label)) in kinds.into_iter().enumerate() {
+        let (n, bytes) = g.cache_usage[i];
+        total += bytes;
+        usage = usage.push(
+            row![
+                column![text(label), text(format!("{n} file · {}", tg::fmt_size(bytes as f64))).size(12).color(p.muted)]
+                    .spacing(1)
+                    .width(Fill),
+                button(text("Svuota").size(13))
+                    .on_press_maybe((n > 0).then_some(Msg::AskClear(kind)))
+                    .padding([5, 12])
+                    .style(style::flat(true)),
+            ]
+            .align_y(Center),
+        );
+    }
+    let limits = Row::with_children(crate::settings::CACHE_LIMITS.iter().map(|&mb| {
+        let label = if mb >= 1024 { format!("{} GB", mb / 1024) } else { format!("{mb} MB") };
+        choice(label, g.settings.cache_mb == mb, Msg::CacheLimit(mb))
+    }))
+    .spacing(8)
+    .wrap();
+    column![
+        section("SPAZIO USATO"),
+        container(usage).padding(14).style(style::pill(p.sidebar)),
+        text(format!("Totale: {}", tg::fmt_size(total as f64))).font(BOLD),
+        text("La cronologia non resta sul disco: si salvano solo anteprime e foto profilo.")
+            .size(12)
+            .color(p.muted),
+        section("TETTO DELLA CACHE"),
+        limits,
+        row![
+            text("A ogni avvio RTete toglie i file più vecchi oltre il tetto.")
+                .size(12)
+                .color(p.muted)
+                .width(Fill),
+            button(text("Sfoltisci ora").size(13)).on_press(Msg::PruneNow).style(style::flat(true)),
+        ]
+        .spacing(8)
+        .align_y(Center),
+    ]
+    .spacing(14)
+    .into()
+}
+
+/// Le sessioni attive: questa in cima, le altre chiudibili una per una.
+fn settings_devices(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let Some(list) = &g.app.sessions else {
+        return text("carico i dispositivi…").color(p.muted).into();
+    };
+    let mut col = Column::new().spacing(10);
+    for (i, s) in list.iter().enumerate() {
+        if i == 1 {
+            col = col.push(section("ALTRE SESSIONI"));
+        } else if i == 0 && s.current {
+            col = col.push(section("QUESTO DISPOSITIVO"));
+        }
+        let mut top = row![text(if s.device.is_empty() { "Dispositivo" } else { s.device.as_str() }).font(BOLD).width(Fill)]
+            .spacing(8)
+            .align_y(Center);
+        if !s.current {
+            top = top.push(
+                button(text("Chiudi").size(12))
+                    .on_press(Msg::AskEndSession(Some(s.hash)))
+                    .padding([4, 10])
+                    .style(style::flat(true)),
+            );
+        }
+        let place = [s.ip.as_str(), s.place.as_str()]
+            .into_iter()
+            .filter(|x| !x.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        let when = if s.current {
+            "online".to_string()
+        } else {
+            format!("ultima attività: {}", list_time(g, s.active))
+        };
+        col = col.push(
+            container(
+                column![
+                    top,
+                    text(s.app.as_str()).size(13),
+                    text(place).size(12).color(p.muted),
+                    text(when).size(12).color(if s.current { p.link } else { p.muted }),
+                ]
+                .spacing(2),
+            )
+            .padding(12)
+            .width(Fill)
+            .style(style::pill(p.sidebar)),
+        );
+    }
+    if list.iter().filter(|s| !s.current).count() > 0 {
+        col = col.push(
+            button(text("Chiudi tutte le altre sessioni"))
+                .on_press(Msg::AskEndSession(None))
+                .padding([8, 16])
+                .style(style::danger),
+        );
+    }
+    col.into()
+}
+
+fn settings_links(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
     let handler_is_us = g.tg_handler == "rtete-gui.desktop";
     let handler_label = if g.tg_handler.is_empty() {
         "nessuna app".to_string()
@@ -1113,54 +1561,15 @@ fn settings(g: &Gui) -> Element<'_, Msg> {
                 .style(style::primary),
         );
     }
-    let body = column![
-        row![
-            text("Impostazioni").size(22).font(BOLD).width(Fill),
-            button(text("✕")).on_press(Msg::ToggleSettings).style(style::flat(false)),
-        ]
-        .align_y(Center),
-        section("ASPETTO"),
-        row![
-            choice(omarchy_label, s.theme == ThemeChoice::Omarchy, Msg::SetTheme(ThemeChoice::Omarchy)),
-            choice("RTete scuro".into(), s.theme == ThemeChoice::Rtete, Msg::SetTheme(ThemeChoice::Rtete)),
-        ]
-        .spacing(8),
-        text("Con il tema Omarchy i colori seguono `omarchy theme set` mentre RTete è aperta.")
-            .size(12)
-            .color(p.muted),
-        row![
-            text(format!("Dimensione  {:.0}%", s.scale * 100.0)).width(170),
-            iced::widget::slider(0.7..=1.6, s.scale, Msg::Scale).step(0.05_f32),
-        ]
-        .spacing(12)
-        .align_y(Center),
-        iced::widget::toggler(s.gpu)
-            .label("Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)")
-            .on_toggle(Msg::Gpu),
-        section("NOTIFICHE"),
-        iced::widget::toggler(s.notify)
-            .label("Notifiche dei messaggi nuovi (non per le chat silenziate)")
-            .on_toggle(Msg::Notify),
-        iced::widget::toggler(s.notify_text)
-            .label("Mostra il testo del messaggio")
-            .on_toggle(Msg::NotifyText),
-        section("LINK"),
-        iced::widget::toggler(s.links_in_app)
+    column![
+        iced::widget::toggler(g.settings.links_in_app)
             .label("Apri i link t.me e tg:// dentro RTete")
             .on_toggle(Msg::LinksInApp),
         text("Link tg:// da browser e altre app").color(p.text),
         handler_row,
-        section("ACCOUNT"),
-        text(format!("Connesso come {}", g.app.me)).color(p.muted),
-        text("Numero e codice si cambiano con `rtete` nel terminale.").size(12).color(p.muted),
     ]
     .spacing(14)
-    .max_width(620);
-    container(scrollable(container(body).padding(28)).height(Fill))
-        .width(Fill)
-        .height(Fill)
-        .style(style::fill(p.bg))
-        .into()
+    .into()
 }
 
 // ------------------------------------------------------ scheda della chat
@@ -1429,13 +1838,45 @@ fn shared_links<'a>(g: &'a Gui, items: &'a [tg::SharedItem]) -> Element<'a, Msg>
 /// tutto, Esc o «Annulla» chiudono senza fare niente.
 fn confirm_dialog(g: &Gui, what: Confirm) -> Element<'_, Msg> {
     let p = style::p();
-    let Some(chat) = g.app.current_chat() else {
+    let chat = g.app.current_chat();
+    if chat.is_none() && matches!(what, Confirm::Block(_) | Confirm::DeleteChat) {
         return space().into();
-    };
-    let name = chat.name.as_str();
-    let user = !chat.is_group;
-    let me = g.app.peer_info.get(&chat.peer_id).is_some_and(|i| i.me);
+    }
+    let name = chat.map_or("", |c| c.name.as_str());
+    let user = chat.is_some_and(|c| !c.is_group);
+    let broadcast = chat.is_some_and(|c| c.broadcast);
+    let me = chat.and_then(|c| g.app.peer_info.get(&c.peer_id)).is_some_and(|i| i.me);
     let (title, body, yes, harmful) = match what {
+        Confirm::EndSession(Some(_)) => (
+            "Chiudere questa sessione?".to_string(),
+            "Il dispositivo viene disconnesso e per usarlo dovrà accedere di nuovo.",
+            "Chiudi",
+            true,
+        ),
+        Confirm::EndSession(None) => (
+            "Chiudere tutte le altre sessioni?".to_string(),
+            "Tutti i dispositivi tranne questo vengono disconnessi.",
+            "Chiudi tutte",
+            true,
+        ),
+        Confirm::ClearCache(CacheKind::Media) => (
+            "Svuotare la cache dei media?".to_string(),
+            "Foto, sticker e miniature salvati sul disco vengono cancellati; si riscaricano quando servono.",
+            "Svuota",
+            true,
+        ),
+        Confirm::ClearCache(CacheKind::Avatars) => (
+            "Svuotare le foto profilo?".to_string(),
+            "Le foto profilo salvate vengono cancellate; si riscaricano quando servono.",
+            "Svuota",
+            true,
+        ),
+        Confirm::ClearCache(CacheKind::Temp) => (
+            "Cancellare i file temporanei?".to_string(),
+            "Audio e video già riprodotti e immagini incollate dagli appunti.",
+            "Cancella",
+            true,
+        ),
         Confirm::Block(true) => (
             format!("Bloccare {name}?"),
             "Non potrà più scriverti, chiamarti né vedere il tuo ultimo accesso. Puoi sbloccarlo quando vuoi.",
@@ -1454,7 +1895,7 @@ fn confirm_dialog(g: &Gui, what: Confirm) -> Element<'_, Msg> {
             "Elimina",
             true,
         ),
-        Confirm::DeleteChat if chat.broadcast => (
+        Confirm::DeleteChat if broadcast => (
             format!("Abbandonare «{name}»?"),
             "Il canale sparisce dalla lista e non riceverai più i suoi messaggi.",
             "Abbandona",

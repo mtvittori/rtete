@@ -35,7 +35,8 @@ pub struct Link {
 // come in send.rs: i payload viaggiano interi, una volta per evento
 #[allow(clippy::large_enum_variant)]
 pub enum NetEvent {
-    Status(String),
+    /// passo dell'avvio (0 connessione, 1 account, 2 chat) e cosa succede
+    Status(u8, String),
     Ready {
         link: Link,
         contacts: Vec<tg::DialogInfo>,
@@ -109,7 +110,8 @@ fn listen(tx: mpsc::UnboundedSender<NetEvent>) {
 }
 
 /// Avvia il runtime e la connessione; gli eventi aspettano la subscription.
-pub fn start(link: Option<String>) {
+/// `cache_bytes`: tetto della cache degli asset, sfoltita prima di tutto.
+pub fn start(link: Option<String>, cache_bytes: u64) {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -123,7 +125,7 @@ pub fn start(link: Option<String>) {
         let _ = tx.send(NetEvent::Link(l));
     }
     rt.spawn(async move {
-        if let Err(e) = run(tx.clone()).await {
+        if let Err(e) = run(tx.clone(), cache_bytes).await {
             let _ = tx.send(NetEvent::Failed(e));
         }
     });
@@ -141,39 +143,43 @@ pub fn events() -> impl Stream<Item = Carrier> {
     .boxed()
 }
 
-async fn run(tx: mpsc::UnboundedSender<NetEvent>) -> Result<(), String> {
-    let status = |s: &str| {
-        let _ = tx.send(NetEvent::Status(s.into()));
+async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<(), String> {
+    let status = |step: u8, s: &str| {
+        let _ = tx.send(NetEvent::Status(step, s.into()));
     };
     // la GUI non ha un terminale per numero e codice: l'accesso si fa una
     // volta con `rtete`, che salva credenziali e sessione
     let creds = tg::load_credentials()
         .ok_or("nessuna credenziale: avvia prima `rtete` nel terminale per l'accesso")?;
-    loader::prune_cache();
+    loader::prune_cache_to(cache_bytes);
 
-    status("mi collego a Telegram…");
+    status(0, "mi collego a Telegram…");
     let mut wait = 2u64;
     let (_session, client, updates) = loop {
         match tg::connect(&creds).await.map_err(|e| e.to_string()) {
-            Ok((session, client, updates)) => match client.is_authorized().await {
-                Ok(true) => break (session, client, updates),
-                Ok(false) => {
-                    return Err(
-                        "sessione non autorizzata: accedi una volta con `rtete` nel terminale"
-                            .into(),
-                    )
+            Ok((session, client, updates)) => {
+                status(1, "verifico l'account…");
+                let authorized = client.is_authorized().await;
+                match authorized {
+                    Ok(true) => break (session, client, updates),
+                    Ok(false) => {
+                        return Err(
+                            "sessione non autorizzata: accedi una volta con `rtete` nel terminale"
+                                .into(),
+                        )
+                    }
+                    Err(e) if wait <= 16 => status(0, &format!("rete non pronta ({e}), ritento…")),
+                    Err(e) => return Err(e.to_string()),
                 }
-                Err(e) if wait <= 16 => status(&format!("rete non pronta ({e}), ritento…")),
-                Err(e) => return Err(e.to_string()),
-            },
-            Err(e) if wait <= 16 => status(&format!("rete non pronta ({e}), ritento…")),
+            }
+            Err(e) if wait <= 16 => status(0, &format!("rete non pronta ({e}), ritento…")),
             Err(e) => return Err(e.to_string()),
         }
         tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
         wait *= 2;
     };
 
-    status("carico le conversazioni…");
+    status(2, "carico le conversazioni…");
     let mut contacts = tg::load_dialogs(&client).await.map_err(|e| e.to_string())?;
     app::pinned_first(&mut contacts);
     let me = tg::own_name(&client).await;

@@ -42,6 +42,11 @@ Click sul nome in alto (o ⓘ) apre la scheda della chat: bio, username,
 membri, media/file/link/musica/vocali condivisi, blocco dell'utente ed
 eliminazione della chat (o uscita dal gruppo), sempre con un popup di
 conferma. I non letti si aggiornano anche se leggi da un altro dispositivo.
+⚙ apre le impostazioni divise come in Telegram: account (nome, username,
+bio, foto profilo), aspetto, notifiche, immagini e media (download
+automatico, miniature, misura delle foto), dati e archiviazione (spazio
+usato, svuota cache, tetto della cache), dispositivi (sessioni attive da
+chiudere) e link.
 Disegna in software (tiny-skia, ~75 MB di RAM); `ICED_BACKEND=wgpu` usa
 la GPU (~105 MB).
 

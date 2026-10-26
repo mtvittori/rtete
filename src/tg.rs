@@ -1433,6 +1433,154 @@ async fn clear_history(client: &Client, peer_ref: ChatRef, revoke: bool) -> Resu
     }
 }
 
+/// Il mio profilo, per le impostazioni.
+#[derive(Clone, Debug, Default)]
+pub struct MyProfile {
+    pub first: String,
+    pub last: String,
+    pub username: String,
+    pub phone: String,
+    pub about: String,
+    /// foto profilo piccola già in cache
+    pub photo: Option<PathBuf>,
+}
+
+/// Legge il mio profilo (nome, username, telefono, bio, foto).
+pub async fn my_profile(client: &Client) -> Result<MyProfile, String> {
+    let me = client.get_me().await.map_err(|e| e.to_string())?;
+    let tl::enums::users::UserFull::Full(full) = client
+        .invoke(&tl::functions::users::GetFullUser { id: tl::enums::InputUser::UserSelf })
+        .await
+        .map_err(|e| e.to_string())?;
+    let tl::enums::UserFull::Full(f) = full.full_user;
+    let photo = match (me.photo().map(|p| p.photo_id), me.to_ref().await.ok().flatten()) {
+        (Some(id), Some(r)) => download_avatar(client, r, id).await.ok(),
+        _ => None,
+    };
+    Ok(MyProfile {
+        first: me.first_name().unwrap_or_default().to_string(),
+        last: me.last_name().unwrap_or_default().to_string(),
+        username: me.username().unwrap_or_default().to_string(),
+        phone: me.phone().filter(|p| !p.is_empty()).map(|p| format!("+{p}")).unwrap_or_default(),
+        about: f.about.unwrap_or_default(),
+        photo,
+    })
+}
+
+/// Salva nome, cognome e bio; lo username solo se è cambiato (`old_username`).
+pub async fn save_profile(client: &Client, p: &MyProfile, old_username: &str) -> Result<(), String> {
+    client
+        .invoke(&tl::functions::account::UpdateProfile {
+            first_name: Some(p.first.trim().to_string()),
+            last_name: Some(p.last.trim().to_string()),
+            about: Some(p.about.trim().to_string()),
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    let username = p.username.trim().trim_start_matches('@');
+    if username != old_username {
+        client
+            .invoke(&tl::functions::account::UpdateUsername { username: username.to_string() })
+            .await
+            .map_err(|e| match e.to_string() {
+                s if s.contains("USERNAME_OCCUPIED") => "username già in uso".to_string(),
+                s if s.contains("USERNAME_INVALID") => {
+                    "username non valido (5-32 caratteri: lettere, cifre, _)".to_string()
+                }
+                s => s,
+            })?;
+    }
+    Ok(())
+}
+
+/// Carica un'immagine come nuova foto profilo.
+pub async fn set_profile_photo(client: &Client, path: &Path) -> Result<(), String> {
+    let uploaded = client.upload_file(path).await.map_err(|e| format!("upload: {e}"))?;
+    client
+        .invoke(&tl::functions::photos::UploadProfilePhoto {
+            fallback: false,
+            bot: None,
+            file: Some(uploaded.raw),
+            video: None,
+            video_start_ts: None,
+            video_emoji_markup: None,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Una sessione attiva dell'account (un dispositivo collegato).
+#[derive(Clone, Debug)]
+pub struct Session {
+    pub hash: i64,
+    pub current: bool,
+    pub device: String,
+    pub app: String,
+    pub place: String,
+    pub ip: String,
+    /// ultima attività, secondi Unix
+    pub active: i64,
+}
+
+/// I dispositivi collegati all'account: prima questo, poi i più recenti.
+pub async fn sessions(client: &Client) -> Result<Vec<Session>, String> {
+    let tl::enums::account::Authorizations::Authorizations(list) = client
+        .invoke(&tl::functions::account::GetAuthorizations {})
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut out: Vec<Session> = list
+        .authorizations
+        .into_iter()
+        .map(|a| {
+            let tl::enums::Authorization::Authorization(a) = a;
+            let device = [a.device_model.as_str(), a.platform.as_str(), a.system_version.as_str()]
+                .iter()
+                .filter(|s| !s.is_empty())
+                .copied()
+                .collect::<Vec<_>>()
+                .join(" · ");
+            let place = [a.region.as_str(), a.country.as_str()]
+                .iter()
+                .filter(|s| !s.is_empty())
+                .copied()
+                .collect::<Vec<_>>()
+                .join(", ");
+            Session {
+                hash: a.hash,
+                current: a.current,
+                device,
+                app: format!("{} {}", a.app_name, a.app_version).trim().to_string(),
+                place,
+                ip: a.ip,
+                active: a.date_active as i64,
+            }
+        })
+        .collect();
+    out.sort_by_key(|s| (!s.current, -s.active));
+    Ok(out)
+}
+
+/// Chiude una sessione (`Some(hash)`) o tutte le altre (`None`).
+pub async fn end_session(client: &Client, hash: Option<i64>) -> Result<(), String> {
+    match hash {
+        Some(hash) => client
+            .invoke(&tl::functions::account::ResetAuthorization { hash })
+            .await
+            .map(drop),
+        None => client
+            .invoke(&tl::functions::auth::ResetAuthorizations {})
+            .await
+            .map(drop),
+    }
+    .map_err(|e| match e.to_string() {
+        s if s.contains("FRESH_RESET_AUTHORISATION_FORBIDDEN") => {
+            "una sessione appena aperta non può chiudere le altre: riprova fra 24 ore".to_string()
+        }
+        s => s,
+    })
+}
+
 /// Un colpo da ricerca: id, data, autore e testo potentemente tagsliato.
 pub struct SearchHit {
     pub outgoing: bool,

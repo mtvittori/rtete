@@ -130,6 +130,19 @@ pub enum Request {
         peer: PeerId,
         revoke: bool,
     },
+    /// il mio profilo (impostazioni)
+    Profile,
+    /// salva nome, bio e username (`old_username`: quello di prima)
+    SaveProfile {
+        profile: tg::MyProfile,
+        old_username: String,
+    },
+    /// nuova foto profilo da un file
+    ProfilePhoto(PathBuf),
+    /// i dispositivi collegati
+    Sessions,
+    /// chiude una sessione, o tutte le altre con `None`
+    EndSession(Option<i64>),
 }
 
 /// Risposte dei worker: un solo canale verso il ciclo; ogni variante ha
@@ -184,6 +197,11 @@ pub enum Response {
         peer: PeerId,
         res: Result<(), String>,
     },
+    Profile(Result<tg::MyProfile, String>),
+    /// profilo o foto salvati
+    ProfileSaved(Result<(), String>),
+    Sessions(Result<Vec<tg::Session>, String>),
+    SessionEnded(Result<Option<i64>, String>),
     /// il probe wl-clipboard ha girato a thread fuori dal ciclo eventi
     Clipboard(ClipboardHit),
 }

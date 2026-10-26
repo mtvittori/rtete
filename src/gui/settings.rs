@@ -24,7 +24,22 @@ pub struct Settings {
     pub notify: bool,
     /// il testo del messaggio nella notifica (altrimenti solo «nuovo messaggio»)
     pub notify_text: bool,
+    /// anteprime delle foto scaricate da sole (altrimenti al click)
+    pub auto_photos: bool,
+    /// miniature dei video
+    pub video_thumbs: bool,
+    /// foto profilo nella lista chat
+    pub avatars: bool,
+    /// lato delle foto in chat, in punti
+    pub photo_px: u16,
+    /// tetto della cache di foto e sticker, in MB (sfoltita all'avvio)
+    pub cache_mb: u32,
 }
+
+/// le misure delle foto in chat proposte nelle impostazioni
+pub const PHOTO_SIZES: [(u16, &str); 3] = [(220, "Piccole"), (320, "Medie"), (440, "Grandi")];
+/// i tetti della cache proposti nelle impostazioni (MB)
+pub const CACHE_LIMITS: [u32; 4] = [32, 128, 512, 2048];
 
 impl Default for Settings {
     fn default() -> Self {
@@ -35,6 +50,11 @@ impl Default for Settings {
             gpu: true,
             notify: true,
             notify_text: true,
+            auto_photos: true,
+            video_thumbs: true,
+            avatars: true,
+            photo_px: 320,
+            cache_mb: 32,
         }
     }
 }
@@ -47,6 +67,15 @@ fn path() -> PathBuf {
 }
 
 impl Settings {
+    /// cosa scaricare da solo, per lo stato condiviso
+    pub fn media_prefs(&self) -> rtete::app::MediaPrefs {
+        rtete::app::MediaPrefs {
+            photos: self.auto_photos,
+            video_thumbs: self.video_thumbs,
+            avatars: self.avatars,
+        }
+    }
+
     pub fn load() -> Self {
         let mut s = Self::default();
         let Ok(raw) = std::fs::read_to_string(path()) else {
@@ -65,6 +94,19 @@ impl Settings {
                 ("gpu", v) => s.gpu = v == "true",
                 ("notifiche", v) => s.notify = v == "true",
                 ("notifiche_testo", v) => s.notify_text = v == "true",
+                ("foto_auto", v) => s.auto_photos = v == "true",
+                ("miniature_video", v) => s.video_thumbs = v == "true",
+                ("foto_profilo", v) => s.avatars = v == "true",
+                ("misura_foto", v) => {
+                    if let Ok(n) = v.parse::<u16>() {
+                        s.photo_px = n.clamp(160, 600);
+                    }
+                }
+                ("cache_mb", v) => {
+                    if let Ok(n) = v.parse::<u32>() {
+                        s.cache_mb = n.clamp(16, 8192);
+                    }
+                }
                 _ => {}
             }
         }
@@ -83,8 +125,18 @@ impl Settings {
         let _ = std::fs::write(
             p,
             format!(
-                "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n",
-                self.scale, self.links_in_app, self.gpu, self.notify, self.notify_text
+                "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n\
+                 foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\n",
+                self.scale,
+                self.links_in_app,
+                self.gpu,
+                self.notify,
+                self.notify_text,
+                self.auto_photos,
+                self.video_thumbs,
+                self.avatars,
+                self.photo_px,
+                self.cache_mb
             ),
         );
     }

@@ -8,6 +8,28 @@ use std::path::{Path, PathBuf};
 
 use crate::tg::media_dir;
 
+/// Spazio occupato dai file (non ricorsivo) di una cartella: (file, byte).
+pub fn dir_usage(dir: &Path) -> (usize, u64) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return (0, 0);
+    };
+    rd.filter_map(|e| e.ok()?.metadata().ok())
+        .filter(|m| m.is_file())
+        .fold((0, 0), |(n, b), m| (n + 1, b + m.len()))
+}
+
+/// Svuota i file (non le sottocartelle) di una cartella della cache.
+pub fn clear_dir(dir: &Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        if e.metadata().is_ok_and(|m| m.is_file()) {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
 /// Cache path for a given media key.
 pub fn cache_png(key: &str) -> PathBuf {
     media_dir().join(format!("{key}.png"))
@@ -25,6 +47,13 @@ const CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
 /// restano al massimo ~200 file e ~32 MiB. Da chiamare all'avvio, prima che
 /// il terminale riceva qualunque immagine.
 pub fn prune_cache() {
+    prune_cache_to(CACHE_MAX_BYTES);
+}
+
+/// Come `prune_cache`, con un tetto scelto (la GUI lo legge dalle
+/// impostazioni); i file ammessi crescono col tetto (~64 kB l'uno).
+pub fn prune_cache_to(max_bytes: u64) {
+    let max_files = ((max_bytes / (64 * 1024)) as usize).max(CACHE_MAX_FILES);
     let Ok(rd) = std::fs::read_dir(media_dir()) else {
         return;
     };
@@ -42,7 +71,7 @@ pub fn prune_cache() {
     for (_, len, path) in files {
         n += 1;
         bytes += len;
-        if n > CACHE_MAX_FILES || bytes > CACHE_MAX_BYTES {
+        if n > max_files || bytes > max_bytes {
             let _ = std::fs::remove_file(path);
         }
     }

@@ -59,6 +59,46 @@ fn retract(row: &mut tg::HistoryRow, mine_on: impl Fn(&tg::ReactionItem) -> bool
     }
 }
 
+/// Cosa scaricare da solo: la GUI lo sceglie nelle impostazioni, la TUI
+/// usa i valori predefiniti (tutto).
+#[derive(Clone, Copy, Debug)]
+pub struct MediaPrefs {
+    /// anteprime delle foto e delle GIF in chat
+    pub photos: bool,
+    /// miniature dei video
+    pub video_thumbs: bool,
+    /// foto profilo nella lista chat
+    pub avatars: bool,
+}
+
+impl Default for MediaPrefs {
+    fn default() -> Self {
+        Self { photos: true, video_thumbs: true, avatars: true }
+    }
+}
+
+impl MediaPrefs {
+    /// l'anteprima di questa riga parte da sola?
+    pub fn auto(&self, kind: &tg::RowKind) -> bool {
+        match kind {
+            tg::RowKind::Sticker { animated, .. } => !animated,
+            tg::RowKind::Photo { .. } => self.photos,
+            tg::RowKind::Video { .. } => self.video_thumbs,
+            _ => false,
+        }
+    }
+}
+
+/// il media di cui si fa l'anteprima (sticker, foto, video)
+pub fn preview_media(kind: &tg::RowKind) -> Option<&Media> {
+    match kind {
+        tg::RowKind::Sticker { media, .. }
+        | tg::RowKind::Photo { media, .. }
+        | tg::RowKind::Video { media, .. } => Some(media),
+        _ => None,
+    }
+}
+
 #[derive(Default)]
 pub struct App {
     pub contacts: Vec<tg::DialogInfo>,
@@ -156,6 +196,10 @@ pub struct App {
     pub shared: HashMap<(PeerId, tg::SharedTab), Vec<tg::SharedItem>>,
     /// schede condivise già chieste (in corso o arrivate)
     pub shared_asked: HashSet<(PeerId, tg::SharedTab)>,
+    pub media_prefs: MediaPrefs,
+    /// il mio profilo e i dispositivi collegati (impostazioni)
+    pub profile: Option<tg::MyProfile>,
+    pub sessions: Option<Vec<tg::Session>>,
     pub quit: bool,
 }
 
@@ -233,6 +277,9 @@ impl App {
 
     /// Chiede le foto profilo che mancano (una volta per foto).
     pub fn request_avatars(&mut self, req: &mpsc::UnboundedSender<Request>) {
+        if !self.media_prefs.avatars {
+            return;
+        }
         for d in &self.contacts {
             let Some(id) = d.photo_id else { continue };
             if self.avatars.contains_key(&id) || !self.avatar_asked.insert(id) {
@@ -566,22 +613,13 @@ impl App {
     pub fn refresh_preview_queue(&mut self, req: &mpsc::UnboundedSender<Request>) {
         let mut medias: Vec<Media> = Vec::new();
         if let Some(ring) = self.open_history() {
-            medias.extend(ring.iter().filter_map(|r| match &r.kind {
-                tg::RowKind::Sticker {
-                    media, animated, ..
-                } => {
-                    // tgs/webm non convertibili: solo etichetta
-                    if *animated {
-                        None
-                    } else {
-                        Some(media.clone())
-                    }
-                }
-                tg::RowKind::Photo { media, .. } | tg::RowKind::Video { media, .. } => {
-                    Some(media.clone())
-                }
-                _ => None,
-            }));
+            // tgs/webm non convertibili; foto e video secondo le preferenze
+            let prefs = self.media_prefs;
+            medias.extend(
+                ring.iter()
+                    .filter(|r| prefs.auto(&r.kind))
+                    .filter_map(|r| preview_media(&r.kind).cloned()),
+            );
         }
         if self.show_sticker && self.set_level {
             if let Some(docs) = self.open_set.and_then(|id| self.set_docs.get(&id)).cloned() {
