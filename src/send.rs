@@ -110,6 +110,26 @@ pub enum Request {
     Dialogs,
     /// foto profilo piccola di una chat
     Avatar { peer_ref: PeerRefT, photo_id: i64 },
+    /// scheda della chat (bio, membri, bloccato)
+    Info { peer_ref: PeerRefT, peer: PeerId },
+    /// contenuti condivisi di un tipo (media, file, link…)
+    Shared {
+        peer_ref: PeerRefT,
+        peer: PeerId,
+        tab: tg::SharedTab,
+    },
+    /// blocca (true) o sblocca un utente
+    Block {
+        peer_ref: PeerRefT,
+        peer: PeerId,
+        blocked: bool,
+    },
+    /// elimina la chat (o esce dal gruppo); `revoke`: anche per l'altro
+    DeleteChat {
+        peer_ref: PeerRefT,
+        peer: PeerId,
+        revoke: bool,
+    },
 }
 
 /// Risposte dei worker: un solo canale verso il ciclo; ogni variante ha
@@ -147,6 +167,23 @@ pub enum Response {
     Forwarded(Result<String, String>),
     Dialogs(Result<Vec<tg::DialogInfo>, String>),
     Avatar { photo_id: i64, path: Result<PathBuf, String> },
+    Info {
+        peer: PeerId,
+        info: Result<tg::PeerInfo, String>,
+    },
+    Shared {
+        peer: PeerId,
+        tab: tg::SharedTab,
+        items: Result<Vec<tg::SharedItem>, String>,
+    },
+    Blocked {
+        peer: PeerId,
+        res: Result<bool, String>,
+    },
+    ChatDeleted {
+        peer: PeerId,
+        res: Result<(), String>,
+    },
     /// il probe wl-clipboard ha girato a thread fuori dal ciclo eventi
     Clipboard(ClipboardHit),
 }

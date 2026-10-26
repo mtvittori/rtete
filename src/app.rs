@@ -17,6 +17,8 @@ pub const MAX_HISTORY: usize = 60;
 /// messaggi per pagina nello scorrimento all'indietro
 pub const OLDER_PAGE: usize = 60;
 pub const RING_CAP: usize = 500;
+/// elementi per scheda nei contenuti condivisi di una chat
+pub const SHARED_PAGE: usize = 60;
 /// Colonne della griglia sticker nel pannello.
 pub const STICKER_COLS: usize = 4;
 
@@ -148,6 +150,12 @@ pub struct App {
     pub quoted_busy: HashSet<PeerId>,
     /// chat la cui ultima richiesta `Quoted` è fallita: prossimo tentativo
     pub quoted_failed: HashMap<PeerId, (Instant, u32)>,
+    /// schede delle chat (bio, membri, bloccato), chieste aprendo le info
+    pub peer_info: HashMap<PeerId, tg::PeerInfo>,
+    /// contenuti condivisi per chat e tipo (media, file, link…)
+    pub shared: HashMap<(PeerId, tg::SharedTab), Vec<tg::SharedItem>>,
+    /// schede condivise già chieste (in corso o arrivate)
+    pub shared_asked: HashSet<(PeerId, tg::SharedTab)>,
     pub quit: bool,
 }
 
@@ -528,6 +536,31 @@ impl App {
         }
         self.quoted_busy.insert(peer);
         let _ = req.send(Request::Quoted { peer_ref, peer, ids });
+    }
+
+    /// Toglie una chat eliminata (o da cui si è usciti) da lista e memoria.
+    pub fn forget_chat(&mut self, peer: PeerId) {
+        let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
+        self.contacts.retain(|c| !tg::same_peer(c.peer_id, peer));
+        self.contact_cursor = sel
+            .and_then(|s| self.contacts.iter().position(|c| tg::same_peer(c.peer_id, s)))
+            .unwrap_or(0);
+        self.histories.remove(&peer);
+        self.quoted.remove(&peer);
+        self.older_done.remove(&peer);
+        self.typing.remove(&peer);
+        self.peer_info.remove(&peer);
+        self.shared.retain(|(p, _), _| *p != peer);
+        self.shared_asked.retain(|(p, _)| *p != peer);
+        if self.open == Some(peer) {
+            self.open = None;
+            self.msg_cursor = None;
+            self.editing = None;
+            self.replying = None;
+            self.compose.clear();
+            self.disarm_delete();
+            self.discard_pending_photo();
+        }
     }
 
     pub fn refresh_preview_queue(&mut self, req: &mpsc::UnboundedSender<Request>) {

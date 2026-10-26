@@ -17,6 +17,7 @@ use rtete::clipboard;
 use rtete::send::{Request, SendJob, SendKind};
 use rtete::sync::{handle_response, handle_update};
 use rtete::tg;
+use grammers_client::tl;
 
 use crate::net::{Carrier, Link, NetEvent};
 use crate::settings::{Settings, ThemeChoice};
@@ -79,6 +80,24 @@ pub enum Msg {
     View(i32),
     Notify(bool),
     NotifyText(bool),
+    /// apre o chiude la scheda della chat (info, media, link…)
+    ToggleInfo,
+    InfoTab(tg::SharedTab),
+    /// chiede conferma per bloccare (true) o sbloccare l'utente
+    AskBlock(bool),
+    /// chiede conferma per eliminare la chat (o uscire dal gruppo)
+    AskDeleteChat,
+    /// «elimina anche per l'altro» nella conferma
+    Revoke(bool),
+    /// il pulsante di conferma del popup
+    ConfirmYes,
+}
+
+/// L'azione in attesa di conferma nel popup.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Confirm {
+    Block(bool),
+    DeleteChat,
 }
 
 pub enum Phase {
@@ -120,6 +139,13 @@ pub struct Gui {
     /// un'immagine o dei file, il testo incollato da iced (un percorso, o
     /// niente) si annulla
     paste_undo: Option<String>,
+    /// scheda della chat aperta accanto (o al posto) della cronologia
+    pub show_info: bool,
+    pub info_tab: tg::SharedTab,
+    /// popup di conferma aperto
+    pub confirm: Option<Confirm>,
+    /// eliminazione della chat privata anche per l'altro
+    pub revoke: bool,
 }
 
 fn main() -> iced::Result {
@@ -184,6 +210,10 @@ fn boot() -> Gui {
         focused: true,
         viewer: None,
         paste_undo: None,
+        show_info: false,
+        info_tab: tg::SharedTab::Media,
+        confirm: None,
+        revoke: false,
         app: App::default(),
         phase: Phase::Connecting("avvio…".into()),
         link: None,
@@ -632,6 +662,51 @@ impl Gui {
                 }
                 Task::none()
             }
+            Msg::ToggleInfo => {
+                self.show_info = !self.show_info && self.app.open.is_some();
+                if self.show_info {
+                    self.show_settings = false;
+                    self.load_info(true);
+                }
+                Task::none()
+            }
+            Msg::InfoTab(tab) => {
+                self.info_tab = tab;
+                self.load_info(false);
+                Task::none()
+            }
+            Msg::AskBlock(on) => {
+                self.confirm = Some(Confirm::Block(on));
+                Task::none()
+            }
+            Msg::AskDeleteChat => {
+                self.revoke = false;
+                self.confirm = Some(Confirm::DeleteChat);
+                Task::none()
+            }
+            Msg::Revoke(on) => {
+                self.revoke = on;
+                Task::none()
+            }
+            Msg::ConfirmYes => {
+                let what = self.confirm.take();
+                let chat = self.app.current_chat().map(|c| (c.peer_ref, c.peer_id));
+                if let (Some(what), Some((peer_ref, peer)), Some(req)) = (what, chat, self.req()) {
+                    match what {
+                        Confirm::Block(blocked) => {
+                            let _ = req.send(Request::Block { peer_ref, peer, blocked });
+                            self.app.status = if blocked { "blocco l'utente…" } else { "sblocco l'utente…" }.into();
+                        }
+                        Confirm::DeleteChat => {
+                            let _ = req.send(Request::DeleteChat { peer_ref, peer, revoke: self.revoke });
+                            self.app.status = "elimino la chat…".into();
+                            self.show_info = false;
+                            notify::dismiss(peer);
+                        }
+                    }
+                }
+                Task::none()
+            }
             Msg::Key(keyboard::Event::KeyPressed { key, .. }) => {
                 if key == keyboard::Key::Named(keyboard::key::Named::Escape) {
                     self.cancel();
@@ -689,11 +764,18 @@ impl Gui {
         if self.viewer.take().is_some() {
             return;
         }
+        if self.confirm.take().is_some() {
+            return;
+        }
         if self.forwarding.take().is_some() {
             return;
         }
         if self.show_settings {
             self.show_settings = false;
+            return;
+        }
+        if self.show_info {
+            self.show_info = false;
             return;
         }
         let a = &mut self.app;
@@ -713,11 +795,38 @@ impl Gui {
         a.status.clear();
     }
 
+    /// La riga `id` della chat aperta: dalla cronologia o dai contenuti
+    /// condivisi della scheda (media vecchi non ancora caricati).
     fn row_media<T>(&self, id: i32, f: impl Fn(&tg::RowKind) -> Option<T>) -> Option<T> {
+        let peer = self.app.open?;
         self.app
             .open_history()
             .and_then(|ring| ring.iter().find(|r| r.id == id))
+            .or_else(|| {
+                self.app
+                    .shared
+                    .iter()
+                    .filter(|((p, _), _)| *p == peer)
+                    .flat_map(|(_, items)| items.iter().map(|it| &it.row))
+                    .find(|r| r.id == id)
+            })
             .and_then(|r| f(&r.kind))
+    }
+
+    /// Chiede la scheda della chat aperta e i contenuti della scheda scelta;
+    /// `fresh`: all'apertura si rileggono anche quelli già in memoria.
+    fn load_info(&mut self, fresh: bool) {
+        let (Some(chat), Some(req)) = (self.app.current_chat(), self.req()) else {
+            return;
+        };
+        let (peer_ref, peer) = (chat.peer_ref, chat.peer_id);
+        if fresh {
+            let _ = req.send(Request::Info { peer_ref, peer });
+            self.app.shared_asked.retain(|(p, _)| *p != peer);
+        }
+        if self.app.shared_asked.insert((peer, self.info_tab)) {
+            let _ = req.send(Request::Shared { peer_ref, peer, tab: self.info_tab });
+        }
     }
 
     /// dopo ogni messaggio: pagine vecchie, citazioni, anteprime da convertire
@@ -785,12 +894,32 @@ impl Gui {
                     }
                     _ => None,
                 };
+                // letta da un'altra sessione: la notifica non serve più
+                let read_elsewhere = match &u {
+                    grammers_client::update::Update::Raw(r) => match &r.raw {
+                        tl::enums::Update::ReadHistoryInbox(x) => Some(PeerId::from(x.peer.clone())),
+                        tl::enums::Update::ReadChannelInbox(x) => PeerId::channel(x.channel_id),
+                        _ => None,
+                    },
+                    _ => None,
+                };
                 // handle_update aspetta la rete solo per una chat mai vista
                 // (dialog_from_message); il contesto tokio serve agli spawn
                 let _rt = net::RT.get().map(|rt| rt.enter());
                 iced::futures::executor::block_on(handle_update(&mut self.app, &client, u));
                 if let Some((peer, from)) = incoming {
                     self.notify(peer, from);
+                }
+                if let Some(peer) = read_elsewhere {
+                    let read = self
+                        .app
+                        .contacts
+                        .iter()
+                        .find(|d| tg::same_peer(d.peer_id, peer))
+                        .is_some_and(|d| d.unread == 0);
+                    if read {
+                        notify::dismiss(peer);
+                    }
                 }
                 Task::none()
             }
@@ -871,6 +1000,10 @@ impl Gui {
         a.discard_pending_photo();
         a.compose.clear();
         a.show_sticker = false;
+        self.confirm = None;
+        if self.show_info {
+            self.load_info(true);
+        }
         Task::batch([self.snap_bottom(), operation::focus(COMPOSE)])
     }
 

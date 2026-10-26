@@ -19,6 +19,15 @@ pub fn mark_read(client: &grammers_client::Client, peer_ref: tg::ChatRef) {
     });
 }
 
+/// La chat è stata letta altrove fino a un certo punto: restano `still`
+/// messaggi non letti.
+fn read_inbox(app: &mut App, chat: Option<PeerId>, still: i32) {
+    let Some(chat) = chat else { return };
+    if let Some(d) = app.contacts.iter_mut().find(|d| tg::same_peer(d.peer_id, chat)) {
+        d.unread = still.max(0) as usize;
+    }
+}
+
 /// «sta scrivendo»: Telegram lo ripete ogni ~5s finché dura, quindi
 /// scade da solo dopo 6s; nei gruppi col nome di chi scrive.
 fn typing(
@@ -155,6 +164,18 @@ pub async fn handle_update(
                 tl::enums::Update::MessageReactions(u) => {
                     let items = tg::reactions_from(&u.reactions);
                     app.apply_reactions(PeerId::from(u.peer), u.msg_id, items);
+                }
+                // letti da un'altra sessione (telefono, web): il badge segue
+                tl::enums::Update::ReadHistoryInbox(u) if u.top_msg_id.is_none() => {
+                    read_inbox(app, Some(PeerId::from(u.peer)), u.still_unread_count)
+                }
+                tl::enums::Update::ReadChannelInbox(u) => {
+                    read_inbox(app, PeerId::channel(u.channel_id), u.still_unread_count)
+                }
+                tl::enums::Update::PeerBlocked(u) => {
+                    if let Some(info) = app.peer_info.get_mut(&PeerId::from(u.peer_id)) {
+                        info.blocked = u.blocked;
+                    }
                 }
                 tl::enums::Update::ReadHistoryOutbox(u) => {
                     read(app, Some(PeerId::from(u.peer)), u.max_id)
@@ -396,6 +417,48 @@ pub async fn handle_response(
         Response::Forwarded(res) => match res {
             Ok(to) => app.status = format!("inoltrato a {to}"),
             Err(err) => app.status = format!("inoltro: {err}"),
+        },
+        Response::Info { peer, info } => match info {
+            Ok(info) => {
+                app.peer_info.insert(peer, info);
+            }
+            Err(err) => app.status = format!("info: {err}"),
+        },
+        Response::Shared { peer, tab, items } => match items {
+            Ok(items) => {
+                let medias: Vec<Media> = items
+                    .iter()
+                    .filter_map(|it| match &it.row.kind {
+                        tg::RowKind::Photo { media, .. } | tg::RowKind::Video { media, .. } => {
+                            Some(media.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                app.ensure_previews(req, medias.iter());
+                app.shared.insert((peer, tab), items);
+            }
+            Err(err) => {
+                // si potrà richiedere riaprendo la scheda
+                app.shared_asked.remove(&(peer, tab));
+                app.status = format!("{}: {err}", tab.label().to_lowercase());
+            }
+        },
+        Response::Blocked { peer, res } => match res {
+            Ok(blocked) => {
+                if let Some(info) = app.peer_info.get_mut(&peer) {
+                    info.blocked = blocked;
+                }
+                app.status = if blocked { "utente bloccato" } else { "utente sbloccato" }.into();
+            }
+            Err(err) => app.status = format!("blocco: {err}"),
+        },
+        Response::ChatDeleted { peer, res } => match res {
+            Ok(()) => {
+                app.forget_chat(peer);
+                app.status = "chat eliminata".into();
+            }
+            Err(err) => app.status = format!("eliminazione chat: {err}"),
         },
         Response::Dialogs(res) => match res {
             Ok(mut list) => {

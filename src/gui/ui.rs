@@ -17,7 +17,7 @@ use rtete::tg::{self, HistoryRow, RowKind};
 
 use crate::style;
 use crate::settings::ThemeChoice;
-use crate::{Gui, Msg, Phase, COMPOSE, FWD_SEARCH, HISTORY};
+use crate::{Confirm, Gui, Msg, Phase, COMPOSE, FWD_SEARCH, HISTORY};
 
 const BOLD: Font = Font {
     weight: Weight::Bold,
@@ -33,6 +33,12 @@ const SIDEBAR_W: f32 = 310.0;
 const COMPACT_W: f32 = 76.0;
 /// sotto questa larghezza la lista chat mostra solo gli avatar
 const COMPACT_BELOW: f32 = 760.0;
+/// larghezza della scheda della chat accanto alla cronologia
+const INFO_W: f32 = 360.0;
+/// sotto questa larghezza la scheda prende il posto della cronologia
+const INFO_SIDE_BELOW: f32 = 1050.0;
+/// lato delle miniature nella griglia dei media condivisi
+const SHARED_PX: f32 = 104.0;
 
 /// Taglia con «…» a circa `max` caratteri (iced non ha l'ellissi).
 fn ellipsize(s: &str, max: usize) -> String {
@@ -54,10 +60,15 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
             text(e.as_str()).color(style::p().danger),
         ]),
         Phase::Ready => iced::widget::responsive(move |size| {
+            let info = g.show_info && g.app.current_chat().is_some();
             let right = if g.forwarding.is_some() {
                 forward_picker(g)
             } else if g.show_settings {
                 settings(g)
+            } else if info && size.width < INFO_SIDE_BELOW {
+                info_panel(g, false)
+            } else if info {
+                row![chat(g), info_panel(g, true)].into()
             } else {
                 chat(g)
             };
@@ -72,10 +83,14 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
                 container(pane.push(right)).width(Fill).height(Fill)
             ]
             .into();
-            match &g.viewer {
-                Some(path) => iced::widget::stack![main, photo_viewer(path)].into(),
-                None => main,
+            let mut layers = iced::widget::Stack::new().push(main);
+            if let Some(what) = g.confirm {
+                layers = layers.push(confirm_dialog(g, what));
             }
+            if let Some(path) = &g.viewer {
+                layers = layers.push(photo_viewer(path));
+            }
+            layers.into()
         })
         .into(),
     }
@@ -334,7 +349,8 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
             .style(style::fill(style::p().bg))
             .into();
     };
-    let header = container(
+    // click sul nome: la scheda con info, media, link, blocco
+    let who = mouse_area(
         row![
             avatar(app, chat, 38.0),
             column![
@@ -343,6 +359,18 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
             ]
         ]
         .spacing(12)
+        .align_y(Center),
+    )
+    .on_press(Msg::ToggleInfo)
+    .interaction(iced::mouse::Interaction::Pointer);
+    let header = container(
+        row![
+            container(who).width(Fill),
+            button(text("ⓘ").size(18))
+                .on_press(Msg::ToggleInfo)
+                .padding([4, 10])
+                .style(style::flat(g.show_info)),
+        ]
         .align_y(Center),
     )
     .padding([10, 16])
@@ -375,9 +403,16 @@ fn subtitle<'a>(g: &Gui, chat: &tg::DialogInfo) -> Element<'a, Msg> {
         return text(format!("{t}{}", dots(g))).size(12).color(p.link).into();
     }
     let now = jiff::Timestamp::now().as_second();
+    let members = g.app.peer_info.get(&chat.peer_id).and_then(|i| i.members);
     let line = match chat.seen {
-        _ if chat.broadcast => "canale".to_string(),
-        _ if chat.is_group => "gruppo".to_string(),
+        _ if chat.broadcast => match members {
+            Some(n) => format!("canale · {n} iscritti"),
+            None => "canale".to_string(),
+        },
+        _ if chat.is_group => match members {
+            Some(n) => format!("gruppo · {n} membri"),
+            None => "gruppo".to_string(),
+        },
         s if s.online(now) => return text("online").size(12).color(p.link).into(),
         tg::Seen::Online(t) | tg::Seen::Offline(t) => match local(g, t) {
             Some(z) if z.date() == jiff::Zoned::now().date() => {
@@ -1126,6 +1161,353 @@ fn settings(g: &Gui) -> Element<'_, Msg> {
         .height(Fill)
         .style(style::fill(p.bg))
         .into()
+}
+
+// ------------------------------------------------------ scheda della chat
+
+/// La scheda della chat aperta: foto, nome, bio/descrizione, contatti,
+/// blocco ed eliminazione, poi media, file, link e audio condivisi.
+/// `side`: accanto alla cronologia (larghezza fissa) o al suo posto.
+fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
+    let app = &g.app;
+    let p = style::p();
+    let Some(chat) = app.current_chat() else {
+        return space().into();
+    };
+    let info = app.peer_info.get(&chat.peer_id);
+    let user = !chat.is_group;
+    let title = if user {
+        "Info utente"
+    } else if chat.broadcast {
+        "Info canale"
+    } else {
+        "Info gruppo"
+    };
+    let top = row![
+        text(title).size(16).font(BOLD).width(Fill),
+        button(text("✕")).on_press(Msg::ToggleInfo).style(style::flat(false)),
+    ]
+    .align_y(Center);
+    let face = column![
+        avatar(app, chat, 96.0),
+        text(chat.name.as_str()).size(20).font(BOLD).align_x(Center),
+        subtitle(g, chat),
+    ]
+    .spacing(6)
+    .align_x(Center)
+    .width(Fill);
+
+    let mut details = Column::new().spacing(12);
+    match info {
+        None => {
+            details = details.push(text("carico le informazioni…").size(12).color(p.muted));
+        }
+        Some(i) => {
+            if let Some(phone) = &i.phone {
+                details = details.push(info_field(text(phone.as_str()).into(), "telefono"));
+            }
+            if let Some(u) = &i.username {
+                let url = format!("https://t.me/{u}");
+                details = details.push(info_field(
+                    button(text(format!("@{u}")).color(p.link))
+                        .on_press(Msg::Link(url))
+                        .padding(0)
+                        .style(|_: &iced::Theme, _| button::Style::default())
+                        .into(),
+                    "username",
+                ));
+            }
+            if !i.about.is_empty() {
+                let label = if user { "bio" } else { "descrizione" };
+                details = details.push(info_field(linked(&i.about), label));
+            }
+            if i.blocked {
+                details = details.push(text("🚫 Hai bloccato questo utente").size(13).color(p.danger));
+            }
+        }
+    }
+
+    // azioni: blocco (solo utenti veri, non i Messaggi salvati) ed eliminazione
+    let act = |label: String, color: iced::Color, m: Msg| {
+        button(text(label).color(color))
+            .on_press(m)
+            .width(Fill)
+            .padding([8, 12])
+            .style(style::flat(false))
+    };
+    let mut acts = Column::new().spacing(2);
+    if let Some(i) = info.filter(|i| user && !i.me) {
+        let (label, m) = if i.blocked {
+            ("✅ Sblocca utente", Msg::AskBlock(false))
+        } else {
+            ("🚫 Blocca utente", Msg::AskBlock(true))
+        };
+        acts = acts.push(act(label.into(), p.text, m));
+    }
+    let del_label = if user {
+        "🗑 Elimina chat"
+    } else if chat.broadcast {
+        "🚪 Abbandona canale"
+    } else {
+        "🚪 Esci dal gruppo"
+    };
+    acts = acts.push(act(del_label.into(), p.danger, Msg::AskDeleteChat));
+
+    let tabs = Row::with_children(tg::SharedTab::ALL.iter().map(|&t| {
+        button(text(t.label()).size(13))
+            .on_press(Msg::InfoTab(t))
+            .padding([4, 10])
+            .style(style::flat(g.info_tab == t))
+            .into()
+    }))
+    .spacing(4)
+    .wrap();
+    let shared: Element<'_, Msg> = match app.shared.get(&(chat.peer_id, g.info_tab)) {
+        None => text("carico…").size(12).color(p.muted).into(),
+        Some(items) if items.is_empty() => {
+            let what = match g.info_tab {
+                tg::SharedTab::Media => "Nessuna foto o video",
+                tg::SharedTab::Files => "Nessun file",
+                tg::SharedTab::Links => "Nessun link",
+                tg::SharedTab::Audio => "Nessun brano",
+                tg::SharedTab::Voice => "Nessun messaggio vocale",
+            };
+            text(what).size(12).color(p.muted).into()
+        }
+        Some(items) => match g.info_tab {
+            tg::SharedTab::Media => shared_grid(app, items),
+            tg::SharedTab::Links => shared_links(g, items),
+            _ => Column::with_children(items.iter().map(|it| shared_row(g, &it.row)))
+                .spacing(4)
+                .into(),
+        },
+    };
+
+    let sep = || container(space()).width(Fill).height(1).style(style::fill(p.selected));
+    let body = column![top, face, details, sep(), acts, sep(), tabs, shared]
+        .spacing(14)
+        .padding(iced::Padding::new(18.0).right(24.0));
+    container(scrollable(body).height(Fill))
+        .width(if side { Length::Fixed(INFO_W) } else { Length::Fill })
+        .height(Fill)
+        .style(style::fill(p.sidebar))
+        .into()
+}
+
+/// un dato della scheda con la sua etichetta sotto, come Telegram
+fn info_field<'a>(value: Element<'a, Msg>, label: &'static str) -> Element<'a, Msg> {
+    column![value, text(label).size(11).color(style::p().muted)]
+        .spacing(2)
+        .into()
+}
+
+/// data breve sotto file e link condivisi
+fn short_date(g: &Gui, secs: i64) -> String {
+    local(g, secs)
+        .map(|z| z.strftime("%d/%m/%y").to_string())
+        .unwrap_or_default()
+}
+
+/// foto e video in una griglia di miniature quadrate (click: visore o player)
+fn shared_grid<'a>(app: &'a App, items: &'a [tg::SharedItem]) -> Element<'a, Msg> {
+    let p = style::p();
+    let mut rows = Column::new().spacing(3);
+    for chunk in items.chunks(3) {
+        let mut line = Row::new().spacing(3);
+        for it in chunk {
+            let r = &it.row;
+            let (media, video) = match &r.kind {
+                RowKind::Photo { media, .. } => (media, false),
+                RowKind::Video { media, .. } => (media, true),
+                _ => continue,
+            };
+            let thumb: Element<'a, Msg> = match app.previews.get(&tg::media_key(media)) {
+                Some(path) => image(image::Handle::from_path(path))
+                    .width(SHARED_PX)
+                    .height(SHARED_PX)
+                    .content_fit(iced::ContentFit::Cover)
+                    .border_radius(4)
+                    .into(),
+                None => container(text(if video { "🎥" } else { "🖼" }).size(28))
+                    .center(SHARED_PX)
+                    .style(style::pill(p.bubble_in))
+                    .into(),
+            };
+            let cell: Element<'a, Msg> = if video {
+                let play = container(text("▶").size(16).color(iced::Color::WHITE))
+                    .padding([4, 9])
+                    .style(style::pill(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
+                iced::widget::stack![thumb, container(play).center(SHARED_PX)].into()
+            } else {
+                thumb
+            };
+            let msg = if video { Msg::Play(r.id) } else { Msg::View(r.id) };
+            line = line.push(
+                mouse_area(cell)
+                    .on_press(msg)
+                    .interaction(iced::mouse::Interaction::Pointer),
+            );
+        }
+        rows = rows.push(line);
+    }
+    rows.into()
+}
+
+/// file, brani e vocali: icona, nome, dettagli e il pulsante giusto
+fn shared_row<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
+    let p = style::p();
+    let when = short_date(g, r.date);
+    let (icon, name, extra, action): (&str, String, String, Option<(&str, Msg)>) = match &r.kind {
+        RowKind::Doc { name, size, .. } => (
+            "📄",
+            name.clone(),
+            size.map(|s| tg::fmt_size(s as f64)).unwrap_or_default(),
+            Some(("Salva", Msg::Save(r.id))),
+        ),
+        RowKind::Audio { voice: true, seconds, .. } => (
+            "🎤",
+            author(&g.app, r).to_string(),
+            tg::fmt_secs(*seconds),
+            Some(("▶", Msg::Play(r.id))),
+        ),
+        RowKind::Audio { name, seconds, .. } => {
+            ("🎵", name.clone(), tg::fmt_secs(*seconds), Some(("▶", Msg::Play(r.id))))
+        }
+        RowKind::Video { round, seconds, .. } => (
+            if *round { "📹" } else { "🎥" },
+            if *round { author(&g.app, r).to_string() } else { "Video".into() },
+            tg::fmt_secs(*seconds),
+            Some(("▶", Msg::Play(r.id))),
+        ),
+        RowKind::Photo { .. } => ("🖼", "Foto".into(), String::new(), Some(("Apri", Msg::View(r.id)))),
+        other => ("💬", other.summary(), String::new(), None),
+    };
+    let sub = [extra, when].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
+    let mut line = row![
+        text(icon).size(22),
+        column![
+            text(ellipsize(&name, 34)).wrapping(text::Wrapping::None),
+            text(sub).size(11).color(p.muted),
+        ]
+        .spacing(2)
+        .width(Fill),
+    ]
+    .spacing(10)
+    .align_y(Center);
+    if let Some((label, m)) = action {
+        line = line.push(button(text(label).size(12)).on_press(m).padding([4, 10]).style(style::primary));
+    }
+    container(line).padding([4, 0]).into()
+}
+
+/// i link condivisi: l'indirizzo cliccabile e il messaggio che lo contiene
+fn shared_links<'a>(g: &'a Gui, items: &'a [tg::SharedItem]) -> Element<'a, Msg> {
+    let p = style::p();
+    let mut col = Column::new().spacing(10);
+    for it in items {
+        let mut entry = Column::new().spacing(2);
+        for url in &it.links {
+            entry = entry.push(
+                button(text(ellipsize(url, 46)).size(13).color(p.link).wrapping(text::Wrapping::None))
+                    .on_press(Msg::Link(url.clone()))
+                    .padding(0)
+                    .style(|_: &iced::Theme, _| button::Style::default()),
+            );
+        }
+        let summary = it.row.kind.summary();
+        let mut sub = short_date(g, it.row.date);
+        if !summary.is_empty() && !it.links.iter().any(|u| summary.trim() == u.as_str()) {
+            sub = format!("{sub} · {}", ellipsize(&summary, 60));
+        }
+        entry = entry.push(text(sub).size(11).color(p.muted));
+        col = col.push(entry);
+    }
+    col.into()
+}
+
+/// Il popup di conferma per blocco ed eliminazione: velo scuro sopra
+/// tutto, Esc o «Annulla» chiudono senza fare niente.
+fn confirm_dialog(g: &Gui, what: Confirm) -> Element<'_, Msg> {
+    let p = style::p();
+    let Some(chat) = g.app.current_chat() else {
+        return space().into();
+    };
+    let name = chat.name.as_str();
+    let user = !chat.is_group;
+    let me = g.app.peer_info.get(&chat.peer_id).is_some_and(|i| i.me);
+    let (title, body, yes, harmful) = match what {
+        Confirm::Block(true) => (
+            format!("Bloccare {name}?"),
+            "Non potrà più scriverti, chiamarti né vedere il tuo ultimo accesso. Puoi sbloccarlo quando vuoi.",
+            "Blocca",
+            true,
+        ),
+        Confirm::Block(false) => (
+            format!("Sbloccare {name}?"),
+            "Potrà di nuovo scriverti e chiamarti.",
+            "Sblocca",
+            false,
+        ),
+        Confirm::DeleteChat if user => (
+            format!("Eliminare la chat con {name}?"),
+            "La cronologia sparisce da tutti i tuoi dispositivi. Non si può annullare.",
+            "Elimina",
+            true,
+        ),
+        Confirm::DeleteChat if chat.broadcast => (
+            format!("Abbandonare «{name}»?"),
+            "Il canale sparisce dalla lista e non riceverai più i suoi messaggi.",
+            "Abbandona",
+            true,
+        ),
+        Confirm::DeleteChat => (
+            format!("Uscire da «{name}»?"),
+            "Esci dal gruppo e la chat sparisce dalla lista. Per rientrare servirà un nuovo invito.",
+            "Esci",
+            true,
+        ),
+    };
+    let mut card = column![
+        text(title).size(18).font(BOLD),
+        text(body).color(p.muted),
+    ]
+    .spacing(12);
+    if what == Confirm::DeleteChat && user && !me {
+        card = card.push(
+            iced::widget::checkbox(g.revoke)
+                .label(format!("Elimina anche per {name}"))
+                .on_toggle(Msg::Revoke),
+        );
+    }
+    let confirm = button(text(yes)).on_press(Msg::ConfirmYes).padding([8, 16]);
+    let confirm = if harmful { confirm.style(style::danger) } else { confirm.style(style::primary) };
+    card = card.push(
+        row![
+            space().width(Fill),
+            button(text("Annulla")).on_press(Msg::Cancel).padding([8, 16]).style(style::flat(false)),
+            confirm,
+        ]
+        .spacing(8)
+        .align_y(Center),
+    );
+    let card = container(card).padding(22).max_width(440).style(move |_: &iced::Theme| {
+        iced::widget::container::Style {
+            background: Some(iced::Background::Color(p.sidebar)),
+            text_color: Some(p.text),
+            border: iced::border::rounded(14),
+            ..Default::default()
+        }
+    });
+    // il velo prende tutti i click: sotto non si preme niente per sbaglio
+    iced::widget::opaque(
+        mouse_area(
+            container(iced::widget::opaque(card))
+                .center(Fill)
+                .padding(16)
+                .style(style::fill(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55))),
+        )
+        .on_press(Msg::Cancel),
+    )
 }
 
 /// i puntini di «sta scrivendo» che si riempiono (uno ogni 400 ms)

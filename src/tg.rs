@@ -1189,6 +1189,250 @@ pub async fn delete_messages(
     Ok(())
 }
 
+/// La scheda di una chat: descrizione, contatti, membri, blocco.
+#[derive(Clone, Debug, Default)]
+pub struct PeerInfo {
+    /// bio dell'utente o descrizione del gruppo/canale
+    pub about: String,
+    pub username: Option<String>,
+    pub phone: Option<String>,
+    /// membri (gruppi e canali)
+    pub members: Option<i32>,
+    /// l'utente è bloccato da me (solo chat private)
+    pub blocked: bool,
+    pub bot: bool,
+    /// la chat con me stesso (Messaggi salvati)
+    pub me: bool,
+}
+
+/// Legge la scheda completa: GetFullUser / GetFullChat / GetFullChannel.
+pub async fn peer_info(client: &Client, peer_ref: ChatRef) -> Result<PeerInfo, String> {
+    use grammers_client::peer::Peer;
+    use grammers_client::session::types::PeerKind;
+    let err = |e: InvocationError| e.to_string();
+    let mut info = PeerInfo::default();
+    match client.resolve_peer(peer_ref).await.map_err(err)? {
+        Peer::User(u) => {
+            info.username = u.username().map(str::to_string);
+            info.phone = u.phone().filter(|p| !p.is_empty()).map(|p| format!("+{p}"));
+            info.bot = u.is_bot();
+            info.me = u.is_self();
+        }
+        Peer::Channel(c) => info.username = c.raw.username.clone(),
+        _ => {}
+    }
+    match peer_ref.id.kind() {
+        PeerKind::User => {
+            let tl::enums::users::UserFull::Full(full) = client
+                .invoke(&tl::functions::users::GetFullUser { id: peer_ref.into() })
+                .await
+                .map_err(err)?;
+            let tl::enums::UserFull::Full(u) = full.full_user;
+            info.about = u.about.unwrap_or_default();
+            info.blocked = u.blocked;
+        }
+        PeerKind::Chat => {
+            let tl::enums::messages::ChatFull::Full(full) = client
+                .invoke(&tl::functions::messages::GetFullChat { chat_id: peer_ref.into() })
+                .await
+                .map_err(err)?;
+            fill_chat_full(&mut info, full.full_chat);
+        }
+        PeerKind::Channel => {
+            let tl::enums::messages::ChatFull::Full(full) = client
+                .invoke(&tl::functions::channels::GetFullChannel { channel: peer_ref.into() })
+                .await
+                .map_err(err)?;
+            fill_chat_full(&mut info, full.full_chat);
+        }
+    }
+    Ok(info)
+}
+
+fn fill_chat_full(info: &mut PeerInfo, full: tl::enums::ChatFull) {
+    match full {
+        tl::enums::ChatFull::Full(c) => {
+            info.about = c.about;
+            info.members = match c.participants {
+                tl::enums::ChatParticipants::Participants(p) => Some(p.participants.len() as i32),
+                tl::enums::ChatParticipants::Forbidden(_) => None,
+            };
+        }
+        tl::enums::ChatFull::ChannelFull(c) => {
+            info.about = c.about;
+            info.members = c.participants_count;
+        }
+        tl::enums::ChatFull::CommunityFull(c) => info.about = c.about,
+    }
+}
+
+/// Le schede dei contenuti condivisi di una chat.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum SharedTab {
+    Media,
+    Files,
+    Links,
+    Audio,
+    Voice,
+}
+
+impl SharedTab {
+    pub const ALL: [SharedTab; 5] =
+        [SharedTab::Media, SharedTab::Files, SharedTab::Links, SharedTab::Audio, SharedTab::Voice];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SharedTab::Media => "Media",
+            SharedTab::Files => "File",
+            SharedTab::Links => "Link",
+            SharedTab::Audio => "Musica",
+            SharedTab::Voice => "Vocali",
+        }
+    }
+
+    fn filter(self) -> tl::enums::MessagesFilter {
+        use tl::enums::MessagesFilter as F;
+        match self {
+            SharedTab::Media => F::InputMessagesFilterPhotoVideo,
+            SharedTab::Files => F::InputMessagesFilterDocument,
+            SharedTab::Links => F::InputMessagesFilterUrl,
+            SharedTab::Audio => F::InputMessagesFilterMusic,
+            SharedTab::Voice => F::InputMessagesFilterRoundVoice,
+        }
+    }
+}
+
+/// Un elemento dei contenuti condivisi: la riga e, per i link, gli URL.
+pub struct SharedItem {
+    pub row: HistoryRow,
+    pub links: Vec<String>,
+}
+
+/// Gli URL di un messaggio: quelli scritti nel testo e quelli nascosti
+/// dietro una parola (entità TextUrl).
+fn message_links(m: &grammers_client::message::Message) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for word in m.text().split_whitespace() {
+        let w = word.trim_matches(|c: char| matches!(c, '(' | ')' | '<' | '>' | '"' | '«' | '»' | ',' | ';'));
+        let w = w.trim_end_matches(['.', ':', '!', '?']);
+        let url = if w.starts_with("https://") || w.starts_with("http://") {
+            w.to_string()
+        } else if w.starts_with("www.") || w.starts_with("t.me/") {
+            format!("https://{w}")
+        } else {
+            continue;
+        };
+        if !out.contains(&url) {
+            out.push(url);
+        }
+    }
+    if let tl::enums::Message::Message(raw) = &m.raw {
+        // gli offset delle entità sono in unità UTF-16
+        let utf16: Vec<u16> = raw.message.encode_utf16().collect();
+        for e in raw.entities.iter().flatten() {
+            let url = match e {
+                tl::enums::MessageEntity::TextUrl(u) => u.url.clone(),
+                tl::enums::MessageEntity::Url(u) => {
+                    let (a, len) = (u.offset.max(0) as usize, u.length.max(0) as usize);
+                    let Some(part) = utf16.get(a..a + len) else { continue };
+                    let w = String::from_utf16_lossy(part);
+                    if w.contains("://") {
+                        w
+                    } else {
+                        format!("https://{w}")
+                    }
+                }
+                _ => continue,
+            };
+            if !out.contains(&url) {
+                out.push(url);
+            }
+        }
+    }
+    out
+}
+
+/// Gli ultimi `limit` contenuti di un tipo condivisi nella chat (dal più recente).
+pub async fn shared_media(
+    client: &Client,
+    peer_ref: ChatRef,
+    tab: SharedTab,
+    limit: usize,
+) -> Result<Vec<SharedItem>, InvocationError> {
+    let mut out = Vec::new();
+    let mut iter = client.search_messages(peer_ref).filter(tab.filter());
+    while out.len() < limit {
+        let Some(m) = iter.next().await? else { break };
+        let links = if tab == SharedTab::Links { message_links(&m) } else { Vec::new() };
+        let from = sender_name(&m);
+        out.push(SharedItem { row: HistoryRow::from_message(&m, from), links });
+    }
+    Ok(out)
+}
+
+/// Blocca o sblocca un utente.
+pub async fn set_blocked(client: &Client, peer_ref: ChatRef, blocked: bool) -> Result<(), InvocationError> {
+    if blocked {
+        client
+            .invoke(&tl::functions::contacts::Block { my_stories_from: false, id: peer_ref.into() })
+            .await?;
+    } else {
+        client
+            .invoke(&tl::functions::contacts::Unblock { my_stories_from: false, id: peer_ref.into() })
+            .await?;
+    }
+    Ok(())
+}
+
+/// Elimina la chat dalla lista: per le private e i gruppi piccoli cancella
+/// la cronologia (`revoke`: anche per gli altri, solo private), dai gruppi
+/// si esce, dai canali/supergruppi si esce e basta.
+pub async fn delete_chat(client: &Client, peer_ref: ChatRef, revoke: bool) -> Result<(), InvocationError> {
+    use grammers_client::session::types::PeerKind;
+    match peer_ref.id.kind() {
+        PeerKind::Channel => {
+            client
+                .invoke(&tl::functions::channels::LeaveChannel { channel: peer_ref.into() })
+                .await?;
+            Ok(())
+        }
+        PeerKind::Chat => {
+            client
+                .invoke(&tl::functions::messages::DeleteChatUser {
+                    revoke_history: false,
+                    chat_id: peer_ref.into(),
+                    user_id: tl::enums::InputUser::UserSelf,
+                })
+                .await?;
+            // già fuori dal gruppo: se la pulizia non va, la chat sparisce
+            // comunque dalla lista al prossimo avvio
+            let _ = clear_history(client, peer_ref, false).await;
+            Ok(())
+        }
+        PeerKind::User => clear_history(client, peer_ref, revoke).await,
+    }
+}
+
+/// Cancella tutta la cronologia; Telegram lo fa a blocchi: `offset` > 0
+/// vuol dire che ne resta.
+async fn clear_history(client: &Client, peer_ref: ChatRef, revoke: bool) -> Result<(), InvocationError> {
+    loop {
+        let tl::enums::messages::AffectedHistory::History(done) = client
+            .invoke(&tl::functions::messages::DeleteHistory {
+                just_clear: false,
+                revoke,
+                peer: peer_ref.into(),
+                max_id: 0,
+                min_date: None,
+                max_date: None,
+            })
+            .await?;
+        if done.offset <= 0 {
+            return Ok(());
+        }
+    }
+}
+
 /// Un colpo da ricerca: id, data, autore e testo potentemente tagsliato.
 pub struct SearchHit {
     pub outgoing: bool,

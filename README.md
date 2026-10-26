@@ -38,6 +38,10 @@ L'accesso (numero, codice, 2FA) si fa una volta con `rtete` nel
 terminale: la GUI riusa credenziali e sessione salvate. Click su un
 messaggio per le azioni (reazioni, rispondi, modifica, copia, elimina),
 📎 incolla un'immagine dagli appunti, 😊 apre gli sticker, Esc annulla.
+Click sul nome in alto (o ⓘ) apre la scheda della chat: bio, username,
+membri, media/file/link/musica/vocali condivisi, blocco dell'utente ed
+eliminazione della chat (o uscita dal gruppo), sempre con un popup di
+conferma. I non letti si aggiornano anche se leggi da un altro dispositivo.
 Disegna in software (tiny-skia, ~75 MB di RAM); `ICED_BACKEND=wgpu` usa
 la GPU (~105 MB).
 

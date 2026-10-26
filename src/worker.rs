@@ -8,7 +8,7 @@ use grammers_client::media::Media;
 use grammers_client::session::types::PeerId;
 use tokio::sync::mpsc;
 
-use crate::app::{MAX_HISTORY, OLDER_PAGE};
+use crate::app::{MAX_HISTORY, OLDER_PAGE, SHARED_PAGE};
 use crate::loader;
 use crate::send::{Request, Response, SendDone, SendJob, SendKind};
 use crate::tg;
@@ -307,6 +307,29 @@ pub fn run_worker(
                     let _gate = permits.acquire_owned().await;
                     let path = tg::download_avatar(&cl, peer_ref, photo_id).await;
                     let _ = out.send(Response::Avatar { photo_id, path });
+                }),
+                Request::Info { peer_ref, peer } => tokio::spawn(async move {
+                    let info = tg::peer_info(&cl, peer_ref).await;
+                    let _ = out.send(Response::Info { peer, info });
+                }),
+                Request::Shared { peer_ref, peer, tab } => tokio::spawn(async move {
+                    let items = tg::shared_media(&cl, peer_ref, tab, SHARED_PAGE)
+                        .await
+                        .map_err(|e| e.to_string());
+                    let _ = out.send(Response::Shared { peer, tab, items });
+                }),
+                Request::Block { peer_ref, peer, blocked } => tokio::spawn(async move {
+                    let res = tg::set_blocked(&cl, peer_ref, blocked)
+                        .await
+                        .map(|()| blocked)
+                        .map_err(|e| e.to_string());
+                    let _ = out.send(Response::Blocked { peer, res });
+                }),
+                Request::DeleteChat { peer_ref, peer, revoke } => tokio::spawn(async move {
+                    let res = tg::delete_chat(&cl, peer_ref, revoke)
+                        .await
+                        .map_err(|e| e.to_string());
+                    let _ = out.send(Response::ChatDeleted { peer, res });
                 }),
                 Request::Dialogs => tokio::spawn(async move {
                     let res = tg::load_dialogs(&cl).await.map_err(|e| e.to_string());
