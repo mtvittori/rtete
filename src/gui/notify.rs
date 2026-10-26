@@ -6,14 +6,14 @@ use std::io::BufRead;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
-use grammers_client::session::types::PeerId;
+use rondine::model::ChatId;
 
 use crate::net;
 
 /// id della notifica aperta per chat: la successiva la rimpiazza
-static OPEN: Mutex<Option<HashMap<PeerId, u32>>> = Mutex::new(None);
+static OPEN: Mutex<Option<HashMap<ChatId, u32>>> = Mutex::new(None);
 
-pub fn show(peer: PeerId, title: &str, body: &str, icon: Option<&std::path::Path>) {
+pub fn show(peer: ChatId, title: &str, body: &str, icon: Option<&std::path::Path>) {
     let replace = OPEN
         .lock()
         .ok()
@@ -61,7 +61,7 @@ pub fn show(peer: PeerId, title: &str, body: &str, icon: Option<&std::path::Path
 }
 
 /// Toglie la notifica della chat appena la si apre.
-pub fn dismiss(peer: PeerId) {
+pub fn dismiss(peer: ChatId) {
     let id = OPEN
         .lock()
         .ok()

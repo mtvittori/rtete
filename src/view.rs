@@ -18,7 +18,7 @@ use ratatui::Frame;
 
 use crate::gfx;
 use crate::styles::*;
-use crate::tg;
+use crate::model;
 use rondine::{tr, trf};
 use crate::app::{App, STICKER_COLS};
 
@@ -62,7 +62,7 @@ pub struct HistoryLine {
     pub color: Color,
     pub sticker: bool,
     pub animated: bool,
-    pub sticker_media: Option<grammers_client::media::Media>,
+    pub sticker_media: Option<model::MediaRef>,
     /// quante righe occupa nel terminale (più di 1 solo per le immagini).
     pub rows: u16,
     /// larghezza immagine in % della larghezza del pannello.
@@ -127,7 +127,7 @@ pub fn msg_label(time: &str, name: &str) -> String {
 
 /// Marcatore in testa al testo: inoltro. La risposta ha una riga sua sopra
 /// il messaggio (`reply_line`).
-fn row_lead(row: &tg::HistoryRow) -> String {
+fn row_lead(row: &model::HistoryRow) -> String {
     let mut out = String::new();
     match &row.fwd {
         Some(f) if f.is_empty() => out.push_str("⤳ "),
@@ -138,7 +138,7 @@ fn row_lead(row: &tg::HistoryRow) -> String {
 }
 
 /// Nome dell'autore di una riga: il proprio per i messaggi in uscita.
-fn author<'a>(row: &'a tg::HistoryRow, me: &'a str) -> &'a str {
+fn author<'a>(row: &'a model::HistoryRow, me: &'a str) -> &'a str {
     if row.outgoing {
         if me.is_empty() {
             "Io"
@@ -153,11 +153,11 @@ fn author<'a>(row: &'a tg::HistoryRow, me: &'a str) -> &'a str {
 }
 
 /// Contenuto di una riga in breve, su una riga sola, per la citazione.
-fn row_summary(row: &tg::HistoryRow) -> String {
+fn row_summary(row: &model::HistoryRow) -> String {
     let text = match &row.kind {
-        tg::RowKind::Text(t) => t.clone(),
-        tg::RowKind::Sticker { emoji, .. } => format!("sticker {emoji}"),
-        tg::RowKind::Photo { caption, gif, .. } => {
+        model::RowKind::Text(t) => t.clone(),
+        model::RowKind::Sticker { emoji, .. } => format!("sticker {emoji}"),
+        model::RowKind::Photo { caption, gif, .. } => {
             let what = if *gif { "🎞 gif" } else { tr("📷 foto") };
             if caption.is_empty() {
                 what.to_string()
@@ -165,15 +165,15 @@ fn row_summary(row: &tg::HistoryRow) -> String {
                 format!("{what} {caption}")
             }
         }
-        tg::RowKind::Doc { name, .. } => format!("📄 {name}"),
-        tg::RowKind::Audio { name, voice, .. } => {
+        model::RowKind::Doc { name, .. } => format!("📄 {name}"),
+        model::RowKind::Audio { name, voice, .. } => {
             if *voice {
                 tr("🎙 vocale").to_string()
             } else {
                 format!("🎧 {name}")
             }
         }
-        tg::RowKind::Note(t) | tg::RowKind::Service(t) | tg::RowKind::Video { note: t, .. } => {
+        model::RowKind::Note(t) | model::RowKind::Service(t) | model::RowKind::Video { note: t, .. } => {
             t.clone()
         }
     };
@@ -190,9 +190,9 @@ const QUOTE_ROWS: usize = 3;
 /// finché non arriva resta il marcatore (o la citazione parziale, che
 /// Telegram manda insieme alla risposta).
 fn reply_line(
-    row: &tg::HistoryRow,
-    rows: &VecDeque<tg::HistoryRow>,
-    quoted: Option<&HashMap<i32, Option<tg::HistoryRow>>>,
+    row: &model::HistoryRow,
+    rows: &VecDeque<model::HistoryRow>,
+    quoted: Option<&HashMap<i32, Option<model::HistoryRow>>>,
     me: &str,
     width: usize,
 ) -> Option<Vec<String>> {
@@ -242,7 +242,7 @@ fn fit(text: String, width: usize) -> String {
 }
 
 /// Riga informativa mostrata alla selezione di un messaggio.
-pub fn row_meta(row: &tg::HistoryRow, tz: &jiff::tz::TimeZone) -> String {
+pub fn row_meta(row: &model::HistoryRow, tz: &jiff::tz::TimeZone) -> String {
     let mut parts = vec![format!("#{}", row.id)];
     if row.date != 0 {
         parts.push(fmt_hhmm(row.date, tz));
@@ -264,7 +264,7 @@ pub fn row_meta(row: &tg::HistoryRow, tz: &jiff::tz::TimeZone) -> String {
 
 /// La barra delle reazioni veloci: l'emoji scelta tra parentesi quadre.
 pub fn react_bar(idx: usize) -> String {
-    tg::QUICK_REACTIONS
+    model::QUICK_REACTIONS
         .iter()
         .enumerate()
         .map(|(i, e)| {
@@ -795,7 +795,7 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
             y += 1;
             // immagine (se convertita) nelle righe successive
             if let Some(media) = &line.sticker_media {
-                let key = tg::media_key(media);
+                let key = media.key().to_string();
                 if let Some(path) = app.previews.get(&key) {
                     let band = line.rows.saturating_sub(1);
                     let w = msgs.width.saturating_sub(1) * line.frac.max(1) / 100;
@@ -1147,7 +1147,7 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
             let idx = row_idx * cols + c;
             let x = inner.x + (c as u16) * cell_w;
             let Some(media) = docs.get(idx) else { break };
-            let emoji = tg::sticker_emoji(media);
+            let emoji = media.emoji().to_string();
             let selected = idx == app.sticker_cursor;
             // testo emoji in fondo alla cella
             let mut spans = vec![Span::styled(
@@ -1174,7 +1174,7 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
                 },
             );
             // anteprima immagine (kitty) sulle righe sopra la cella
-            let key = tg::media_key(media);
+            let key = media.key().to_string();
             if let Some(path) = app.previews.get(&key) {
                 let (w, h) = gfx::square_fit((cell_w.saturating_sub(1)) as u32, (ch - 1) as u32);
                 let rect = Rect {
@@ -1210,7 +1210,7 @@ fn draw_card(
     app: &App,
     area: Rect,
     cmds: &mut Vec<Cmd>,
-    sel: Option<(&grammers_client::media::Media, usize, usize)>,
+    sel: Option<(&model::MediaRef, usize, usize)>,
 ) {
     let block = pane(tr("In evidenza"), false);
     let inner = block.inner(area);
@@ -1236,7 +1236,7 @@ fn draw_card(
         width: cols[0].width.saturating_sub(1),
         height: inner.height,
     };
-    let key = tg::media_key(media);
+    let key = media.key().to_string();
     if let Some(path) = app.previews.get(&key) {
         let (w, h) = gfx::square_fit(art.width as u32, art.height as u32);
         let rect = Rect {
@@ -1256,7 +1256,7 @@ fn draw_card(
         );
     }
     // colonna destra: emoji, posizione nel set e suggerimento
-    let emoji = tg::sticker_emoji(media);
+    let emoji = media.emoji().to_string();
     let mut lines: Vec<Line<'static>> = Vec::new();
     if !emoji.is_empty() {
         lines.push(Line::from(Span::styled(
@@ -1315,7 +1315,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
             FG
         };
         match &row.kind {
-            tg::RowKind::Text(text) => {
+            model::RowKind::Text(text) => {
                 let text = &format!(
                     "{}{text}{}",
                     row_lead(row),
@@ -1385,7 +1385,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     }
                 }
             }
-            tg::RowKind::Sticker {
+            model::RowKind::Sticker {
                 media,
                 emoji,
                 animated,
@@ -1417,7 +1417,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     links: Vec::new(),
                 });
             }
-            tg::RowKind::Photo {
+            model::RowKind::Photo {
                 media,
                 caption,
                 gif,
@@ -1444,14 +1444,14 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     links: scan_links(&line_text),
                 });
             }
-            tg::RowKind::Doc {
+            model::RowKind::Doc {
                 media: _,
                 name,
                 size,
                 caption,
             } => {
                 let size_txt = size
-                    .map(|s| format!(" ({})", tg::fmt_size(s as f64)))
+                    .map(|s| format!(" ({})", model::fmt_size(s as f64)))
                     .unwrap_or_default();
                 let cap_txt = if caption.is_empty() {
                     String::new()
@@ -1468,7 +1468,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     last.links = scan_links(&last.text);
                 }
             }
-            tg::RowKind::Audio {
+            model::RowKind::Audio {
                 name,
                 seconds,
                 caption,
@@ -1476,7 +1476,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                 ..
             } => {
                 let main = if *voice {
-                    trf!("🎙 vocale {}", tg::fmt_secs(*seconds))
+                    trf!("🎙 vocale {}", model::fmt_secs(*seconds))
                 } else {
                     format!("🎧 {}", name)
                 };
@@ -1494,7 +1494,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     last.links = scan_links(&last.text);
                 }
             }
-            tg::RowKind::Note(text) | tg::RowKind::Video { note: text, .. } => {
+            model::RowKind::Note(text) | model::RowKind::Video { note: text, .. } => {
                 lines.push(HistoryLine {
                     text: format!("{label}🎥 {text}"),
                     color: ACCENT_DIM,
@@ -1505,7 +1505,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     last.links = scan_links(&last.text);
                 }
             }
-            tg::RowKind::Service(text) => {
+            model::RowKind::Service(text) => {
                 lines.push(HistoryLine {
                     text: format!("· {text}"),
                     color: INCOMING,
@@ -1617,11 +1617,11 @@ mod tests {
 
     #[test]
     fn meta_lists_reply_forward_edit() {
-        let row = tg::HistoryRow {
+        let row = model::HistoryRow {
             id: 7,
             outgoing: false,
             from: String::new(),
-            kind: tg::RowKind::Text("x".into()),
+            kind: model::RowKind::Text("x".into()),
             reactions: Vec::new(),
             date: 1_700_000_000,
             reply_to: Some(3),
@@ -1637,12 +1637,12 @@ mod tests {
         assert_eq!(row_lead(&row), "⤳ Anna: ");
     }
 
-    fn text_row(id: i32, outgoing: bool, from: &str, text: &str, reply_to: Option<i32>) -> tg::HistoryRow {
-        tg::HistoryRow {
+    fn text_row(id: i32, outgoing: bool, from: &str, text: &str, reply_to: Option<i32>) -> model::HistoryRow {
+        model::HistoryRow {
             id,
             outgoing,
             from: from.into(),
-            kind: tg::RowKind::Text(text.into()),
+            kind: model::RowKind::Text(text.into()),
             reactions: Vec::new(),
             date: 0,
             reply_to,

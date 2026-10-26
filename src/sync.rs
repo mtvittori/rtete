@@ -1,45 +1,34 @@
-//! Aggiornamenti di stato indipendenti dall'interfaccia: update Telegram e
-//! risposte dei worker applicati ad `App`. Li usano sia la TUI sia la GUI.
+//! Aggiornamenti di stato indipendenti dall'interfaccia e dal backend:
+//! eventi live e risposte dei worker applicati ad `App`. Li usano sia la
+//! TUI sia la GUI.
 
-use grammers_client::media::Media;
-use grammers_client::session::types::{PeerId, PeerKind};
 use tokio::sync::mpsc;
 
 use crate::app::{App, OLDER_PAGE};
 use crate::clipboard::handle_clipboard;
-use crate::send::{Request, Response, SendDone};
 use crate::i18n::tr;
-use crate::tg;
+use crate::model::{self, ChatId, Live, MediaRef};
+use crate::send::{Request, Response, SendDone};
 use crate::trf;
 
 /// Segna la chat come letta con la richiesta fuori dal flusso eventi:
-/// lo spawn async parte subito ma l'input non aspetta la rete.
-pub fn mark_read(client: &grammers_client::Client, peer_ref: tg::ChatRef) {
-    let cl = client.clone();
-    tokio::spawn(async move {
-        let _ = cl.mark_as_read(peer_ref).await;
-    });
+/// il worker la manda subito ma l'input non aspetta la rete.
+pub fn mark_read(req: &mpsc::UnboundedSender<Request>, peer_ref: model::ChatRef) {
+    let _ = req.send(Request::MarkRead(peer_ref));
 }
 
 /// La chat è stata letta altrove fino a un certo punto: restano `still`
 /// messaggi non letti.
-fn read_inbox(app: &mut App, chat: Option<PeerId>, still: i32) {
-    let Some(chat) = chat else { return };
-    if let Some(d) = app.contacts.iter_mut().find(|d| tg::same_peer(d.peer_id, chat)) {
+fn read_inbox(app: &mut App, chat: ChatId, still: i32) {
+    if let Some(d) = app.contacts.iter_mut().find(|d| model::same_peer(d.peer_id, chat)) {
         d.unread = still.max(0) as usize;
     }
 }
 
 /// «sta scrivendo»: Telegram lo ripete ogni ~5s finché dura, quindi
 /// scade da solo dopo 6s; nei gruppi col nome di chi scrive.
-fn typing(
-    app: &mut App,
-    chat: Option<PeerId>,
-    who: Option<PeerId>,
-    action: &grammers_client::tl::enums::SendMessageAction,
-) {
-    let Some(chat) = chat else { return };
-    let Some(what) = tg::typing_label(action) else {
+fn typing(app: &mut App, chat: ChatId, who: Option<ChatId>, what: Option<&'static str>) {
+    let Some(what) = what else {
         app.typing.remove(&chat);
         return;
     };
@@ -48,7 +37,7 @@ fn typing(
             let name = app
                 .contacts
                 .iter()
-                .find(|d| tg::same_peer(d.peer_id, w))
+                .find(|d| model::same_peer(d.peer_id, w))
                 .map(|d| d.name.split_whitespace().next().unwrap_or("").to_string())
                 .unwrap_or_else(|| tr("qualcuno").into());
             format!("{name} {what}")
@@ -59,42 +48,35 @@ fn typing(
     app.typing.insert(chat, (until, label));
 }
 
-pub async fn handle_update(
-    app: &mut App,
-    client: &grammers_client::Client,
-    update: grammers_client::update::Update,
-) {
-    use grammers_client::update::Update;
-
-    /// il nome del dialogo (come in sidebar) quando il mittente non è
-    /// risolvibile dal raw update (mappa peers mancante in grammers).
-    fn dialog_or(app: &App, pid: PeerId, fallback: String) -> String {
-        if !fallback.is_empty() {
-            return fallback;
-        }
-        app.contacts
-            .iter()
-            .find(|d| tg::same_peer(d.peer_id, pid))
-            .map(|d| d.name.clone())
-            .unwrap_or(fallback)
+/// il nome del dialogo (come in sidebar) quando il mittente non è
+/// risolvibile dall'update (mappa peers mancante nel backend).
+fn dialog_or(app: &App, pid: ChatId, fallback: String) -> String {
+    if !fallback.is_empty() {
+        return fallback;
     }
+    app.contacts
+        .iter()
+        .find(|d| model::same_peer(d.peer_id, pid))
+        .map(|d| d.name.clone())
+        .unwrap_or(fallback)
+}
 
-    match update {
-        Update::NewMessage(m) => {
-            let m = m.into_inner();
-            let peer_id = m.peer_id();
-            let outgoing = m.outgoing();
-            let fresh = if app.contacts.iter().any(|d| tg::same_peer(d.peer_id, peer_id)) {
-                None
-            } else {
-                tg::dialog_from_message(client, &m).await
-            };
-            app.bump_chat(peer_id, fresh);
+/// Un evento live del backend applicato allo stato.
+pub fn handle_live(app: &mut App, live: Live, req: &mpsc::UnboundedSender<Request>) {
+    match live {
+        Live::NewMessage { chat: peer_id, mut row, dialog } => {
+            let outgoing = row.outgoing;
+            let known = app.contacts.iter().any(|d| model::same_peer(d.peer_id, peer_id));
+            if !known && dialog.is_none() {
+                // chat mai vista e senza voce pronta: si rilegge la lista
+                let _ = req.send(Request::Dialogs);
+            }
+            app.bump_chat(peer_id, if known { None } else { dialog });
             // il messaggio è arrivato: non sta più scrivendo
             if !outgoing {
                 app.typing.remove(&peer_id);
             }
-            let row = tg::HistoryRow::from_message(&m, dialog_or(app, peer_id, tg::sender_name(&m)));
+            row.from = dialog_or(app, peer_id, std::mem::take(&mut row.from));
             app.set_last(peer_id, &row);
             let open_id = app.current_chat().map(|c| c.peer_id);
             if !outgoing && app.translate.is_auto(peer_id) && app.histories.contains_key(&peer_id) {
@@ -106,34 +88,32 @@ pub async fn handle_update(
                     // la chat aperta è a fuoco: i nuovi arrivati sono letti
                     // (prima mark_as_read partiva solo al load della storia)
                     if let Some(chat) = app.current_chat() {
-                        mark_read(client, chat.peer_ref);
+                        mark_read(req, chat.peer_ref);
                     }
                 }
             } else if !outgoing {
                 for d in app.contacts.iter_mut() {
-                    if tg::same_peer(d.peer_id, peer_id) {
+                    if model::same_peer(d.peer_id, peer_id) {
                         d.unread += 1;
                         break;
                     }
                 }
             }
         }
-        Update::MessageEdited(m) => {
-            let m = m.into_inner();
-            let peer_id = m.peer_id();
-            let row = tg::HistoryRow::from_message(&m, dialog_or(app, peer_id, tg::sender_name(&m)));
+        Live::Edited { chat: peer_id, mut row } => {
+            row.from = dialog_or(app, peer_id, std::mem::take(&mut row.from));
+            let id = row.id;
             app.replace_row(peer_id, row);
-            if app.editing == Some(m.id()) {
+            if app.editing == Some(id) {
                 app.editing = None;
                 app.compose.clear();
             }
         }
-        Update::MessageDeleted(deletion) => {
-            let ids: Vec<i32> = deletion.messages().to_vec();
+        Live::Deleted { chat, ids } => {
             // Gli id dei messaggi nei canali/supergroup sono per-canale e
             // collidono con quelli delle chat personali: il retain su tutte
             // le cronologie rimuoveva righe della chat sbagliata.
-            match deletion.channel_id().and_then(PeerId::channel) {
+            match chat {
                 Some(pid) => {
                     if let Some(ring) = app.histories.get_mut(&pid) {
                         ring.retain(|r| !ids.contains(&r.id));
@@ -143,7 +123,7 @@ pub async fn handle_update(
                     // personali e piccoli gruppi: id unici per account, il
                     // retain su quelle cronologie è corretto; i canali no
                     for (pid, ring) in app.histories.iter_mut() {
-                        if pid.kind() == PeerKind::Channel {
+                        if pid.own_msg_ids() {
                             continue;
                         }
                         ring.retain(|r| !ids.contains(&r.id));
@@ -154,73 +134,36 @@ pub async fn handle_update(
                 app.status = trf!("· {} messaggi cancellati in chat", ids.len());
             }
         }
-        Update::Raw(raw) => {
-            // le reazioni arrivano come update grezzo: aggiorna la riga
-            use grammers_client::tl;
-            // le spunte doppie: l'altro ha letto fino a max_id
-            let read = |app: &mut App, pid: Option<PeerId>, max_id: i32| {
-                if let Some(d) = pid.and_then(|p| {
-                    app.contacts.iter_mut().find(|d| tg::same_peer(d.peer_id, p))
-                }) {
-                    d.read_out = d.read_out.max(max_id);
-                }
-            };
-            match raw.raw {
-                tl::enums::Update::MessageReactions(u) => {
-                    let items = tg::reactions_from(&u.reactions);
-                    app.apply_reactions(PeerId::from(u.peer), u.msg_id, items);
-                }
-                // letti da un'altra sessione (telefono, web): il badge segue
-                tl::enums::Update::ReadHistoryInbox(u) if u.top_msg_id.is_none() => {
-                    read_inbox(app, Some(PeerId::from(u.peer)), u.still_unread_count)
-                }
-                tl::enums::Update::ReadChannelInbox(u) => {
-                    read_inbox(app, PeerId::channel(u.channel_id), u.still_unread_count)
-                }
-                tl::enums::Update::PeerBlocked(u) => {
-                    if let Some(info) = app.peer_info.get_mut(&PeerId::from(u.peer_id)) {
-                        info.blocked = u.blocked;
-                    }
-                }
-                tl::enums::Update::ReadHistoryOutbox(u) => {
-                    read(app, Some(PeerId::from(u.peer)), u.max_id)
-                }
-                tl::enums::Update::ReadChannelOutbox(u) => {
-                    read(app, PeerId::channel(u.channel_id), u.max_id)
-                }
-                tl::enums::Update::UserStatus(u) => {
-                    if let Some(d) = PeerId::user(u.user_id).and_then(|p| {
-                        app.contacts.iter_mut().find(|d| tg::same_peer(d.peer_id, p))
-                    }) {
-                        d.seen = tg::Seen::from_raw(&u.status);
-                    }
-                }
-                tl::enums::Update::UserTyping(u) => {
-                    typing(app, PeerId::user(u.user_id), None, &u.action)
-                }
-                tl::enums::Update::ChatUserTyping(u) => {
-                    typing(app, PeerId::chat(u.chat_id), Some(PeerId::from(u.from_id)), &u.action)
-                }
-                tl::enums::Update::ChannelUserTyping(u) => {
-                    typing(app, PeerId::channel(u.channel_id), Some(PeerId::from(u.from_id)), &u.action)
-                }
-                _ => {}
+        Live::Reactions { chat, msg, items } => app.apply_reactions(chat, msg, items),
+        // letti da un'altra sessione (telefono, web): il badge segue
+        Live::ReadInbox { chat, still } => read_inbox(app, chat, still),
+        Live::Blocked { chat, blocked } => {
+            if let Some(info) = app.peer_info.get_mut(&chat) {
+                info.blocked = blocked;
             }
         }
-        _ => {}
+        // le spunte doppie: l'altro ha letto fino a max_id
+        Live::ReadOutbox { chat, max_id } => {
+            if let Some(d) = app.contacts.iter_mut().find(|d| model::same_peer(d.peer_id, chat)) {
+                d.read_out = d.read_out.max(max_id);
+            }
+        }
+        Live::Seen { chat, seen } => {
+            if let Some(d) = app.contacts.iter_mut().find(|d| model::same_peer(d.peer_id, chat)) {
+                d.seen = seen;
+            }
+        }
+        Live::Typing { chat, who, what } => typing(app, chat, who, what),
     }
 }
 
 /// L'intero ramo di risposte del ciclo eventi, estratto in funzione:
 /// una ricezione sola sul canale (prima: dieci canali e un waiting_pick
 /// che scartava a mano il primo che rispondeva).
-pub async fn handle_response(
-    app: &mut App,
-    resp: Response,
-    client: &grammers_client::Client,
-    req: &mpsc::UnboundedSender<Request>,
-) {
+pub fn handle_response(app: &mut App, resp: Response, req: &mpsc::UnboundedSender<Request>) {
     match resp {
+        Response::Live(live) => handle_live(app, live, req),
+        Response::LiveErr(e) => app.status = trf!("rete: {}", e),
         Response::Hist { peer, rows } => {
             let is_open = app.current_chat().map(|c| c.peer_id) == Some(peer);
             let Ok(rows) = rows else {
@@ -238,16 +181,16 @@ pub async fn handle_response(
                 // la storia è arrivata e la chat è a fuoco: il badge
                 // unread della barra sparisce
                 for d in app.contacts.iter_mut() {
-                    if tg::same_peer(d.peer_id, peer) {
+                    if model::same_peer(d.peer_id, peer) {
                         d.unread = 0;
                         break;
                     }
                 }
                 if let Some(chat) = app.current_chat() {
-                    mark_read(client, chat.peer_ref);
+                    mark_read(req, chat.peer_ref);
                 }
                 let prefs = app.media_prefs;
-                let medias: Vec<Media> = app
+                let medias: Vec<MediaRef> = app
                     .histories
                     .get(&peer)
                     .map(|ring| {
@@ -381,27 +324,27 @@ pub async fn handle_response(
         },
         Response::Clipboard(hit) => handle_clipboard(app, hit),
         Response::Link(res) => match res {
-            Ok(tg::LinkHit::Chat { dialog, post }) => {
+            Ok(model::LinkHit::Chat { dialog, post }) => {
                 let pid = dialog.peer_id;
-                if !app.contacts.iter().any(|d| tg::same_peer(d.peer_id, pid)) {
+                if !app.contacts.iter().any(|d| model::same_peer(d.peer_id, pid)) {
                     let pinned_len = app.contacts.iter().take_while(|c| c.pinned).count();
                     app.contacts.insert(pinned_len, dialog);
                 }
                 app.link_open = Some((pid, post));
                 app.status.clear();
             }
-            Ok(tg::LinkHit::Already(pid)) => {
-                if !app.contacts.iter().any(|d| tg::same_peer(d.peer_id, pid)) {
+            Ok(model::LinkHit::Already(pid)) => {
+                if !app.contacts.iter().any(|d| model::same_peer(d.peer_id, pid)) {
                     let _ = req.send(Request::Dialogs);
                 }
                 app.link_open = Some((pid, None));
                 app.status.clear();
             }
-            Ok(tg::LinkHit::Invite { hash, title, members }) => {
+            Ok(model::LinkHit::Invite { hash, title, members }) => {
                 app.invite = Some((hash, title, members));
                 app.status.clear();
             }
-            Ok(tg::LinkHit::Joined(pid)) => {
+            Ok(model::LinkHit::Joined(pid)) => {
                 let _ = req.send(Request::Dialogs);
                 app.link_open = pid.map(|p| (p, None));
                 app.status = tr("sei entrato nella chat").into();
@@ -426,10 +369,10 @@ pub async fn handle_response(
         },
         Response::Shared { peer, tab, items } => match items {
             Ok(items) => {
-                let medias: Vec<Media> = items
+                let medias: Vec<MediaRef> = items
                     .iter()
                     .filter_map(|it| match &it.row.kind {
-                        tg::RowKind::Photo { media, .. } | tg::RowKind::Video { media, .. } => {
+                        model::RowKind::Photo { media, .. } | model::RowKind::Video { media, .. } => {
                             Some(media.clone())
                         }
                         _ => None,
@@ -522,7 +465,7 @@ pub async fn handle_response(
                 let sel = app.contacts.get(app.contact_cursor).map(|c| c.peer_id);
                 app.contacts = list;
                 app.contact_cursor = sel
-                    .and_then(|s| app.contacts.iter().position(|c| tg::same_peer(c.peer_id, s)))
+                    .and_then(|s| app.contacts.iter().position(|c| model::same_peer(c.peer_id, s)))
                     .unwrap_or(0);
             }
             Err(err) => app.status = trf!("lista chat: {}", err),

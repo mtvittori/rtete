@@ -1,15 +1,23 @@
 //! Il cuore di Rondine condiviso fra la TUI (`rondine`) e la GUI iced
-//! (`rondine-gui`): rete Telegram, worker, cache delle anteprime e stato.
+//! (`rondine-gui`): stato, worker, cache delle anteprime e i backend di
+//! rete. L'app parla coi backend solo coi tipi di `model` e il protocollo
+//! di `send`; tutto quello che è di un servizio sta in `backend::<nome>`.
 
 pub mod app;
+pub mod backend;
 pub mod clipboard;
 pub mod i18n;
+pub mod links;
 pub mod loader;
+pub mod model;
+pub mod paths;
 pub mod send;
 pub mod sync;
-pub mod tg;
 pub mod translate;
 pub mod worker;
+
+/// Il backend Telegram (grammers), col nome breve di sempre.
+pub use backend::tg;
 
 /// Variabile d'ambiente `RONDINE_<key>`; vale ancora il vecchio nome
 /// `RTETE_<key>` di quando l'app si chiamava RTete.

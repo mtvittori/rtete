@@ -1,4 +1,4 @@
-//! Rondine GUI — la stessa Rondine (grammers, worker, cache delle anteprime,
+//! Rondine GUI — la stessa Rondine (backend, worker, cache delle anteprime,
 //! stato `App`) con un'interfaccia iced al posto della TUI. L'accesso
 //! (numero, codice) resta alla TUI: qui si riusa la sessione salvata.
 
@@ -8,17 +8,16 @@ mod settings;
 mod style;
 mod ui;
 
-use grammers_client::session::types::PeerId;
 use iced::widget::{operation, scrollable};
 use iced::{keyboard, Subscription, Task};
 
 use rondine::app::App;
 use rondine::clipboard;
+use rondine::model::ChatId;
 use rondine::send::{Request, SendJob, SendKind};
-use rondine::sync::{handle_response, handle_update};
-use rondine::tg;
+use rondine::sync::{handle_live, handle_response};
+use rondine::{links, model, paths};
 use rondine::{i18n, tr, trf, translate};
-use grammers_client::tl;
 
 use crate::net::{Carrier, Link, NetEvent};
 use crate::settings::{Settings, ThemeChoice};
@@ -30,7 +29,7 @@ pub const FWD_SEARCH: &str = "fwd-search";
 #[derive(Debug, Clone)]
 pub enum Msg {
     Net(Carrier),
-    Open(PeerId),
+    Open(ChatId),
     Filter(String),
     Compose(String),
     Submit,
@@ -71,7 +70,7 @@ pub enum Msg {
     Join,
     Gpu(bool),
     Forward(i32),
-    ForwardTo(PeerId),
+    ForwardTo(ChatId),
     FwdFilter(String),
     /// un frame mentre un'animazione corre
     Frame(std::time::Instant),
@@ -83,7 +82,7 @@ pub enum Msg {
     NotifyText(bool),
     /// apre o chiude la scheda della chat (info, media, link…)
     ToggleInfo,
-    InfoTab(tg::SharedTab),
+    InfoTab(model::SharedTab),
     /// chiede conferma per bloccare (true) o sbloccare l'utente
     AskBlock(bool),
     /// chiede conferma per eliminare la chat (o uscire dal gruppo)
@@ -159,9 +158,9 @@ pub enum CacheKind {
 impl CacheKind {
     pub fn dir(self) -> std::path::PathBuf {
         match self {
-            CacheKind::Media => tg::media_dir(),
-            CacheKind::Avatars => tg::media_dir().join("avatars"),
-            CacheKind::Temp => tg::tmp_dir(),
+            CacheKind::Media => paths::media_dir(),
+            CacheKind::Avatars => paths::media_dir().join("avatars"),
+            CacheKind::Temp => paths::tmp_dir(),
         }
     }
 }
@@ -200,7 +199,7 @@ pub struct Gui {
     /// link arrivati prima della connessione
     pending_links: Vec<String>,
     /// messaggio da inoltrare: (chat di partenza, id)
-    pub forwarding: Option<(tg::ChatRef, i32)>,
+    pub forwarding: Option<(model::ChatRef, i32)>,
     pub fwd_filter: String,
     /// animazioni: pannello sticker, barra azioni del messaggio scelto
     pub panel: iced::Animation<bool>,
@@ -218,21 +217,21 @@ pub struct Gui {
     paste_undo: Option<String>,
     /// scheda della chat aperta accanto (o al posto) della cronologia
     pub show_info: bool,
-    pub info_tab: tg::SharedTab,
+    pub info_tab: model::SharedTab,
     /// popup di conferma aperto
     pub confirm: Option<Confirm>,
     /// eliminazione della chat privata anche per l'altro
     pub revoke: bool,
     pub settings_page: SettingsPage,
     /// il profilo in modifica (copiato da quello letto da Telegram)
-    pub pf: tg::MyProfile,
+    pub pf: model::MyProfile,
     /// spazio della cache: media, foto profilo, temporanei (file, byte)
     pub cache_usage: [(usize, u64); 3],
 }
 
 fn main() -> iced::Result {
     // prima di leggere le impostazioni: le cartelle di RTete diventano di Rondine
-    tg::migrate_old_dirs();
+    paths::migrate_old_dirs();
     i18n::set(Settings::load().lang.resolve());
     // GPU (wgpu) per uno scorrimento fluido; dalle impostazioni si passa
     // al disegno software (tiny-skia, ~35 MB in meno). ICED_BACKEND vince.
@@ -296,11 +295,11 @@ fn boot() -> Gui {
         viewer: None,
         paste_undo: None,
         show_info: false,
-        info_tab: tg::SharedTab::Media,
+        info_tab: model::SharedTab::Media,
         confirm: None,
         revoke: false,
         settings_page: SettingsPage::Main,
-        pf: tg::MyProfile::default(),
+        pf: model::MyProfile::default(),
         cache_usage: [(0, 0); 3],
         app: App {
             media_prefs: settings.media_prefs(),
@@ -394,8 +393,8 @@ impl Gui {
             Msg::View(id) => {
                 // l'originale a piena risoluzione se c'è, sennò l'anteprima
                 self.viewer = self.row_media(id, |k| match k {
-                    tg::RowKind::Photo { media, .. } => rondine::loader::original(media)
-                        .or_else(|| self.app.previews.get(&tg::media_key(media)).cloned()),
+                    model::RowKind::Photo { media, .. } => rondine::loader::original(media)
+                        .or_else(|| self.app.previews.get(media.key()).cloned()),
                     _ => None,
                 });
                 return Task::none();
@@ -435,7 +434,7 @@ impl Gui {
                     .app
                     .contacts
                     .iter()
-                    .find(|c| tg::same_peer(c.peer_id, pid))
+                    .find(|c| model::same_peer(c.peer_id, pid))
                     .map(|c| (c.peer_ref, c.name.clone()));
                 if let (Some((from, id)), Some((to, to_name)), Some(req)) =
                     (self.forwarding.take(), dest, self.req())
@@ -492,7 +491,7 @@ impl Gui {
             Msg::Edit(id) => {
                 let text = self.app.open_history().and_then(|ring| {
                     ring.iter().find(|r| r.id == id).and_then(|r| match &r.kind {
-                        tg::RowKind::Text(t) => Some(t.clone()),
+                        model::RowKind::Text(t) => Some(t.clone()),
                         _ => None,
                     })
                 });
@@ -565,7 +564,7 @@ impl Gui {
             }
             Msg::Save(id) => {
                 let job = self.row_media(id, |k| match k {
-                    tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
+                    model::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
                     _ => None,
                 });
                 if let (Some((media, name)), Some(req)) = (job, self.req()) {
@@ -576,18 +575,18 @@ impl Gui {
             }
             Msg::Play(id) => {
                 let job = self.row_media(id, |k| match k {
-                    tg::RowKind::Audio { media, name, voice, .. } => {
+                    model::RowKind::Audio { media, name, voice, .. } => {
                         let label = if *voice { "voce".to_string() } else { name.clone() };
                         let fname = if *voice {
-                            format!("voce-{}.ogg", tg::media_key(media))
+                            format!("voce-{}.ogg", media.key())
                         } else {
-                            tg::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
+                            paths::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
                         };
                         Some((media.clone(), fname, label, false))
                     }
-                    tg::RowKind::Video { media, .. } => Some((
+                    model::RowKind::Video { media, .. } => Some((
                         media.clone(),
-                        format!("video-{}.mp4", tg::media_key(media)),
+                        format!("video-{}.mp4", media.key()),
                         "video".to_string(),
                         true,
                     )),
@@ -641,7 +640,7 @@ impl Gui {
                 }
                 // come Telegram: la prima volta si apre sui preferiti
                 if self.app.show_sticker && self.app.open_set.is_none() {
-                    return self.handle(Msg::OpenSet(tg::FAVED_SET));
+                    return self.handle(Msg::OpenSet(model::FAVED_SET));
                 }
                 Task::none()
             }
@@ -691,7 +690,7 @@ impl Gui {
                 Task::none()
             }
             Msg::Link(url) => {
-                match tg::parse_link(&url).filter(|_| self.settings.links_in_app) {
+                match links::parse_link(&url).filter(|_| self.settings.links_in_app) {
                     Some(link) => self.follow(link),
                     None => {
                         let _ = std::process::Command::new("xdg-open")
@@ -1008,7 +1007,7 @@ impl Gui {
         self.after_change();
         // un link risolto: la chat si apre appena è nella lista
         if let Some((pid, post)) = self.app.link_open {
-            if self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, pid)) {
+            if self.app.contacts.iter().any(|c| model::same_peer(c.peer_id, pid)) {
                 self.app.link_open = None;
                 self.show_settings = false;
                 let open = self.open_chat(pid);
@@ -1021,10 +1020,10 @@ impl Gui {
 
     /// Un link Telegram: le chat private si cercano fra le proprie, il
     /// resto lo risolve il worker (username, inviti).
-    fn follow(&mut self, link: tg::TgLink) {
-        if let tg::TgLink::Private { channel, post } = link {
-            let pid = PeerId::channel(channel);
-            match pid.filter(|p| self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, *p))) {
+    fn follow(&mut self, link: links::TgLink) {
+        if let links::TgLink::Private { channel, post } = link {
+            let pid = links::channel_chat(channel);
+            match pid.filter(|p| self.app.contacts.iter().any(|c| model::same_peer(c.peer_id, *p))) {
                 Some(p) => self.app.link_open = Some((p, post)),
                 None => self.app.status = tr("link a una chat privata che non è fra le tue").into(),
             }
@@ -1043,7 +1042,7 @@ impl Gui {
             self.pending_links.push(url);
             return;
         }
-        match tg::parse_link(&url) {
+        match links::parse_link(&url) {
             Some(link) => self.follow(link),
             None => self.app.status = trf!("link non riconosciuto: {}", url),
         }
@@ -1087,7 +1086,7 @@ impl Gui {
 
     /// La riga `id` della chat aperta: dalla cronologia o dai contenuti
     /// condivisi della scheda (media vecchi non ancora caricati).
-    fn row_media<T>(&self, id: i32, f: impl Fn(&tg::RowKind) -> Option<T>) -> Option<T> {
+    fn row_media<T>(&self, id: i32, f: impl Fn(&model::RowKind) -> Option<T>) -> Option<T> {
         let peer = self.app.open?;
         self.app
             .open_history()
@@ -1217,35 +1216,22 @@ impl Gui {
                 Task::none()
             }
             NetEvent::OpenPeer(pid) => self.open_chat(pid),
-            NetEvent::UpdateErr(e) => {
-                self.app.status = trf!("rete: {}", e);
-                Task::none()
-            }
-            NetEvent::Update(u) => {
+            NetEvent::Response(rondine::send::Response::Live(u)) => {
                 let Some(link) = &self.link else {
                     return Task::none();
                 };
-                let client = link.client.clone();
-                // messaggio in arrivo: chi e da dove, prima che l'update sparisca
+                let req = link.req.clone();
+                // messaggio in arrivo: chi e da dove, prima che l'evento sparisca
                 let incoming = match &u {
-                    grammers_client::update::Update::NewMessage(m) if !m.outgoing() => {
-                        Some((m.peer_id(), tg::sender_name(m)))
-                    }
+                    model::Live::NewMessage { chat, row, .. } if !row.outgoing => Some((*chat, row.from.clone())),
                     _ => None,
                 };
                 // letta da un'altra sessione: la notifica non serve più
                 let read_elsewhere = match &u {
-                    grammers_client::update::Update::Raw(r) => match &r.raw {
-                        tl::enums::Update::ReadHistoryInbox(x) => Some(PeerId::from(x.peer.clone())),
-                        tl::enums::Update::ReadChannelInbox(x) => PeerId::channel(x.channel_id),
-                        _ => None,
-                    },
+                    model::Live::ReadInbox { chat, .. } => Some(*chat),
                     _ => None,
                 };
-                // handle_update aspetta la rete solo per una chat mai vista
-                // (dialog_from_message); il contesto tokio serve agli spawn
-                let _rt = net::RT.get().map(|rt| rt.enter());
-                iced::futures::executor::block_on(handle_update(&mut self.app, &client, u));
+                handle_live(&mut self.app, u, &req);
                 if let Some((peer, from)) = incoming {
                     self.notify(peer, from);
                 }
@@ -1254,7 +1240,7 @@ impl Gui {
                         .app
                         .contacts
                         .iter()
-                        .find(|d| tg::same_peer(d.peer_id, peer))
+                        .find(|d| model::same_peer(d.peer_id, peer))
                         .is_some_and(|d| d.unread == 0);
                     if read {
                         notify::dismiss(peer);
@@ -1266,7 +1252,7 @@ impl Gui {
                 let Some(link) = &self.link else {
                     return Task::none();
                 };
-                let (client, req) = (link.client.clone(), link.req.clone());
+                let req = link.req.clone();
                 if let rondine::send::Response::Clipboard(hit) = &r {
                     match (hit, self.paste_undo.take()) {
                         // il testo l'ha già messo iced nel campo
@@ -1280,8 +1266,7 @@ impl Gui {
                 }
                 let first_page = matches!(&r, rondine::send::Response::Hist { .. });
                 let profile = matches!(&r, rondine::send::Response::Profile(Ok(_)));
-                let _rt = net::RT.get().map(|rt| rt.enter());
-                iced::futures::executor::block_on(handle_response(&mut self.app, r, &client, &req));
+                handle_response(&mut self.app, r, &req);
                 if profile {
                     if let Some(p) = &self.app.profile {
                         self.pf = p.clone();
@@ -1297,11 +1282,11 @@ impl Gui {
 
     /// Notifica di un messaggio nuovo: non per le chat silenziate né per
     /// quella aperta mentre la finestra è a fuoco.
-    fn notify(&self, peer: PeerId, from: String) {
+    fn notify(&self, peer: ChatId, from: String) {
         if !self.settings.notify || (self.focused && self.app.open == Some(peer)) {
             return;
         }
-        let Some(d) = self.app.contacts.iter().find(|d| tg::same_peer(d.peer_id, peer)) else {
+        let Some(d) = self.app.contacts.iter().find(|d| model::same_peer(d.peer_id, peer)) else {
             return;
         };
         if d.muted {
@@ -1320,9 +1305,9 @@ impl Gui {
         notify::show(peer, &d.name, &body, icon.map(|p| p.as_path()));
     }
 
-    fn open_chat(&mut self, pid: PeerId) -> Task<Msg> {
+    fn open_chat(&mut self, pid: ChatId) -> Task<Msg> {
         notify::dismiss(pid);
-        let Some(i) = self.app.contacts.iter().position(|c| tg::same_peer(c.peer_id, pid)) else {
+        let Some(i) = self.app.contacts.iter().position(|c| model::same_peer(c.peer_id, pid)) else {
             return Task::none();
         };
         self.app.contact_cursor = i;

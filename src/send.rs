@@ -2,17 +2,16 @@
 
 use std::path::PathBuf;
 
-use grammers_client::media::Media;
-use grammers_client::session::types::PeerId;
-
 use crate::clipboard::ClipboardHit;
-use crate::tg;
-
-pub type PeerRefT = grammers_client::session::types::PeerRef;
+use crate::links::TgLink;
+use crate::model::{
+    ChatId, ChatRef, HistoryRow, Live, LinkHit, MediaRef, MyProfile, SearchHit, SharedItem, SharedTab, StickerSetInfo,
+    DialogInfo, PeerInfo, Session,
+};
 
 pub struct SendJob {
-    pub peer: PeerRefT,
-    pub peer_id: PeerId,
+    pub peer: ChatRef,
+    pub peer_id: ChatId,
     pub kind: SendKind,
     /// risposta a questo messaggio (Ctrl-R); ignorato dalle modifiche
     pub reply_to: Option<i32>,
@@ -20,8 +19,8 @@ pub struct SendJob {
 
 /// esito: nuovo messaggio o modifica confermata
 pub enum SendDone {
-    New(PeerId, tg::HistoryRow),
-    Edit(PeerId, tg::HistoryRow),
+    New(ChatId, HistoryRow),
+    Edit(ChatId, HistoryRow),
 }
 
 // I payload servono interi sui canali mpsc: il boxing aggiungerebbe solo
@@ -29,7 +28,7 @@ pub enum SendDone {
 #[allow(clippy::large_enum_variant)]
 pub enum SendKind {
     Text(String),
-    Sticker(Media),
+    Sticker(MediaRef),
     /// foto dalla clipboard (file già salvato in tmp) con eventuale caption.
     Photo { path: String, caption: String },
     /// file scelto dall'utente (selettore, appunti, trascinato): le
@@ -48,43 +47,45 @@ pub enum SendKind {
 /// canale che rispondeva, con `.expect("servizio chiuso")` ovunque).
 pub enum Request {
     Hist {
-        peer_ref: PeerRefT,
-        peer: PeerId,
+        peer_ref: ChatRef,
+        peer: ChatId,
     },
     /// pagina precedente: messaggi prima di `before`
     HistOlder {
-        peer_ref: PeerRefT,
-        peer: PeerId,
+        peer_ref: ChatRef,
+        peer: ChatId,
         before: i32,
     },
     /// messaggi citati da risposte ma assenti dalla cronologia caricata
     Quoted {
-        peer_ref: PeerRefT,
-        peer: PeerId,
+        peer_ref: ChatRef,
+        peer: ChatId,
         ids: Vec<i32>,
     },
+    /// la chat aperta è stata letta (fuori dal flusso eventi)
+    MarkRead(ChatRef),
     Sets,
     SetDocs {
         set_id: i64,
         short: String,
     },
     /// conversione png: il dispatcher la limita con un semaforo a 2 posti
-    Conv(Media),
+    Conv(MediaRef),
     Send(SendJob),
     Del {
-        peer_ref: PeerRefT,
+        peer_ref: ChatRef,
         id: i32,
     },
     Search {
-        peer_ref: PeerRefT,
+        peer_ref: ChatRef,
         query: String,
     },
     Save {
-        media: Media,
+        media: MediaRef,
         name: String,
     },
     Play {
-        media: Media,
+        media: MediaRef,
         fname: String,
         label: String,
         /// true: apre la finestra video (mpv), false: solo audio
@@ -92,49 +93,49 @@ pub enum Request {
     },
     /// inoltra un messaggio da una chat a un'altra
     Forward {
-        from: PeerRefT,
+        from: ChatRef,
         id: i32,
-        to: PeerRefT,
+        to: ChatRef,
         to_name: String,
     },
     React {
-        peer_ref: PeerRefT,
+        peer_ref: ChatRef,
         msg_id: i32,
         emoticon: Option<String>,
     },
     /// link Telegram da risolvere (chat pubblica o invito)
-    Link(tg::TgLink),
+    Link(TgLink),
     /// accetta l'invito confermato
     Join(String),
     /// rilegge la lista dei dialoghi (dopo un ingresso in una chat)
     Dialogs,
     /// foto profilo piccola di una chat
-    Avatar { peer_ref: PeerRefT, photo_id: i64 },
+    Avatar { peer_ref: ChatRef, photo_id: i64 },
     /// scheda della chat (bio, membri, bloccato)
-    Info { peer_ref: PeerRefT, peer: PeerId },
+    Info { peer_ref: ChatRef, peer: ChatId },
     /// contenuti condivisi di un tipo (media, file, link…)
     Shared {
-        peer_ref: PeerRefT,
-        peer: PeerId,
-        tab: tg::SharedTab,
+        peer_ref: ChatRef,
+        peer: ChatId,
+        tab: SharedTab,
     },
     /// blocca (true) o sblocca un utente
     Block {
-        peer_ref: PeerRefT,
-        peer: PeerId,
+        peer_ref: ChatRef,
+        peer: ChatId,
         blocked: bool,
     },
     /// elimina la chat (o esce dal gruppo); `revoke`: anche per l'altro
     DeleteChat {
-        peer_ref: PeerRefT,
-        peer: PeerId,
+        peer_ref: ChatRef,
+        peer: ChatId,
         revoke: bool,
     },
     /// il mio profilo (impostazioni)
     Profile,
     /// salva nome, bio e username (`old_username`: quello di prima)
     SaveProfile {
-        profile: tg::MyProfile,
+        profile: MyProfile,
         old_username: String,
     },
     /// nuova foto profilo da un file
@@ -145,7 +146,7 @@ pub enum Request {
     EndSession(Option<i64>),
     /// traduce il testo di un messaggio (`auto`: chat tradotta da sola)
     Translate {
-        peer: PeerId,
+        peer: ChatId,
         id: i32,
         text: String,
         cfg: Box<crate::translate::Config>,
@@ -162,58 +163,58 @@ pub enum Request {
 #[allow(clippy::large_enum_variant)]
 pub enum Response {
     Hist {
-        peer: PeerId,
-        rows: Result<Vec<tg::HistoryRow>, String>,
+        peer: ChatId,
+        rows: Result<Vec<HistoryRow>, String>,
     },
     HistOlder {
-        peer: PeerId,
-        rows: Result<Vec<tg::HistoryRow>, String>,
+        peer: ChatId,
+        rows: Result<Vec<HistoryRow>, String>,
     },
     /// per id: la riga, o `None` se il messaggio non esiste più
     Quoted {
-        peer: PeerId,
-        rows: Result<Vec<(i32, Option<tg::HistoryRow>)>, String>,
+        peer: ChatId,
+        rows: Result<Vec<(i32, Option<HistoryRow>)>, String>,
     },
-    Sets(Result<Vec<tg::StickerSetInfo>, String>),
+    Sets(Result<Vec<StickerSetInfo>, String>),
     Docs {
         set_id: i64,
-        docs: Result<Vec<Media>, String>,
+        docs: Result<Vec<MediaRef>, String>,
     },
     Converted((String, Result<PathBuf, String>)),
     Sent(Result<SendDone, String>),
     Deleted(Result<(), String>),
-    Searched(Result<Vec<tg::SearchHit>, String>),
+    Searched(Result<Vec<SearchHit>, String>),
     Saved(Result<String, String>),
     Played(Result<String, String>),
     Reacted(Result<(), String>),
-    Link(Result<tg::LinkHit, String>),
+    Link(Result<LinkHit, String>),
     Forwarded(Result<String, String>),
-    Dialogs(Result<Vec<tg::DialogInfo>, String>),
+    Dialogs(Result<Vec<DialogInfo>, String>),
     Avatar { photo_id: i64, path: Result<PathBuf, String> },
     Info {
-        peer: PeerId,
-        info: Result<tg::PeerInfo, String>,
+        peer: ChatId,
+        info: Result<PeerInfo, String>,
     },
     Shared {
-        peer: PeerId,
-        tab: tg::SharedTab,
-        items: Result<Vec<tg::SharedItem>, String>,
+        peer: ChatId,
+        tab: SharedTab,
+        items: Result<Vec<SharedItem>, String>,
     },
     Blocked {
-        peer: PeerId,
+        peer: ChatId,
         res: Result<bool, String>,
     },
     ChatDeleted {
-        peer: PeerId,
+        peer: ChatId,
         res: Result<(), String>,
     },
-    Profile(Result<tg::MyProfile, String>),
+    Profile(Result<MyProfile, String>),
     /// profilo o foto salvati
     ProfileSaved(Result<(), String>),
-    Sessions(Result<Vec<tg::Session>, String>),
+    Sessions(Result<Vec<Session>, String>),
     SessionEnded(Result<Option<i64>, String>),
     Translated {
-        peer: PeerId,
+        peer: ChatId,
         id: i32,
         auto: bool,
         target: String,
@@ -222,4 +223,8 @@ pub enum Response {
     TranslateTest(Result<crate::translate::Translated, String>),
     /// il probe wl-clipboard ha girato a thread fuori dal ciclo eventi
     Clipboard(ClipboardHit),
+    /// un evento live dal server (messaggi nuovi, letture…)
+    Live(Live),
+    /// lo stream degli eventi live ha avuto un errore
+    LiveErr(String),
 }

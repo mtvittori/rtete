@@ -74,6 +74,25 @@ aggiungere una lingua basta un file nuovo e una voce in `src/i18n.rs`;
 Disegna in software (tiny-skia, ~75 MB di RAM); `ICED_BACKEND=wgpu` usa
 la GPU (~105 MB).
 
+## Architettura
+
+L'interfaccia (TUI e GUI) e lo stato non conoscono il servizio di
+messaggistica: parlano con un **backend** solo coi tipi neutri di
+`src/model.rs` (chat, messaggi, media) e col protocollo `Request` /
+`Response` di `src/send.rs`. Anche gli eventi live (messaggi nuovi,
+letture, «sta scrivendo») arrivano come `Response::Live` sullo stesso
+canale.
+
+| Dove | Cosa |
+| --- | --- |
+| `src/model.rs`, `src/paths.rs`, `src/links.rs` | tipi, cartelle e link, uguali per ogni backend |
+| `src/app.rs`, `src/sync.rs` | stato e come cambia a ogni evento/risposta |
+| `src/worker.rs`, `src/loader.rs` | salvataggi, player, traduzioni, conversione delle anteprime |
+| `src/backend/tg/` | Telegram (grammers): accesso, dispatcher delle richieste, update live |
+
+Un nuovo backend (WhatsApp) è un'altra cartella sotto `src/backend/` che
+esegue le stesse `Request` e manda le stesse `Response`.
+
 ## Primo avvio
 
 ```

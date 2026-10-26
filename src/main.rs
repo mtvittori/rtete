@@ -10,7 +10,7 @@ mod styles;
 mod term;
 mod view;
 
-use rondine::{app, clipboard, loader, send, tg, worker};
+use rondine::{app, clipboard, loader, model, paths, send, tg};
 
 use std::sync::atomic::Ordering;
 
@@ -24,7 +24,7 @@ use tokio::sync::mpsc;
 use crate::app::App;
 use crate::view::Cmd;
 use crate::events::handle_event;
-use rondine::sync::{handle_response, handle_update};
+use rondine::sync::handle_response;
 use crate::send::{Request, Response};
 use crate::term::{panic_hook, TUI_UP, TermGuard};
 
@@ -41,7 +41,7 @@ async fn render(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tg::migrate_old_dirs();
+    paths::migrate_old_dirs();
     rondine::i18n::set(rondine::i18n::detect());
     let creds = match tg::load_credentials() {
         Some(c) => c,
@@ -71,14 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (req_tx, req_rx) = mpsc::unbounded_channel::<Request>();
     let (res_tx, mut res_rx) = mpsc::unbounded_channel::<Response>();
 
-    worker::run_worker(client.clone(), req_rx, res_tx.clone());
-
-    // stream aggiornamenti live
-    let cfg = grammers_client::sender::UpdatesConfiguration { catch_up: false };
-    let mut update_stream = client
-        .stream_updates(updates, cfg)
-        .await
-        .map_err(|e| e.to_string())?;
+    // il backend: dispatcher delle richieste e update live, tutto in
+    // arrivo sul canale delle risposte
+    tg::worker::start(client, updates, req_rx, res_tx.clone()).await?;
 
     // ---------------- TUI ----------------------------------------------
     panic_hook();
@@ -158,12 +153,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(Err(_)) => {}
                 None => break,
             },
-            upd = update_stream.next() => match upd {
-                Ok(u) => handle_update(&mut app, &client, u).await,
-                Err(e) => app.status = rondine::trf!("rete: {}", e),
-            },
             done = res_rx.recv() => match done {
-                Some(resp) => handle_response(&mut app, resp, &client, &req_tx).await,
+                Some(resp) => handle_response(&mut app, resp, &req_tx),
                 None => break,
             },
         }

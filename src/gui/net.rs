@@ -1,18 +1,17 @@
 //! Ponte fra la rete e iced: un runtime tokio tutto nostro tiene in piedi
-//! grammers e i worker; quello che arriva (update live, risposte dei
+//! il backend e i worker; quello che arriva (eventi live, risposte dei
 //! worker) passa in un solo canale che la subscription di iced legge.
 
 use std::sync::{Arc, Mutex, OnceLock};
 
-use grammers_client::update::Update;
-use grammers_client::Client;
 use iced::futures::{Stream, StreamExt};
 use tokio::sync::mpsc;
 
 use rondine::send::{Request, Response};
-use rondine::{app, loader, tg, tr, trf, worker};
+use rondine::model::{ChatId, DialogInfo};
+use rondine::{app, loader, tg, tr, trf};
 
-/// Il runtime della rete: grammers, worker e `mark_read` girano qui, non
+/// Il runtime della rete: backend, worker e `mark_read` girano qui, non
 /// nell'executor di iced (così `Handle::enter` basta per gli spawn).
 pub static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 /// il ricevitore degli eventi di rete: la subscription lo prende una volta
@@ -20,14 +19,13 @@ static EVENTS: Mutex<Option<mpsc::UnboundedReceiver<NetEvent>>> = Mutex::new(Non
 /// per chi manda eventi da fuori dal ciclo di rete (click sulle notifiche)
 static SENDER: OnceLock<mpsc::UnboundedSender<NetEvent>> = OnceLock::new();
 
-pub fn open_peer(peer: grammers_client::session::types::PeerId) {
+pub fn open_peer(peer: ChatId) {
     if let Some(tx) = SENDER.get() {
         let _ = tx.send(NetEvent::OpenPeer(peer));
     }
 }
 
 pub struct Link {
-    pub client: Client,
     pub req: mpsc::UnboundedSender<Request>,
     pub res: mpsc::UnboundedSender<Response>,
 }
@@ -39,17 +37,15 @@ pub enum NetEvent {
     Status(u8, String),
     Ready {
         link: Link,
-        contacts: Vec<tg::DialogInfo>,
+        contacts: Vec<DialogInfo>,
         me: String,
     },
     Failed(String),
-    Update(Update),
-    UpdateErr(String),
     Response(Response),
     /// link Telegram da aprire (argomento o da un'altra istanza)
     Link(String),
     /// click su una notifica: apri la chat
-    OpenPeer(grammers_client::session::types::PeerId),
+    OpenPeer(ChatId),
 }
 
 /// I messaggi di iced devono essere `Clone`: l'evento viaggia in una
@@ -186,17 +182,11 @@ async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<()
 
     let (req_tx, req_rx) = mpsc::unbounded_channel::<Request>();
     let (res_tx, mut res_rx) = mpsc::unbounded_channel::<Response>();
-    worker::run_worker(client.clone(), req_rx, res_tx.clone());
-
-    let cfg = grammers_client::sender::UpdatesConfiguration { catch_up: false };
-    let mut stream = client
-        .stream_updates(updates, cfg)
-        .await
-        .map_err(|e| e.to_string())?;
+    // il backend: dispatcher e update live, tutto sul canale delle risposte
+    tg::worker::start(client, updates, req_rx, res_tx.clone()).await?;
 
     let _ = tx.send(NetEvent::Ready {
         link: Link {
-            client: client.clone(),
             req: req_tx,
             res: res_tx,
         },
@@ -204,19 +194,10 @@ async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<()
         me,
     });
 
-    loop {
-        let ev = tokio::select! {
-            upd = stream.next() => match upd {
-                Ok(u) => NetEvent::Update(u),
-                Err(e) => NetEvent::UpdateErr(e.to_string()),
-            },
-            done = res_rx.recv() => match done {
-                Some(r) => NetEvent::Response(r),
-                None => return Ok(()),
-            },
-        };
-        if tx.send(ev).is_err() {
+    while let Some(r) = res_rx.recv().await {
+        if tx.send(NetEvent::Response(r)).is_err() {
             return Ok(()); // finestra chiusa
         }
     }
+    Ok(())
 }

@@ -7,7 +7,8 @@ use tokio::sync::mpsc;
 use crate::app::{App, STICKER_COLS};
 use crate::clipboard::{ctrl_copy, ctrl_paste, paste_text};
 use crate::send::{Request, Response, SendJob, SendKind};
-use crate::tg;
+use crate::model;
+use crate::paths;
 use crate::view;
 use rondine::{tr, trf};
 
@@ -172,7 +173,7 @@ pub(crate) async fn handle_event(
                 // orizzontale: solo nel pannello sticker (→ = l, ← = h)
                 // nel pannello reazioni: ←/→ muovono la scelta
                 KeyCode::Right if app.react_open => {
-                    let max = tg::QUICK_REACTIONS.len() - 1;
+                    let max = model::QUICK_REACTIONS.len() - 1;
                     app.react_idx = (app.react_idx + 1).min(max);
                 }
                 KeyCode::Left if app.react_open => {
@@ -211,9 +212,9 @@ pub(crate) async fn handle_event(
                     // to_digit, non `c - '1'` su usize: con '0' la
                     // sottrazione underflowerava e passava la guardia
                     let n = c.to_digit(10).unwrap_or(0) as usize;
-                    if (1..=tg::QUICK_REACTIONS.len()).contains(&n) {
+                    if (1..=model::QUICK_REACTIONS.len()).contains(&n) {
                         app.react_idx = n - 1;
-                        app.status = trf!("reazioni: {} (Invio per applicare)", tg::QUICK_REACTIONS[n - 1]);
+                        app.status = trf!("reazioni: {} (Invio per applicare)", model::QUICK_REACTIONS[n - 1]);
                     }
                 }
                 KeyCode::Char(c) if !app.show_sticker && !app.react_open => {
@@ -290,7 +291,7 @@ fn ctrl_translate(app: &mut App) {
     let Some(ring) = app.chat_ready_ring() else {
         return;
     };
-    let is_text = |r: &tg::HistoryRow| matches!(&r.kind, tg::RowKind::Text(t) if !t.trim().is_empty());
+    let is_text = |r: &model::HistoryRow| matches!(&r.kind, model::RowKind::Text(t) if !t.trim().is_empty());
     let pick = App::picked_row(ring, cursor, |r| is_text(r) && (!r.outgoing || cursor == Some(r.id)))
         .map(|r| r.id);
     let (Some(id), Some(peer)) = (pick, app.open) else {
@@ -324,10 +325,10 @@ pub(crate) fn ctrl_edit(app: &mut App) {
     // (cursor letto prima della chiamata col prestito mutabile di App)
     let cursor = app.msg_cursor;
     let found = App::picked_row(ring, cursor, |r| {
-        r.outgoing && matches!(r.kind, tg::RowKind::Text(_))
+        r.outgoing && matches!(r.kind, model::RowKind::Text(_))
     })
     .and_then(|r| match &r.kind {
-        tg::RowKind::Text(t) => Some((r.id, t.clone())),
+        model::RowKind::Text(t) => Some((r.id, t.clone())),
         _ => None,
     });
     match found {
@@ -400,8 +401,8 @@ pub(crate) fn ctrl_play(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
         return;
     };
     // cursore attivo? riproduci QUEL audio; altrimenti l'ultimo
-    let to_job = |r: &tg::HistoryRow| match &r.kind {
-        tg::RowKind::Audio {
+    let to_job = |r: &model::HistoryRow| match &r.kind {
+        model::RowKind::Audio {
             media, name, voice, ..
         } => {
             let label = if *voice {
@@ -411,16 +412,16 @@ pub(crate) fn ctrl_play(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
             };
             // i vocali salvarli sempre ogg; i brani col nome così com'è
             let fname = if *voice {
-                format!("voce-{}.ogg", tg::media_key(media))
+                format!("voce-{}.ogg", media.key())
             } else {
-                tg::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
+                paths::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
             };
             Some((media.clone(), fname, label))
         }
         _ => None,
     };
     let found = App::picked_row(ring, cursor, |r| {
-        matches!(r.kind, tg::RowKind::Audio { .. })
+        matches!(r.kind, model::RowKind::Audio { .. })
     })
     .and_then(to_job);
     match found {
@@ -441,10 +442,10 @@ pub(crate) fn ctrl_save(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     };
     // cursore attivo? salva QUEL documento; altrimenti l'ultimo della cronologia
     let found = App::picked_row(ring, cursor, |r| {
-        matches!(r.kind, tg::RowKind::Doc { .. })
+        matches!(r.kind, model::RowKind::Doc { .. })
     })
     .and_then(|r| match &r.kind {
-        tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
+        model::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
         _ => None,
     });
     match found {
@@ -648,7 +649,7 @@ fn enter_set(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
 pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     // reazioni veloci aperte: Invio toggle sull'emoji corrente
     if app.react_open {
-        let emoticon = tg::QUICK_REACTIONS[app.react_idx].to_string();
+        let emoticon = model::QUICK_REACTIONS[app.react_idx].to_string();
         let mid = app.msg_cursor;
         let peer = app
             .current_chat()

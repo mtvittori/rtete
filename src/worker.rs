@@ -1,25 +1,17 @@
-//! Il dispatcher: un task per job di rete, conversioni limitate da un semaforo, player audio.
+//! I pezzi dei worker uguali per ogni backend: salvataggi, player audio e
+//! traduzioni. Il dispatcher vero (un task per job di rete) sta nel
+//! backend (`backend::tg::worker`), che passa qui il proprio download.
 
+use std::future::Future;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use grammers_client::media::Media;
-use grammers_client::session::types::PeerId;
 use tokio::sync::mpsc;
 
-use crate::app::{MAX_HISTORY, OLDER_PAGE, SHARED_PAGE};
-use crate::loader;
-use crate::send::{Request, Response, SendDone, SendJob, SendKind};
-use crate::tg;
-
-pub fn row_from_msg(m: grammers_client::message::Message) -> Result<(PeerId, tg::HistoryRow), String> {
-    let peer_id = m.peer_id();
-    let from = tg::sender_name(&m);
-    let mut row = tg::HistoryRow::from_message(&m, from);
-    row.outgoing = true;
-    Ok((peer_id, row))
-}
+use crate::model::ChatId;
+use crate::paths;
+use crate::send::Response;
 
 /// generazione progressiva del player audio (niente pid esterni)
 pub static NEXT_PLAY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -32,90 +24,26 @@ pub fn which(cmd: &str) -> bool {
         .any(|d| std::path::Path::new(d).join(cmd).exists())
 }
 
-/// Un invio testi/foto/sticker o l'edit di un messaggio (era il vecchio
-/// worker: solo estratto in funzione, il dispatcher lo esegue per job).
-pub async fn send_job(
-    client: &grammers_client::Client,
-    job: SendJob,
-) -> Result<SendDone, String> {
-    match job.kind {
-        SendKind::Text(text) => match tg::send_text(client, job.peer, &text, job.reply_to).await {
-            Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
-            Err(e) => Err(e.to_string()),
-        },
-        SendKind::Sticker(media) => match tg::send_sticker(client, job.peer, &media, job.reply_to).await {
-            Ok(m) => row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)),
-            Err(e) => Err(e.to_string()),
-        },
-        SendKind::Photo { path, caption } => {
-            match tg::send_photo(
-                client,
-                job.peer,
-                std::path::Path::new(&path),
-                &caption,
-                job.reply_to,
-            )
-            .await {
-                Ok(m) => {
-                    // l'upload chiude il job: il temporaneo non serve più
-                    let _ = std::fs::remove_file(&path);
-                    row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row))
-                }
-                Err(e) => Err(e.to_string()),
-            }
-        }
-        SendKind::File { path, caption } => {
-            let path = std::path::Path::new(&path);
-            let sent = if tg::is_photo_file(path) {
-                tg::send_photo(client, job.peer, path, &caption, job.reply_to).await
-            } else {
-                tg::send_document(client, job.peer, path, &caption, job.reply_to).await
-            };
-            sent.and_then(|m| row_from_msg(m).map(|(pid, row)| SendDone::New(pid, row)))
-        }
-        SendKind::EditText { id, text } => {
-            match tg::edit_text(client, job.peer, id, &text).await {
-                Ok(()) => Ok(SendDone::Edit(
-                    job.peer_id,
-                    tg::HistoryRow {
-                        id,
-                        outgoing: true,
-                        from: String::new(),
-                        kind: tg::RowKind::Text(text),
-                        reactions: Vec::new(),
-                        date: 0,
-                        reply_to: None,
-                        reply_quote: None,
-                        fwd: None,
-                        edited: true,
-                    },
-                )),
-                Err(e) => Err(e.to_string()),
-            }
-        }
-    }
-}
-
 /// Un salvataggio: scarica in .part e sposta col nome libero (mai
 /// sovrascritture, mai parziali col nome finale).
-pub async fn save_job(
-    client: &grammers_client::Client,
-    media: Media,
-    name: String,
-) -> Result<String, String> {
-    let Some(sane) = tg::sanitize_file_name(&name) else {
+pub async fn save_job<F, Fut>(name: String, download: F) -> Result<String, String>
+where
+    F: FnOnce(PathBuf) -> Fut,
+    Fut: Future<Output = Result<(), String>>,
+{
+    let Some(sane) = paths::sanitize_file_name(&name) else {
         return Err(crate::tr("nome file vuoto o inutilizzabile").into());
     };
-    let dir = tg::downloads_dir();
+    let dir = paths::downloads_dir();
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let tmp = dir.join(format!(".rondine-{ts}.part"));
-    let res = match tg::download_media_to(client, &media, tmp.clone()).await {
+    let res = match download(tmp.clone()).await {
         Ok(()) => {
             // scaricato per intero: prendi un nome libero e sposta
-            let target = tg::unique_save_path(&dir, &sane);
+            let target = paths::unique_save_path(&dir, &sane);
             match std::fs::rename(&tmp, &target) {
                 Ok(()) => Ok(target.display().to_string()),
                 Err(e) => Err(crate::trf!("spostamento: {}", e)),
@@ -128,14 +56,45 @@ pub async fn save_job(
     res
 }
 
+/// Il player audio/video: un solo brano alla volta, il nuovo ferma il
+/// vecchio.
+#[derive(Default)]
+pub struct Player {
+    /// sveglia del player audio in corsa: generazione sul watch
+    alert: Option<tokio::sync::watch::Sender<u64>>,
+}
+
+impl Player {
+    /// Scarica con `download` (nel temporaneo che riceve) e riproduce.
+    pub fn play<F, Fut>(&mut self, fname: String, label: String, video: bool, out: mpsc::UnboundedSender<Response>, download: F)
+    where
+        F: FnOnce(PathBuf) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<(), String>> + Send,
+    {
+        // sveglia il player vecchio (se c'è): lui chiude
+        // figlio e temporanei e non manda l'Ok postumo
+        let gen = NEXT_PLAY.fetch_add(1, Ordering::Relaxed) + 1;
+        if let Some(prev) = self.alert.take() {
+            prev.send_replace(gen);
+        }
+        let (alert, wait) = tokio::sync::watch::channel(gen);
+        self.alert = Some(alert);
+        // nel nome del temp la generazione: Ctrl-P vicini
+        // non si pestano i propri file
+        let target = paths::tmp_dir().join(format!("play-{gen}-{fname}"));
+        tokio::spawn(async move {
+            play_job(download(target.clone()), target, wait, gen, label, video, out).await;
+        });
+    }
+}
+
 /// Riproduzione audio: niente kill esterni col pid (si riusano: uccideva
 /// un processo qualsiasi). La generazione gira su un watch: un nuovo
 /// Ctrl-P avanza il valore, il task vecchio chiude figlio e temporanei
 /// e non manda l'Ok postumo che sovrascriveva lo stato sbagliato.
 #[allow(clippy::too_many_arguments)]
 pub async fn play_job(
-    client: &grammers_client::Client,
-    media: &Media,
+    download: impl Future<Output = Result<(), String>>,
     target: PathBuf,
     mut stop_rx: tokio::sync::watch::Receiver<u64>,
     gen: u64,
@@ -149,7 +108,7 @@ pub async fn play_job(
         let _ = tokio::fs::remove_file(&target).await;
         return;
     }
-    if let Err(e) = tg::download_media_to(client, media, target.clone()).await {
+    if let Err(e) = download.await {
         let _ = tokio::fs::remove_file(&target).await;
         let _ = out.send(Response::Played(Err(e)));
         return;
@@ -202,208 +161,49 @@ pub async fn play_job(
     }
 }
 
-/// Dispatcher: un task per job (i lavori di rete vanno in parallelo);
-/// la sola conversione resta limitata a due in trasmissione con un
-/// semaforo, come i due vecchi worker (RAM piatta).
-pub fn run_worker(
-    client: grammers_client::Client,
-    mut req_rx: mpsc::UnboundedReceiver<Request>,
-    res_tx: mpsc::UnboundedSender<Response>,
+/// Traduce il testo di un messaggio (`auto`: chat tradotta da sola);
+/// `permits` tiene poche traduzioni alla volta, per non sbattere sui
+/// limiti del servizio.
+pub fn translate_job(
+    permits: &Arc<tokio::sync::Semaphore>,
+    peer: ChatId,
+    id: i32,
+    text: String,
+    cfg: Box<crate::translate::Config>,
+    auto: bool,
+    out: mpsc::UnboundedSender<Response>,
 ) {
-    let cl = client;
-    let out = res_tx;
-    let conv_permits = Arc::new(tokio::sync::Semaphore::new(2));
-    // traduzioni: poche alla volta, per non sbattere sui limiti del servizio
-    let tr_permits = Arc::new(tokio::sync::Semaphore::new(3));
+    let gate = Arc::clone(permits);
     tokio::spawn(async move {
-        // sveglia del player audio in corsa: generazione sul watch
-        let mut play_alert: Option<tokio::sync::watch::Sender<u64>> = None;
-        while let Some(req) = req_rx.recv().await {
-            let cl = cl.clone();
-            let out = out.clone();
-            let permits = Arc::clone(&conv_permits);
-            match req {
-                Request::Conv(media) => tokio::spawn(async move {
-                    let _gate = permits.acquire_owned().await;
-                    let key = tg::media_key(&media);
-                    let res = loader::convert_to_png(cl, &media, key.clone())
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Converted((key, res)));
-                }),
-                Request::Hist { peer_ref, peer } => tokio::spawn(async move {
-                    // l'errore viaggia col canale: un guasto di rete non
-                    // è storia vuota ("chat senza messaggi")
-                    let rows = tg::load_history(&cl, peer_ref, MAX_HISTORY)
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Hist { peer, rows });
-                }),
-                Request::HistOlder { peer_ref, peer, before } => tokio::spawn(async move {
-                    let rows = tg::load_history_before(&cl, peer_ref, before, OLDER_PAGE)
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::HistOlder { peer, rows });
-                }),
-                Request::Quoted { peer_ref, peer, ids } => tokio::spawn(async move {
-                    let rows = tg::load_by_id(&cl, peer_ref, &ids)
-                        .await
-                        .map(|found| ids.iter().copied().zip(found).collect())
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Quoted { peer, rows });
-                }),
-                Request::Sets => tokio::spawn(async move {
-                    // se fallisce resta None: riaprire con Tab ritenta,
-                    // invece di servire per sempre una finta lista vuota
-                    let sets = tg::fetch_installed_sets(&cl)
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Sets(sets));
-                }),
-                Request::SetDocs { set_id, short } => tokio::spawn(async move {
-                    // un errore NON marca il set come caricato: la
-                    // griglia riparte al prossimo input, dopo il backoff
-                    let docs = if set_id < 0 {
-                        tg::fetch_special_docs(&cl, set_id).await
-                    } else {
-                        tg::fetch_set_docs_by_name(&cl, &short).await
-                    };
-                    let docs = docs
-                        .map(|docs| docs.into_iter().filter_map(tg::media_from_doc).collect())
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Docs { set_id, docs });
-                }),
-                Request::Send(job) => tokio::spawn(async move {
-                    let res = send_job(&cl, job).await;
-                    let _ = out.send(Response::Sent(res));
-                }),
-                Request::Del { peer_ref, id } => tokio::spawn(async move {
-                    let res = tg::delete_messages(&cl, peer_ref, &[id])
-                        .await
-                        .map(|_| ())
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Deleted(res));
-                }),
-                Request::Search { peer_ref, query } => tokio::spawn(async move {
-                    let res = tg::search_chat(&cl, peer_ref, &query, 40)
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Searched(res));
-                }),
-                Request::React { peer_ref, msg_id, emoticon } => tokio::spawn(async move {
-                    let res = tg::send_reaction(&cl, peer_ref, msg_id, emoticon.as_deref())
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Reacted(res));
-                }),
-                Request::Link(link) => tokio::spawn(async move {
-                    let _ = out.send(Response::Link(tg::resolve_link(&cl, link).await));
-                }),
-                Request::Join(hash) => tokio::spawn(async move {
-                    let _ = out.send(Response::Link(tg::join_invite(&cl, hash).await));
-                }),
-                Request::Avatar { peer_ref, photo_id } => tokio::spawn(async move {
-                    // stesso semaforo delle conversioni: all'avvio partono
-                    // tutte insieme e non devono intasare la rete
-                    let _gate = permits.acquire_owned().await;
-                    let path = tg::download_avatar(&cl, peer_ref, photo_id).await;
-                    let _ = out.send(Response::Avatar { photo_id, path });
-                }),
-                Request::Info { peer_ref, peer } => tokio::spawn(async move {
-                    let info = tg::peer_info(&cl, peer_ref).await;
-                    let _ = out.send(Response::Info { peer, info });
-                }),
-                Request::Shared { peer_ref, peer, tab } => tokio::spawn(async move {
-                    let items = tg::shared_media(&cl, peer_ref, tab, SHARED_PAGE)
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Shared { peer, tab, items });
-                }),
-                Request::Block { peer_ref, peer, blocked } => tokio::spawn(async move {
-                    let res = tg::set_blocked(&cl, peer_ref, blocked)
-                        .await
-                        .map(|()| blocked)
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Blocked { peer, res });
-                }),
-                Request::DeleteChat { peer_ref, peer, revoke } => tokio::spawn(async move {
-                    let res = tg::delete_chat(&cl, peer_ref, revoke)
-                        .await
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::ChatDeleted { peer, res });
-                }),
-                Request::Profile => tokio::spawn(async move {
-                    let _ = out.send(Response::Profile(tg::my_profile(&cl).await));
-                }),
-                Request::SaveProfile { profile, old_username } => tokio::spawn(async move {
-                    let res = tg::save_profile(&cl, &profile, &old_username).await;
-                    let _ = out.send(Response::ProfileSaved(res));
-                }),
-                Request::ProfilePhoto(path) => tokio::spawn(async move {
-                    let res = tg::set_profile_photo(&cl, &path).await;
-                    let _ = out.send(Response::ProfileSaved(res));
-                }),
-                Request::Sessions => tokio::spawn(async move {
-                    let _ = out.send(Response::Sessions(tg::sessions(&cl).await));
-                }),
-                Request::EndSession(hash) => tokio::spawn(async move {
-                    let res = tg::end_session(&cl, hash).await.map(|()| hash);
-                    let _ = out.send(Response::SessionEnded(res));
-                }),
-                Request::Translate { peer, id, text, cfg, auto } => {
-                    let gate = Arc::clone(&tr_permits);
-                    tokio::spawn(async move {
-                        let _gate = gate.acquire_owned().await;
-                        let target = cfg.target_lang();
-                        let to = target.clone();
-                        let res = tokio::task::spawn_blocking(move || crate::translate::translate(&cfg, &text, &to))
-                            .await
-                            .unwrap_or_else(|e| Err(e.to_string()));
-                        let _ = out.send(Response::Translated { peer, id, auto, target, res });
-                    })
-                }
-                Request::TranslateTest(cfg) => tokio::spawn(async move {
-                    let res = tokio::task::spawn_blocking(move || {
-                        let sample = "Hello! This is a test message from Rondine 🙂";
-                        crate::translate::translate(&cfg, sample, &cfg.target_lang())
-                    })
-                    .await
-                    .unwrap_or_else(|e| Err(e.to_string()));
-                    let _ = out.send(Response::TranslateTest(res));
-                }),
-                Request::Dialogs => tokio::spawn(async move {
-                    let res = tg::load_dialogs(&cl).await.map_err(|e| e.to_string());
-                    let _ = out.send(Response::Dialogs(res));
-                }),
-                Request::Save { media, name } => tokio::spawn(async move {
-                    let res = save_job(&cl, media, name).await;
-                    let _ = out.send(Response::Saved(res));
-                }),
-                Request::Forward { from, id, to, to_name } => tokio::spawn(async move {
-                    let res = cl
-                        .forward_messages(to, &[id], from)
-                        .await
-                        .map(|_| to_name)
-                        .map_err(|e| e.to_string());
-                    let _ = out.send(Response::Forwarded(res));
-                }),
-                Request::Play { media, fname, label, video } => {
-                    // sveglia il player vecchio (se c'è): lui chiude
-                    // figlio e temporanei e non manda l'Ok postumo
-                    let gen = NEXT_PLAY.fetch_add(1, Ordering::Relaxed) + 1;
-                    if let Some(prev) = play_alert.take() {
-                        prev.send_replace(gen);
-                    }
-                    let (alert, wait) = tokio::sync::watch::channel(gen);
-                    play_alert = Some(alert);
-                    // nel nome del temp la generazione: Ctrl-P vicini
-                    // non si pestano i propri file
-                    let target = tg::tmp_dir().join(format!("play-{gen}-{fname}"));
-                    tokio::spawn(async move {
-                        play_job(&cl, &media, target, wait, gen, label, video, out).await;
-                    })
-                }
-            };
-        }
+        let _gate = gate.acquire_owned().await;
+        let target = cfg.target_lang();
+        let to = target.clone();
+        let res = tokio::task::spawn_blocking(move || crate::translate::translate(&cfg, &text, &to))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+        let _ = out.send(Response::Translated { peer, id, auto, target, res });
     });
+}
+
+/// La frase di prova delle impostazioni (Impostazioni → Traduzione).
+pub fn translate_test_job(cfg: Box<crate::translate::Config>, out: mpsc::UnboundedSender<Response>) {
+    tokio::spawn(async move {
+        let res = tokio::task::spawn_blocking(move || {
+            let sample = "Hello! This is a test message from Rondine 🙂";
+            crate::translate::translate(&cfg, sample, &cfg.target_lang())
+        })
+        .await
+        .unwrap_or_else(|e| Err(e.to_string()));
+        let _ = out.send(Response::TranslateTest(res));
+    });
+}
+
+/// Scarica (con `fetch`, che restituisce l'originale in cache) e converte
+/// in PNG/APNG; la risposta porta la chiave della cache.
+pub async fn conv_job<Fut>(key: String, fetch: Fut, out: &mpsc::UnboundedSender<Response>)
+where
+    Fut: Future<Output = Result<PathBuf, String>>,
+{
+    let res = crate::loader::convert_to_png(&key, fetch).await;
+    let _ = out.send(Response::Converted((key, res)));
 }
