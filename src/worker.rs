@@ -111,7 +111,7 @@ pub async fn save_job(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    let tmp = dir.join(format!(".rtete-{ts}.part"));
+    let tmp = dir.join(format!(".rondine-{ts}.part"));
     let res = match tg::download_media_to(client, &media, tmp.clone()).await {
         Ok(()) => {
             // scaricato per intero: prendi un nome libero e sposta
@@ -158,8 +158,7 @@ pub async fn play_job(
         let _ = tokio::fs::remove_file(&target).await;
         return;
     }
-    let player = std::env::var("RTETE_PLAYER")
-        .ok()
+    let player = crate::env_var("PLAYER")
         .or_else(|| ["mpv", "ffplay"].iter().find(|p| which(p)).map(|p| p.to_string()));
     let Some(p) = player else {
         let _ = out.send(Response::Played(Err("nessun player: installa mpv o ffplay".into())));
@@ -171,7 +170,7 @@ pub async fn play_job(
         .unwrap_or(false);
     let mut cmd = tokio::process::Command::new(&p);
     match (is_mpv, video) {
-        (true, true) => cmd.args(["--no-terminal", "--really-quiet", "--title=RTete"]),
+        (true, true) => cmd.args(["--no-terminal", "--really-quiet", "--title=Rondine"]),
         (true, false) => cmd.args(["--no-video", "--no-terminal", "--really-quiet"]),
         (false, true) => cmd.args(["-autoexit", "-loglevel", "quiet"]),
         (false, false) => cmd.args(["-nodisp", "-autoexit", "-loglevel", "quiet"]),

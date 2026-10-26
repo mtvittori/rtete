@@ -12,8 +12,8 @@ use iced::widget::{
 };
 use iced::{Alignment, Center, Element, Fill, Font, Length};
 
-use rtete::app::App;
-use rtete::tg::{self, HistoryRow, RowKind};
+use rondine::app::App;
+use rondine::tg::{self, HistoryRow, RowKind};
 
 use crate::style;
 use crate::settings::ThemeChoice;
@@ -181,7 +181,7 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
     let card = container(steps).padding([14, 22]).style(style::pill(p.sidebar));
     centered(column![
         logo(p.accent),
-        text("RTete").size(30).font(BOLD),
+        text("Rondine").size(30).font(BOLD),
         text("Telegram leggero per Linux").size(13).color(p.muted),
         space().height(14),
         spinner(g, 54.0),
@@ -198,9 +198,9 @@ fn failed(e: &str) -> Element<'_, Msg> {
         container(text("!").size(46).font(BOLD).color(iced::Color::WHITE))
             .center(92)
             .style(style::avatar(p.danger)),
-        text("RTete non riesce a partire").size(22).font(BOLD),
+        text("Rondine non riesce a partire").size(22).font(BOLD),
         container(text(e).color(p.danger).align_x(Center)).max_width(520),
-        text("Controlla la connessione; il primo accesso si fa con `rtete` nel terminale.")
+        text("Controlla la connessione; il primo accesso si fa con `rondine` nel terminale.")
             .size(12)
             .color(p.muted),
         space().height(6),
@@ -1262,13 +1262,13 @@ fn settings_main(g: &Gui) -> Element<'_, Msg> {
         entry("🖼", "Immagini e media", "download automatico, miniature, misura delle foto", SettingsPage::Media),
         entry("💾", "Dati e archiviazione", "cache e spazio su disco", SettingsPage::Storage),
         entry("💻", "Dispositivi", "sessioni attive dell'account", SettingsPage::Devices),
-        entry("🔗", "Link", "t.me e tg:// dentro RTete", SettingsPage::Links),
+        entry("🔗", "Link", "t.me e tg:// dentro Rondine", SettingsPage::Links),
     ]
     .spacing(2);
     column![
         container(card).style(style::pill(p.sidebar)),
         container(list).padding(4).style(style::pill(p.sidebar)),
-        text(format!("RTete {}", env!("CARGO_PKG_VERSION"))).size(12).color(p.muted),
+        text(format!("Rondine {}", env!("CARGO_PKG_VERSION"))).size(12).color(p.muted),
     ]
     .spacing(16)
     .into()
@@ -1356,10 +1356,10 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         section("TEMA"),
         row![
             choice(omarchy_label, s.theme == ThemeChoice::Omarchy, Msg::SetTheme(ThemeChoice::Omarchy)),
-            choice("RTete scuro".into(), s.theme == ThemeChoice::Rtete, Msg::SetTheme(ThemeChoice::Rtete)),
+            choice("Rondine scuro".into(), s.theme == ThemeChoice::Rondine, Msg::SetTheme(ThemeChoice::Rondine)),
         ]
         .spacing(8),
-        text("Con il tema Omarchy i colori seguono `omarchy theme set` mentre RTete è aperta.")
+        text("Con il tema Omarchy i colori seguono `omarchy theme set` mentre Rondine è aperta.")
             .size(12)
             .color(p.muted),
         section("DIMENSIONE"),
@@ -1470,7 +1470,7 @@ fn settings_storage(g: &Gui) -> Element<'_, Msg> {
         section("TETTO DELLA CACHE"),
         limits,
         row![
-            text("A ogni avvio RTete toglie i file più vecchi oltre il tetto.")
+            text("A ogni avvio Rondine toglie i file più vecchi oltre il tetto.")
                 .size(12)
                 .color(p.muted)
                 .width(Fill),
@@ -1545,7 +1545,7 @@ fn settings_devices(g: &Gui) -> Element<'_, Msg> {
 
 fn settings_links(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
-    let handler_is_us = g.tg_handler == "rtete-gui.desktop";
+    let handler_is_us = g.tg_handler == "rondine-gui.desktop";
     let handler_label = if g.tg_handler.is_empty() {
         "nessuna app".to_string()
     } else {
@@ -1556,14 +1556,14 @@ fn settings_links(g: &Gui) -> Element<'_, Msg> {
         .align_y(Center);
     if !handler_is_us {
         handler_row = handler_row.push(
-            button(text("Usa RTete").size(13))
+            button(text("Usa Rondine").size(13))
                 .on_press(Msg::TgHandler)
                 .style(style::primary),
         );
     }
     column![
         iced::widget::toggler(g.settings.links_in_app)
-            .label("Apri i link t.me e tg:// dentro RTete")
+            .label("Apri i link t.me e tg:// dentro Rondine")
             .on_toggle(Msg::LinksInApp),
         text("Link tg:// da browser e altre app").color(p.text),
         handler_row,

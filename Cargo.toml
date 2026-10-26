@@ -1,5 +1,5 @@
 [package]
-name = "rtete"
+name = "rondine"
 version = "0.1.0"
 edition = "2021"
 
@@ -24,11 +24,11 @@ rfd = { version = "0.17", optional = true, default-features = false, features = 
 gui = ["dep:iced", "dep:rfd"]
 
 [[bin]]
-name = "rtete"
+name = "rondine"
 path = "src/main.rs"
 
 [[bin]]
-name = "rtete-gui"
+name = "rondine-gui"
 path = "src/gui/main.rs"
 required-features = ["gui"]
 

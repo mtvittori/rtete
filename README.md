@@ -1,4 +1,8 @@
-# RTete
+# Rondine
+
+*Rondine* è la rondine, l'uccello messaggero (prima l'app si chiamava RTete:
+al primo avvio cartelle, sessione e impostazioni si spostano da sole, e le
+vecchie variabili `RTETE_*` valgono ancora).
 
 Client Telegram *nativo per Linux* pensato per consumare pochissima RAM:
 
@@ -21,20 +25,20 @@ sudo pacman -S rust
 cargo build --release
 ```
 
-Il binario finisce in `target/release/rtete`.
+Il binario finisce in `target/release/rondine`.
 
 ## Versione grafica (iced)
 
-Accanto alla TUI c'è `rtete-gui`, la stessa RTete (rete, worker, cache
+Accanto alla TUI c'è `rondine-gui`, la stessa Rondine (rete, worker, cache
 degli sticker, stato) con un'interfaccia [iced](https://iced.rs): lista
 chat a sinistra, cronologia a bolle, sticker e foto come immagini vere.
 
 ```
-cargo build --release --features gui --bin rtete-gui
-target/release/rtete-gui
+cargo build --release --features gui --bin rondine-gui
+target/release/rondine-gui
 ```
 
-L'accesso (numero, codice, 2FA) si fa una volta con `rtete` nel
+L'accesso (numero, codice, 2FA) si fa una volta con `rondine` nel
 terminale: la GUI riusa credenziali e sessione salvate. Click su un
 messaggio per le azioni (reazioni, rispondi, modifica, copia, elimina),
 📎 incolla un'immagine dagli appunti, 😊 apre gli sticker, Esc annulla.
@@ -53,17 +57,17 @@ la GPU (~105 MB).
 ## Primo avvio
 
 ```
-target/release/rtete
+target/release/rondine
 ```
 
-Al primo avvio chiede (una sola volta, salvate in `~/.config/rtete/credentials`):
+Al primo avvio chiede (una sola volta, salvate in `~/.config/rondine/credentials`):
 
 1. **API ID** e **API hash** — da <https://my.telegram.org> → *API development tools*;
 2. **numero di telefono** (formato internazionale, `+39…`);
 3. **codice** inviato da Telegram (dentro l'app ufficiale);
 4. eventuale **password 2FA**.
 
-Dopodiché la sessione vive in `~/.local/share/rtete/rtete.db`.
+Dopodiché la sessione vive in `~/.local/share/rondine/rondine.db`.
 
 ## Comandi
 
@@ -107,7 +111,7 @@ messaggio selezionato invece che sull'ultimo.
 | `Ctrl-E` | modifica un tuo messaggio di testo (selezionato o, in mancanza, l'ultimo; il testo va in composizione, `Invio` conferma) |
 | `Ctrl-D` | arma la cancellazione di un tuo messaggio (selezionato o l'ultimo), `Invio` conferma (Esc annulla) |
 | `Ctrl-O` | salva un documento (`~/Downloads`): selezionato o l'ultimo della chat |
-| `Ctrl-P` | riproduce audio selezionato/ultimo: `🎙 vocali` e brani tra i documenti; mpv/ffplay (`RTETE_PLAYER` sovrascrive) |
+| `Ctrl-P` | riproduce audio selezionato/ultimo: `🎙 vocali` e brani tra i documenti; mpv/ffplay (`RONDINE_PLAYER` sovrascrive) |
 | `Ctrl-Y` | copia negli appunti il messaggio selezionato (senza selezione: l'ultimo con testo) via `wl-copy` |
 | `Ctrl-R` | risponde al messaggio selezionato: sopra la composizione compare `↱ Autore: …`, il prossimo invio (testo, sticker o foto) è la risposta; di nuovo `Ctrl-R` o `Esc` annulla |
 | `Ctrl-T` | reazioni veloci sul messaggio selezionato: si apre la barra delle emoji (`←/→` o tasti `1..8`), `Invio` aggiunge/toglie la reazione, `Esc` chiude |
@@ -133,8 +137,8 @@ kitty permette comunque di selezionare testo **tenendo premuto Shift** +
 
 - **Foto Telegram, allegati immagini e GIF**: renderizzati in terminale con il kitty graphics protocol; le GIF e gli sticker APNG **animano da sole (kitty anima gli APNG nati come GIF: l'animazione gira sul terminale).
 - **Documenti**: riga con nome e dimensione; `Ctrl-O` li salva in `~/Downloads`
-- **Audio (vocali `🎙 m:ss` e brani tra i documenti `🎧`)**: `Ctrl-P` scarica e suona con un player esterno (mpv se presente, altrimenti ffplay; env `RTETE_PLAYER` per un binario specifico). Nessuna libreria audio: 0 RAM extra, il player gira in un processo separato e un nuovo `Ctrl-P` lo termina.
-- **Grandezza immagini**: variabile d'ambiente `RTETE_SCALE` (0.5–4) moltiplica sticker/foto nella griglia e messaggi. Il rapporto celle si regola con `RTETE_CELL_W`/`RTETE_CELL_H` (pixel per cella del terminale).
+- **Audio (vocali `🎙 m:ss` e brani tra i documenti `🎧`)**: `Ctrl-P` scarica e suona con un player esterno (mpv se presente, altrimenti ffplay; env `RONDINE_PLAYER` per un binario specifico). Nessuna libreria audio: 0 RAM extra, il player gira in un processo separato e un nuovo `Ctrl-P` lo termina.
+- **Grandezza immagini**: variabile d'ambiente `RONDINE_SCALE` (0.5–4) moltiplica sticker/foto nella griglia e messaggi. Il rapporto celle si regola con `RONDINE_CELL_W`/`RONDINE_CELL_H` (pixel per cella del terminale).
 - **Video (mp4)**: etichetta informativa (durata/caption), non renderizzati.
 - Gli sticker TGS (Lottie) e i video-sticker webm restano etichetta emoji: renderizzarli servirebbero librerie C pesanti (rlottie/libvpx), in contrasto con la filosofia "poco RAM, build semplice".
 - Nessun supporto a survey di reazioni o reazioni mobili (stanti, per ora).
@@ -143,7 +147,7 @@ kitty permette comunque di selezionare testo **tenendo premuto Shift** +
 ## RAM
 
 Nessuna cache in memoria: ogni media scaricato viene subito convertito/compresso e buttato
-su disco (`~/.local/share/rtete/assets/<md5>.png`, cache condivisa per tutti i tipi);
+su disco (`~/.local/share/rondine/assets/<md5>.png`, cache condivisa per tutti i tipi);
 la cronologia in RAM è limitata a 60 messaggi per chat aperta, le conversioni girano
 in spawn_blocking e NESSUN frame completo resta a lungo nello heap. `smem`/`ps` per
 verificare: il RSS tipico sta nelle decine di MB, non centinaia.

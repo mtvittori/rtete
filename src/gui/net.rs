@@ -9,8 +9,8 @@ use grammers_client::Client;
 use iced::futures::{Stream, StreamExt};
 use tokio::sync::mpsc;
 
-use rtete::send::{Request, Response};
-use rtete::{app, loader, tg, worker};
+use rondine::send::{Request, Response};
+use rondine::{app, loader, tg, worker};
 
 /// Il runtime della rete: grammers, worker e `mark_read` girano qui, non
 /// nell'executor di iced (così `Handle::enter` basta per gli spawn).
@@ -73,10 +73,10 @@ fn sock_path() -> std::path::PathBuf {
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    dir.join("rtete-gui.sock")
+    dir.join("rondine-gui.sock")
 }
 
-/// Istanza unica: se RTete è già aperta le passa il link (o niente, solo
+/// Istanza unica: se Rondine è già aperta le passa il link (o niente, solo
 /// per farsi trovare) e ritorna true; il chiamante allora esce.
 pub fn hand_off(link: Option<&str>) -> bool {
     use std::io::Write;
@@ -148,9 +148,9 @@ async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<()
         let _ = tx.send(NetEvent::Status(step, s.into()));
     };
     // la GUI non ha un terminale per numero e codice: l'accesso si fa una
-    // volta con `rtete`, che salva credenziali e sessione
+    // volta con `rondine`, che salva credenziali e sessione
     let creds = tg::load_credentials()
-        .ok_or("nessuna credenziale: avvia prima `rtete` nel terminale per l'accesso")?;
+        .ok_or("nessuna credenziale: avvia prima `rondine` nel terminale per l'accesso")?;
     loader::prune_cache_to(cache_bytes);
 
     status(0, "mi collego a Telegram…");
@@ -164,7 +164,7 @@ async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<()
                     Ok(true) => break (session, client, updates),
                     Ok(false) => {
                         return Err(
-                            "sessione non autorizzata: accedi una volta con `rtete` nel terminale"
+                            "sessione non autorizzata: accedi una volta con `rondine` nel terminale"
                                 .into(),
                         )
                     }

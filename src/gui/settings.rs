@@ -7,8 +7,8 @@ use std::path::PathBuf;
 pub enum ThemeChoice {
     /// i colori del tema Omarchy corrente, aggiornati al cambio tema
     Omarchy,
-    /// la palette scura di RTete
-    Rtete,
+    /// la palette scura di Rondine
+    Rondine,
 }
 
 #[derive(Clone, Debug)]
@@ -16,7 +16,7 @@ pub struct Settings {
     pub theme: ThemeChoice,
     /// scala dell'interfaccia (testo e spazi)
     pub scale: f32,
-    /// i link t.me / tg:// si aprono in RTete invece che nel browser
+    /// i link t.me / tg:// si aprono in Rondine invece che nel browser
     pub links_in_app: bool,
     /// disegno con la GPU (wgpu) invece che in software (tiny-skia)
     pub gpu: bool,
@@ -63,13 +63,13 @@ fn path() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"));
-    base.join("rtete/gui.conf")
+    base.join("rondine/gui.conf")
 }
 
 impl Settings {
     /// cosa scaricare da solo, per lo stato condiviso
-    pub fn media_prefs(&self) -> rtete::app::MediaPrefs {
-        rtete::app::MediaPrefs {
+    pub fn media_prefs(&self) -> rondine::app::MediaPrefs {
+        rondine::app::MediaPrefs {
             photos: self.auto_photos,
             video_thumbs: self.video_thumbs,
             avatars: self.avatars,
@@ -84,7 +84,7 @@ impl Settings {
         for (k, v) in raw.lines().filter_map(|l| l.split_once('=')) {
             match (k.trim(), v.trim()) {
                 ("tema", "omarchy") => s.theme = ThemeChoice::Omarchy,
-                ("tema", "rtete") => s.theme = ThemeChoice::Rtete,
+                ("tema", "rondine" | "rtete") => s.theme = ThemeChoice::Rondine,
                 ("scala", v) => {
                     if let Ok(f) = v.parse::<f32>() {
                         s.scale = f.clamp(0.7, 1.6);
@@ -120,7 +120,7 @@ impl Settings {
         }
         let theme = match self.theme {
             ThemeChoice::Omarchy => "omarchy",
-            ThemeChoice::Rtete => "rtete",
+            ThemeChoice::Rondine => "rondine",
         };
         let _ = std::fs::write(
             p,
@@ -154,7 +154,7 @@ pub fn tg_handler() -> String {
 
 pub fn set_tg_handler() -> bool {
     std::process::Command::new("xdg-mime")
-        .args(["default", "rtete-gui.desktop", "x-scheme-handler/tg"])
+        .args(["default", "rondine-gui.desktop", "x-scheme-handler/tg"])
         .status()
         .is_ok_and(|s| s.success())
 }

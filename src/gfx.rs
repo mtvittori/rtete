@@ -29,7 +29,7 @@ static CELL_W: AtomicU32 = AtomicU32::new(10);
 static CELL_H: AtomicU32 = AtomicU32::new(20);
 
 fn set_flag(name: &str) -> bool {
-    std::env::var(name).is_ok()
+    rondine::env_var(name).is_some()
 }
 
 /// Il terminale che ospita il processo, risalendo gli antenati in /proc: il
@@ -70,9 +70,9 @@ fn host_terminal() -> Option<&'static str> {
 /// una shell di kitty non capirebbe i comandi `\x1b_G`.
 fn detect() -> Mode {
     let term = std::env::var("TERM").unwrap_or_default();
-    if set_flag("RTETE_FORCE_SIXEL") {
+    if set_flag("FORCE_SIXEL") {
         Mode::Sixel
-    } else if set_flag("RTETE_FORCE_KITTY") {
+    } else if set_flag("FORCE_KITTY") {
         Mode::Kitty
     } else if term.starts_with("foot") || host_terminal() == Some("foot") {
         Mode::Sixel
@@ -129,15 +129,13 @@ pub fn refresh_cells() {
 }
 
 /// Dimensione di una cella in pixel (stima 10x20 finché la finestra non
-/// riporta i pixel). RTETE_CELL_W / RTETE_CELL_H la forzano.
+/// riporta i pixel). RONDINE_CELL_W / RONDINE_CELL_H la forzano.
 pub fn cells() -> (f32, f32) {
-    let w = std::env::var("RTETE_CELL_W")
-        .ok()
+    let w = rondine::env_var("CELL_W")
         .and_then(|v| v.parse::<u32>().ok())
         .filter(|v| *v >= 2)
         .unwrap_or(CELL_W.load(Ordering::Relaxed)) as f32;
-    let h = std::env::var("RTETE_CELL_H")
-        .ok()
+    let h = rondine::env_var("CELL_H")
         .and_then(|v| v.parse::<u32>().ok())
         .filter(|v| *v >= 2)
         .unwrap_or(CELL_H.load(Ordering::Relaxed)) as f32;

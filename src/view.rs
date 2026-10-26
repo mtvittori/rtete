@@ -37,8 +37,7 @@ const CARD_H: u16 = 10;
 fn scale() -> f32 {
     static S: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
     *S.get_or_init(|| {
-        std::env::var("RTETE_SCALE")
-            .ok()
+        rondine::env_var("SCALE")
             .and_then(|v| v.parse::<f32>().ok())
             .filter(|v| (0.5..=4.0).contains(v))
             .unwrap_or(1.0)
@@ -482,7 +481,7 @@ pub fn draw(f: &mut Frame, app: &mut App, cmds: &mut Vec<Cmd>) {
 /// Prima riga: percorso corrente a sinistra, stato locale a destra
 /// (come il volume di jellyfin-tui).
 fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
-    let mut spans = vec![Span::styled("rtete", Style::new().fg(FAINT))];
+    let mut spans = vec![Span::styled("rondine", Style::new().fg(FAINT))];
     if let Some(chat) = app.current_chat() {
         spans.push(Span::styled(" › ", Style::new().fg(FAINT)));
         spans.push(Span::styled(
@@ -621,7 +620,7 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
         app.mouse_map.clear();
         app.link_map.clear();
         let hints = hints_line(&[("apri", "Invio"), ("sticker", "Tab"), ("esci", "q")]);
-        let block = pane("RTete", true).title_bottom(hints);
+        let block = pane("Rondine", true).title_bottom(hints);
         let inner = block.inner(area);
         f.render_widget(block, area);
         if inner.height > 1 {

@@ -1,4 +1,4 @@
-//! Colori e stili. La palette è globale e cambia a caldo: quella di RTete
+//! Colori e stili. La palette è globale e cambia a caldo: quella di Rondine
 //! (scura sul modello di Telegram Desktop) o quella del tema Omarchy
 //! corrente, letta da `~/.local/state/omarchy/current/theme/colors.toml`.
 
@@ -27,7 +27,7 @@ pub struct Pal {
     pub names: [Color; 7],
 }
 
-pub const RTETE: Pal = Pal {
+pub const RONDINE: Pal = Pal {
     bg: color!(0x0e1621),
     sidebar: color!(0x17212b),
     header: color!(0x17212b),
@@ -51,11 +51,11 @@ pub const RTETE: Pal = Pal {
     ],
 };
 
-static PAL: RwLock<Pal> = RwLock::new(RTETE);
+static PAL: RwLock<Pal> = RwLock::new(RONDINE);
 
 /// la palette in uso
 pub fn p() -> Pal {
-    PAL.read().map(|g| *g).unwrap_or(RTETE)
+    PAL.read().map(|g| *g).unwrap_or(RONDINE)
 }
 
 pub fn set(pal: Pal) {
@@ -126,7 +126,7 @@ pub fn omarchy() -> Option<Pal> {
     let dark_bg = get("dark_background").unwrap_or(bg);
     let lighter = get("lighter_background").unwrap_or_else(|| mix(bg, text, 0.08));
     let selection = get("selection").unwrap_or_else(|| mix(bg, accent, 0.35));
-    let or = |key: &str, i: usize| get(key).unwrap_or(RTETE.names[i]);
+    let or = |key: &str, i: usize| get(key).unwrap_or(RONDINE.names[i]);
     Some(Pal {
         bg,
         sidebar: dark_bg,
@@ -139,7 +139,7 @@ pub fn omarchy() -> Option<Pal> {
         // serve più contrasto
         muted: mix(text, bg, 0.45),
         link: get("cyan").unwrap_or(accent),
-        danger: get("red").unwrap_or(RTETE.danger),
+        danger: get("red").unwrap_or(RONDINE.danger),
         selected: selection,
         hover: lighter,
         names: [
@@ -163,7 +163,7 @@ pub fn name_color(seed: &str) -> Color {
 pub fn theme() -> Theme {
     let p = p();
     Theme::custom(
-        "RTete",
+        "Rondine",
         iced::theme::Palette {
             background: p.bg,
             text: p.text,

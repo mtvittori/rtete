@@ -98,7 +98,7 @@ pub fn ctrl_copy(app: &mut App) {
                   // i paste finché il clipboard non viene rimpiazzato
                 let _ = ch.wait();
             }
-            Err(_) => eprintln!("[rtete] wl-copy non trovato (installa wl-clipboard)"),
+            Err(_) => eprintln!("[rondine] wl-copy non trovato (installa wl-clipboard)"),
         }
     });
 }

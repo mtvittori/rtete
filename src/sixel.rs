@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn codifica_png_in_sixel() {
         let path =
-            std::env::temp_dir().join(format!("rtete-sixel-test-{}.png", std::process::id()));
+            std::env::temp_dir().join(format!("rondine-sixel-test-{}.png", std::process::id()));
         write_test_png(&path);
         // riquadro 5x3 celle da 10x20 px, immagine quadrata: va centrata
         let s = encode(&path, 50, 60).expect("codifica sixel");

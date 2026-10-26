@@ -1,5 +1,5 @@
 //! Gestione degli input della TUI: tastiera, mouse, incolla (update e
-//! risposte dei worker stanno in `rtete::sync`).
+//! risposte dei worker stanno in `rondine::sync`).
 
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use tokio::sync::mpsc;

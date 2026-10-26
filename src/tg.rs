@@ -411,8 +411,8 @@ pub struct Credentials {
     pub api_hash: String,
 }
 
-fn config_dir() -> PathBuf {
-    // specifica XDG: la dir specifica dell'app è base + "/rtete".
+fn config_base() -> PathBuf {
+    // specifica XDG: la dir specifica dell'app è base + "/rondine".
     // Le var XDG contano solo se assolute, altrimenti si riparte da HOME.
     let base = match std::env::var("XDG_CONFIG_HOME")
         .ok()
@@ -424,10 +424,42 @@ fn config_dir() -> PathBuf {
             .map(|h| PathBuf::from(h).join(".config"))
             .unwrap_or_else(|| PathBuf::from(".")),
     };
-    base.join("rtete")
+    base
 }
 
-fn data_dir() -> PathBuf {
+fn config_dir() -> PathBuf {
+    config_base().join(APP_DIR)
+}
+
+/// il nome delle cartelle dell'app (config e dati)
+const APP_DIR: &str = "rondine";
+/// le cartelle e la sessione di quando l'app si chiamava RTete
+const OLD_DIR: &str = "rtete";
+const DB_FILE: &str = "rondine.db";
+const OLD_DB_FILE: &str = "rtete.db";
+
+/// Prima del cambio di nome tutto stava in `rtete/`: al primo avvio di
+/// Rondine le cartelle (credenziali, sessione, cache, impostazioni) si
+/// spostano, così non serve rifare l'accesso. Da chiamare prima di tutto.
+pub fn migrate_old_dirs() {
+    for base in [config_base(), data_base()] {
+        let (old, new) = (base.join(OLD_DIR), base.join(APP_DIR));
+        if old.is_dir() && !new.exists() {
+            let _ = std::fs::rename(&old, &new);
+        }
+    }
+    // la sessione sqlite con i suoi file di journal
+    let dir = data_dir();
+    for ext in ["", "-wal", "-shm", "-journal"] {
+        let old = dir.join(format!("{OLD_DB_FILE}{ext}"));
+        let new = dir.join(format!("{DB_FILE}{ext}"));
+        if old.exists() && !new.exists() {
+            let _ = std::fs::rename(&old, &new);
+        }
+    }
+}
+
+fn data_base() -> PathBuf {
     let base = match std::env::var("XDG_DATA_HOME")
         .ok()
         .filter(|p| std::path::Path::new(p).is_absolute())
@@ -438,7 +470,11 @@ fn data_dir() -> PathBuf {
             .map(|h| PathBuf::from(h).join(".local/share"))
             .unwrap_or_else(|| PathBuf::from(".")),
     };
-    base.join("rtete")
+    base
+}
+
+fn data_dir() -> PathBuf {
+    data_base().join(APP_DIR)
 }
 
 pub fn media_dir() -> PathBuf {
@@ -530,7 +566,7 @@ fn parse_creds(raw: &str) -> Option<Credentials> {
 
 /// Interactive first-run prompt; stores the answer in the credentials file.
 pub async fn prompt_credentials() -> Result<Credentials, Box<dyn std::error::Error>> {
-    println!("Prima configurazione di RTete.");
+    println!("Prima configurazione di Rondine.");
     let _ = write!(std::io::stdout(), "API ID: ");
     let _ = std::io::stdout().flush();
     let mut line = String::new();
@@ -575,7 +611,7 @@ pub async fn connect(
     // Il file nasce 0600 (pre-creato: sqlite apre quello esistente e non lo
     // ricrea con la umask); i -wal/-journal che sqlite crea coi permessi
     // standard restano protetti perché la cartella è 0700.
-    let db_path = data_dir().join("rtete.db");
+    let db_path = data_dir().join(DB_FILE);
     if !db_path.exists() {
         std::fs::OpenOptions::new()
             .write(true)
@@ -601,7 +637,7 @@ pub async fn connect(
 }
 
 /// La rete non è sempre pronta al primo colpo (Wi-Fi che rientra, laptop
-/// che riprende dal sospendo): chi lanciava rtete vedeva solo un errore
+/// che riprende dal sospendo): chi lanciava rondine vedeva solo un errore
 /// e una chiusura. Qui si ritenta pochi colpi con crescente attesa, e
 /// solo per errori di cavallo di rete: parola? numero sbagliato?
 pub async fn connect_and_sign(
@@ -712,7 +748,7 @@ pub async fn sign_in(
         // log mascherato per diagnosi: niente numero completo su disco
         let shown = &phone[..phone.len().min(4)];
         eprintln!(
-            "[rtete] tel normalizzato: {shown}… ({} cifre)",
+            "[rondine] tel normalizzato: {shown}… ({} cifre)",
             phone.len() - 1
         );
         // "+39" da solo o righe spurie: richiedi invece di chiamare Telegram
@@ -1675,7 +1711,7 @@ pub fn same_peer(a: PeerId, b: PeerId) -> bool {
     a == b
 }
 
-/// Un link Telegram (`tg://…` o `https://t.me/…`) che si apre dentro rtete.
+/// Un link Telegram (`tg://…` o `https://t.me/…`) che si apre dentro Rondine.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TgLink {
     /// chat pubblica per username, eventualmente su un messaggio
@@ -1946,7 +1982,7 @@ mod tests {
     // ---------- unique_save_path ----------
     #[test]
     fn unique_avoids_collisions() {
-        let dir = std::env::temp_dir().join(format!("rtete-uniq-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rondine-uniq-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("report.pdf"), b"x").unwrap();
         assert_eq!(

@@ -1,4 +1,4 @@
-//! RTete GUI — la stessa RTete (grammers, worker, cache delle anteprime,
+//! Rondine GUI — la stessa Rondine (grammers, worker, cache delle anteprime,
 //! stato `App`) con un'interfaccia iced al posto della TUI. L'accesso
 //! (numero, codice) resta alla TUI: qui si riusa la sessione salvata.
 
@@ -12,11 +12,11 @@ use grammers_client::session::types::PeerId;
 use iced::widget::{operation, scrollable};
 use iced::{keyboard, Subscription, Task};
 
-use rtete::app::App;
-use rtete::clipboard;
-use rtete::send::{Request, SendJob, SendKind};
-use rtete::sync::{handle_response, handle_update};
-use rtete::tg;
+use rondine::app::App;
+use rondine::clipboard;
+use rondine::send::{Request, SendJob, SendKind};
+use rondine::sync::{handle_response, handle_update};
+use rondine::tg;
 use grammers_client::tl;
 
 use crate::net::{Carrier, Link, NetEvent};
@@ -212,6 +212,8 @@ pub struct Gui {
 }
 
 fn main() -> iced::Result {
+    // prima di leggere le impostazioni: le cartelle di RTete diventano di Rondine
+    tg::migrate_old_dirs();
     // GPU (wgpu) per uno scorrimento fluido; dalle impostazioni si passa
     // al disegno software (tiny-skia, ~35 MB in meno). ICED_BACKEND vince.
     if std::env::var_os("ICED_BACKEND").is_none() && !Settings::load().gpu {
@@ -225,7 +227,7 @@ fn main() -> iced::Result {
     }
     net::start(link, Settings::load().cache_mb as u64 * 1024 * 1024);
     iced::application(boot, Gui::update, ui::view)
-        .title("RTete")
+        .title("Rondine")
         .theme(|_: &Gui| style::theme())
         .scale_factor(|g: &Gui| g.settings.scale)
         .subscription(Gui::subscription)
@@ -233,7 +235,7 @@ fn main() -> iced::Result {
             size: iced::Size::new(1100.0, 760.0),
             // la classe che Hyprland vede (regole finestra, scorciatoie)
             platform_specific: iced::window::settings::PlatformSpecific {
-                application_id: "rtete-gui".into(),
+                application_id: "rondine-gui".into(),
                 ..Default::default()
             },
             ..Default::default()
@@ -241,16 +243,16 @@ fn main() -> iced::Result {
         .run()
 }
 
-/// Porta a fuoco la finestra di RTete già aperta (Hyprland).
+/// Porta a fuoco la finestra di Rondine già aperta (Hyprland).
 pub fn focus_existing() {
-    let lua = r#"hl.dsp.focus({ window = "class:rtete-gui" })"#;
+    let lua = r#"hl.dsp.focus({ window = "class:rondine-gui" })"#;
     let ok = std::process::Command::new("hyprctl")
         .args(["dispatch", lua])
         .output()
         .is_ok_and(|o| o.status.success() && !String::from_utf8_lossy(&o.stdout).contains("rror"));
     if !ok {
         let _ = std::process::Command::new("hyprctl")
-            .args(["dispatch", "focuswindow", "class:rtete-gui"])
+            .args(["dispatch", "focuswindow", "class:rondine-gui"])
             .output();
     }
 }
@@ -291,8 +293,8 @@ fn boot() -> Gui {
 
 fn apply_theme(choice: ThemeChoice) {
     let pal = match choice {
-        ThemeChoice::Omarchy => style::omarchy().unwrap_or(style::RTETE),
-        ThemeChoice::Rtete => style::RTETE,
+        ThemeChoice::Omarchy => style::omarchy().unwrap_or(style::RONDINE),
+        ThemeChoice::Rondine => style::RONDINE,
     };
     style::set(pal);
 }
@@ -368,7 +370,7 @@ impl Gui {
             Msg::View(id) => {
                 // l'originale a piena risoluzione se c'è, sennò l'anteprima
                 self.viewer = self.row_media(id, |k| match k {
-                    tg::RowKind::Photo { media, .. } => rtete::loader::original(media)
+                    tg::RowKind::Photo { media, .. } => rondine::loader::original(media)
                         .or_else(|| self.app.previews.get(&tg::media_key(media)).cloned()),
                     _ => None,
                 });
@@ -783,7 +785,7 @@ impl Gui {
                 Task::none()
             }
             Msg::PruneNow => {
-                rtete::loader::prune_cache_to(self.settings.cache_mb as u64 * 1024 * 1024);
+                rondine::loader::prune_cache_to(self.settings.cache_mb as u64 * 1024 * 1024);
                 // le anteprime tolte dal disco si riscaricano quando servono
                 self.app.previews.retain(|_, p| p.exists());
                 self.measure_cache();
@@ -799,7 +801,7 @@ impl Gui {
                 Task::none()
             }
             Msg::LoadPreview(id) => {
-                let media = self.row_media(id, |k| rtete::app::preview_media(k).cloned());
+                let media = self.row_media(id, |k| rondine::app::preview_media(k).cloned());
                 if let (Some(media), Some(req)) = (media, self.req()) {
                     self.app.ensure_previews(&req, [&media]);
                 }
@@ -942,7 +944,7 @@ impl Gui {
     }
 
     /// Link da fuori (argomento o altra istanza): come un click in chat,
-    /// ma sempre dentro RTete.
+    /// ma sempre dentro Rondine.
     fn external_link(&mut self, url: String) {
         if self.link.is_none() {
             self.pending_links.push(url);
@@ -1017,7 +1019,7 @@ impl Gui {
 
     fn measure_cache(&mut self) {
         for (i, kind) in [CacheKind::Media, CacheKind::Avatars, CacheKind::Temp].into_iter().enumerate() {
-            self.cache_usage[i] = rtete::loader::dir_usage(&kind.dir());
+            self.cache_usage[i] = rondine::loader::dir_usage(&kind.dir());
         }
     }
 
@@ -1026,12 +1028,12 @@ impl Gui {
         let a = &mut self.app;
         match kind {
             CacheKind::Media => {
-                rtete::loader::clear_dir(&kind.dir());
+                rondine::loader::clear_dir(&kind.dir());
                 a.previews.clear();
                 a.failed.clear();
             }
             CacheKind::Avatars => {
-                rtete::loader::clear_dir(&kind.dir());
+                rondine::loader::clear_dir(&kind.dir());
                 a.avatars.clear();
                 a.avatar_asked.clear();
             }
@@ -1041,7 +1043,7 @@ impl Gui {
                     a.status = "c'è un invio in corso: riprova dopo".into();
                     return;
                 }
-                rtete::loader::clear_dir(&kind.dir());
+                rondine::loader::clear_dir(&kind.dir());
             }
         }
         a.status = "cache svuotata".into();
@@ -1163,7 +1165,7 @@ impl Gui {
                     return Task::none();
                 };
                 let (client, req) = (link.client.clone(), link.req.clone());
-                if let rtete::send::Response::Clipboard(hit) = &r {
+                if let rondine::send::Response::Clipboard(hit) = &r {
                     match (hit, self.paste_undo.take()) {
                         // il testo l'ha già messo iced nel campo
                         (clipboard::ClipboardHit::Text(_) | clipboard::ClipboardHit::Empty, Some(_)) => {
@@ -1174,8 +1176,8 @@ impl Gui {
                         (_, None) => {}
                     }
                 }
-                let first_page = matches!(&r, rtete::send::Response::Hist { .. });
-                let profile = matches!(&r, rtete::send::Response::Profile(Ok(_)));
+                let first_page = matches!(&r, rondine::send::Response::Hist { .. });
+                let profile = matches!(&r, rondine::send::Response::Profile(Ok(_)));
                 let _rt = net::RT.get().map(|rt| rt.enter());
                 iced::futures::executor::block_on(handle_response(&mut self.app, r, &client, &req));
                 if profile {

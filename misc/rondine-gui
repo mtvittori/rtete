@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Rondine GUI — client Telegram grafico (iced) di ~/Work/rondine.
+# Un link tg:// o t.me come argomento si apre nella finestra già aperta.
+# Gli errori finiscono su ~/.local/state/rondine-gui.err.log.
+# Con la TUI aperta non parte: le due condividerebbero la stessa sessione
+# sqlite (~/.local/share/rondine/rondine.db) nello stesso momento.
+set -uo pipefail
+
+bin="$HOME/Work/rondine/target/release/rondine-gui"
+# il progetto può stare ancora nella cartella col vecchio nome
+[[ -x $bin ]] || bin="$HOME/Work/rtete/target/release/rondine-gui"
+if [[ ! -x $bin ]]; then
+  notify-send -a Rondine "Rondine" "Binario non trovato: compila con
+cargo build --release --features gui --bin rondine-gui" 2>/dev/null
+  exit 1
+fi
+if pgrep -x rondine >/dev/null; then
+  notify-send -a Rondine "Rondine" "La versione da terminale è aperta: chiudila prima (usano la stessa sessione)." 2>/dev/null
+  exit 1
+fi
+mkdir -m 700 -p "$HOME/.local/state"
+log="$HOME/.local/state/rondine-gui.err.log"
+touch "$log" && chmod 600 "$log"
+exec "$bin" "$@" 2>>"$log"

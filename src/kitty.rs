@@ -13,7 +13,7 @@
 //! the cheap `a=p` placement at the current position; images that disappear
 //! from the layout are deleted by id (`a=d,d=i`) — the old full `a=d,d=A`
 //! wipe on every layout change forced a retransmit of everything (flicker).
-//! Set `RTETE_B64=1` to fall back to the chunked base64 transmission
+//! Set `RONDINE_B64=1` to fall back to the chunked base64 transmission
 //! (for a terminal that accepts the protocol but not `t=f`).
 
 use std::collections::HashMap;
@@ -60,7 +60,7 @@ pub(crate) fn env_terminal_supports() -> bool {
         || term_program.eq_ignore_ascii_case("WezTerm")
         || std::env::var("GHOSTTY_RESOURCES_DIR").is_ok()
         || std::env::var("WEZTERM_PANE").is_ok()
-        || std::env::var("RTETE_FORCE_KITTY").is_ok()
+        || rondine::env_var("FORCE_KITTY").is_some()
 }
 
 /// Rileva il supporto una volta sola tramite variabili d'ambiente.
@@ -68,7 +68,7 @@ pub(crate) fn env_terminal_supports() -> bool {
 /// Volutamente SENZA probe con risposta su stdin: la query `a=q` andrebbe a
 /// finire nel filone di una lettura bloccante "orfana" che divorerebbe la
 /// prima riga digitata dall'utente (es. il telefono al login). Il wrapper
-/// lancia RTete in Kitty/ghostty/wezterm, che dichiarano già le variabili giuste.
+/// lancia Rondine in Kitty/ghostty/wezterm, che dichiarano già le variabili giuste.
 pub fn startup_detect() {
     SUPPORT.store(env_terminal_supports(), Ordering::Relaxed);
 }
@@ -79,11 +79,11 @@ pub fn supported() -> bool {
 
 /// Trasmette i byte del PNG una volta per id. Default: `t=f` — il payload è
 /// il percorso del file, il terminale legge da sé (niente base64 sul pty,
-/// niente mega-di-payload per ogni cambio di layout). Con RTETE_B64=1 si
+/// niente mega-di-payload per ogni cambio di layout). Con RONDINE_B64=1 si
 /// torna alla codifica base64 a blocchi.
 fn transmit(id: u32, path: &Path) -> bool {
-    let legacy = std::env::var("RTETE_B64")
-        .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    let legacy = rondine::env_var("B64")
+        .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     let payload = if legacy {
         let Ok(bytes) = std::fs::read(path) else {
             return false;

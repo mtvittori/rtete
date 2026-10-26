@@ -1,5 +1,5 @@
 //! Colori del tema del terminale: sfondo e testo predefiniti più la palette
-//! ANSI a 16 colori, così rtete segue il tema Omarchy (foot/kitty) senza RGB
+//! ANSI a 16 colori, così Rondine segue il tema Omarchy (foot/kitty) senza RGB
 //! fissi. La barra di selezione si ottiene invertendo i colori (REVERSED).
 
 pub mod palette {

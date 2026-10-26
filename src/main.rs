@@ -1,4 +1,4 @@
-//! RTete — client Telegram TUI per Linux, pensato per consumare pochissima RAM:
+//! Rondine — client Telegram TUI per Linux, pensato per consumare pochissima RAM:
 //! grammers (MTProto puro-Rust, niente TDLib), ratatui per l'interfaccia e il
 //! kitty graphics protocol (o sixel su foot) per mostrare gli sticker.
 
@@ -10,7 +10,7 @@ mod styles;
 mod term;
 mod view;
 
-use rtete::{app, clipboard, loader, send, tg, worker};
+use rondine::{app, clipboard, loader, send, tg, worker};
 
 use std::sync::atomic::Ordering;
 
@@ -24,7 +24,7 @@ use tokio::sync::mpsc;
 use crate::app::App;
 use crate::view::Cmd;
 use crate::events::handle_event;
-use rtete::sync::{handle_response, handle_update};
+use rondine::sync::{handle_response, handle_update};
 use crate::send::{Request, Response};
 use crate::term::{panic_hook, TUI_UP, TermGuard};
 
@@ -41,6 +41,7 @@ async fn render(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tg::migrate_old_dirs();
     let creds = match tg::load_credentials() {
         Some(c) => c,
         None => tg::prompt_credentials().await?,
