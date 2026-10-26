@@ -21,9 +21,18 @@ iced = { version = "0.14", optional = true, default-features = false, features =
 rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal", "wayland"] }
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
 serde_json = "1"
+# backend WhatsApp (non ufficiale, multi-device): solo con --features whatsapp
+whatsapp-rust = { version = "0.7.0", optional = true, default-features = false, features = ["signal", "tokio-native", "tokio-runtime", "tokio-transport", "ureq-client"] }
+# lo storage SQLite senza la sua copia di SQLite: grammers (libsql) ne porta
+# già una, due copie statiche nello stesso binario non si linkano
+whatsapp-rust-sqlite-storage = { version = "0.7.0", optional = true, default-features = false }
+# archivio locale delle chat WhatsApp e QR dell'abbinamento
+serde = { version = "1", features = ["derive"], optional = true }
+qrcode = { version = "0.14.1", default-features = false, optional = true }
 
 [features]
 gui = ["dep:iced", "dep:rfd"]
+whatsapp = ["dep:whatsapp-rust", "dep:whatsapp-rust-sqlite-storage", "dep:serde", "dep:qrcode"]
 
 [[bin]]
 name = "rondine"

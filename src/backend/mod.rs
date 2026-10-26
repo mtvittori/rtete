@@ -3,3 +3,7 @@
 //! compresi) sullo stesso canale: l'app non vede altro.
 
 pub mod tg;
+
+/// WhatsApp (whatsapp-rust, non ufficiale): solo con `--features whatsapp`.
+#[cfg(feature = "whatsapp")]
+pub mod wa;

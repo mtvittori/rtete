@@ -1306,3 +1306,48 @@ PRIVACY
 
 I messaggi da tradurre vengono inviati al servizio scelto, solo quando premi «🌐 Traduci» o nelle chat a traduzione automatica (si attiva dalla scheda della chat). La chiave resta in ~/.config/rondine/translate.conf, leggibile solo da te.
 Messages to translate are sent to the chosen service, only when you press “🌐 Translate” or in chats with automatic translation (enabled from the chat profile). The key stays in ~/.config/rondine/translate.conf, readable only by you.
+
+Abbinato! Scarico le chat dal telefono…
+Paired! Downloading chats from the phone…
+
+Codice di abbinamento: {} (WhatsApp → Dispositivi collegati → Collega con numero)
+Pairing code: {} (WhatsApp → Linked devices → Link with phone number)
+
+Mi collego a WhatsApp…
+Connecting to WhatsApp…
+
+WhatsApp ha sospeso l'account: {}
+WhatsApp suspended the account: {}
+
+WhatsApp sul telefono → Dispositivi collegati → Collega un dispositivo, poi inquadra il QR.
+WhatsApp on the phone → Linked devices → Link a device, then scan the QR code.
+
+abbinamento non riuscito: {}
+pairing failed: {}
+
+archivio: {}
+archive: {}
+
+chat sconosciuta
+unknown chat
+
+connessione a WhatsApp chiusa
+WhatsApp connection closed
+
+dispositivo scollegato dal telefono: riavvia per abbinarlo di nuovo
+device unlinked from the phone: restart to pair it again
+
+letture: {}
+read receipts: {}
+
+non disponibile su WhatsApp
+not available on WhatsApp
+
+su WhatsApp si cancellano solo i propri messaggi
+on WhatsApp you can only delete your own messages
+
+🚫 messaggio eliminato
+🚫 message deleted
+
+questa build non ha WhatsApp: ricompila con --features whatsapp
+this build has no WhatsApp: rebuild with --features whatsapp

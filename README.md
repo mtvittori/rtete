@@ -74,6 +74,37 @@ aggiungere una lingua basta un file nuovo e una voce in `src/i18n.rs`;
 Disegna in software (tiny-skia, ~75 MB di RAM); `ICED_BACKEND=wgpu` usa
 la GPU (~105 MB).
 
+## WhatsApp (sperimentale)
+
+Rondine può usare anche WhatsApp, con
+[`whatsapp-rust`](https://github.com/jlucaso1/whatsapp-rust): lo stesso
+protocollo multi-device di WhatsApp Web, in Rust puro. **Non è un client
+ufficiale**: Meta può sospendere l'account, meglio provarlo su un numero
+secondario.
+
+```
+cargo build --release --features whatsapp
+target/release/rondine --whatsapp
+```
+
+Al primo avvio compare un QR nel terminale: sul telefono *WhatsApp →
+Dispositivi collegati → Collega un dispositivo*. In alternativa
+`RONDINE_WA_PHONE=39333… rondine --whatsapp` mostra un codice di 8
+caratteri da inserire nel telefono (*Collega con numero*). Poi la sessione
+resta in `~/.local/share/rondine/whatsapp/`.
+
+WhatsApp non tiene la cronologia sul server: le chat arrivano dal telefono
+all'abbinamento e da lì in poi Rondine le salva in locale
+(`whatsapp/chats.json` e `whatsapp/msgs/*.jsonl`, leggibili solo da te).
+
+Cosa c'è già: lista chat, cronologia, messaggi in tempo reale, invio di
+testo, risposte, modifica, cancellazione dei propri messaggi, reazioni,
+spunte di lettura, «sta scrivendo», foto/sticker/miniature dei video,
+salvataggio e riproduzione dei media, invio di foto e file, ricerca nella
+chat. Non ci sono (o non ancora): set di sticker, foto profilo, inoltro,
+blocco, eliminazione delle chat, nomi dei gruppi nuovi prima della
+sincronizzazione, la GUI (per ora solo la TUI).
+
 ## Architettura
 
 L'interfaccia (TUI e GUI) e lo stato non conoscono il servizio di
@@ -89,9 +120,10 @@ canale.
 | `src/app.rs`, `src/sync.rs` | stato e come cambia a ogni evento/risposta |
 | `src/worker.rs`, `src/loader.rs` | salvataggi, player, traduzioni, conversione delle anteprime |
 | `src/backend/tg/` | Telegram (grammers): accesso, dispatcher delle richieste, update live |
+| `src/backend/wa/` | WhatsApp (whatsapp-rust): abbinamento, archivio locale, dispatcher, eventi |
 
-Un nuovo backend (WhatsApp) è un'altra cartella sotto `src/backend/` che
-esegue le stesse `Request` e manda le stesse `Response`.
+Ogni backend esegue le stesse `Request` e manda le stesse `Response`; un
+servizio nuovo è un'altra cartella sotto `src/backend/`.
 
 ## Primo avvio
 
