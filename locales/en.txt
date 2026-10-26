@@ -1201,3 +1201,108 @@ Conversations
 
 Disconnetti
 Sign out
+
+configura la traduzione in Impostazioni → Traduzione
+set up translation in Settings → Translation
+
+il messaggio è già nella tua lingua
+the message is already in your language
+
+traduzione: {}
+translation: {}
+
+manca la chiave DeepL (Impostazioni → Traduzione)
+missing DeepL key (Settings → Translation)
+
+chiave DeepL non valida
+invalid DeepL key
+
+quota mensile di DeepL esaurita
+DeepL monthly quota used up
+
+troppe richieste: riprova fra poco
+too many requests: try again shortly
+
+risposta di DeepL non valida
+invalid response from DeepL
+
+chiave API non valida
+invalid API key
+
+risposta del servizio non valida
+invalid response from the service
+
+🌐 traduco…
+🌐 translating…
+
+nessun messaggio di testo da tradurre
+no text message to translate
+
+configura la traduzione in Impostazioni → Traduzione (rondine-gui) o in ~/.config/rondine/translate.conf
+set up translation in Settings → Translation (rondine-gui) or in ~/.config/rondine/translate.conf
+
+provo la traduzione…
+testing translation…
+
+🌐 Originale
+🌐 Original
+
+🌐 Traduci
+🌐 Translate
+
+🌐 tradotto da {}
+🌐 translated from {}
+
+🌐 tradotto
+🌐 translated
+
+Traduzione
+Translation
+
+traduzione dei messaggi con DeepL, Groq e altri
+message translation with DeepL, Groq and others
+
+🌐 Traduci da solo i messaggi di questa chat
+🌐 Automatically translate this chat's messages
+
+SERVIZIO
+SERVICE
+
+Compatibile OpenAI (Groq…)
+OpenAI-compatible (Groq…)
+
+Chiave API DeepL
+DeepL API key
+
+La chiave si crea gratis su deepl.com (piano «DeepL API Free»); quelle gratuite finiscono con «:fx».
+Create a free key on deepl.com (“DeepL API Free” plan); free keys end with “:fx”.
+
+Indirizzo
+Address
+
+Chiave API
+API key
+
+Modello
+Model
+
+La chiave di Groq si crea su console.groq.com; con Ollama in locale non serve.
+Create a Groq key on console.groq.com; a local Ollama needs none.
+
+Come l'interfaccia ({})
+Same as the interface ({})
+
+Prova
+Test
+
+inserisci prima la chiave
+enter the key first
+
+TRADURRE IN
+TRANSLATE INTO
+
+PRIVACY
+PRIVACY
+
+I messaggi da tradurre vengono inviati al servizio scelto, solo quando premi «🌐 Traduci» o nelle chat a traduzione automatica (si attiva dalla scheda della chat). La chiave resta in ~/.config/rondine/translate.conf, leggibile solo da te.
+Messages to translate are sent to the chosen service, only when you press “🌐 Translate” or in chats with automatic translation (enabled from the chat profile). The key stays in ~/.config/rondine/translate.conf, readable only by you.

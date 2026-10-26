@@ -1366,6 +1366,24 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                         last.links = links;
                     }
                 }
+                // la traduzione sotto il testo, nella stessa colonna
+                let tr_lines = match app.open.and_then(|p| app.translations.get(&(p, row.id))) {
+                    Some(crate::app::TrState::Shown(t)) => {
+                        wrap(&format!("🌐 {}", t.text), width.saturating_sub(LABEL_W + 3))
+                    }
+                    Some(crate::app::TrState::Busy) => vec![tr("🌐 traduco…").to_string()],
+                    _ => Vec::new(),
+                };
+                for piece in tr_lines {
+                    lines.push(HistoryLine {
+                        text: format!("{} │ {}", " ".repeat(LABEL_W), piece),
+                        color: ACCENT_DIM,
+                        ..HistoryLine::sep()
+                    });
+                    if let Some(last) = lines.last_mut() {
+                        last.id = row.id;
+                    }
+                }
             }
             tg::RowKind::Sticker {
                 media,

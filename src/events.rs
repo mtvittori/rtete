@@ -83,6 +83,8 @@ pub(crate) async fn handle_event(
                                 String::new()
                             };
                         }
+                        // traduce (o rimette l'originale) il messaggio scelto
+                        'g' => ctrl_translate(app),
                         // ricerca nella chat aperta
                         'f' if app.current_chat().is_some() => {
                             app.show_search = true;
@@ -279,6 +281,25 @@ pub(crate) fn key_updown_mouse(app: &mut App, m: crossterm::event::MouseEvent, d
         }
     } else {
         move_msg_cursor(app, down);
+    }
+}
+
+/// Ctrl-G: traduzione del messaggio selezionato, o dell'ultimo ricevuto.
+fn ctrl_translate(app: &mut App) {
+    let cursor = app.msg_cursor;
+    let Some(ring) = app.chat_ready_ring() else {
+        return;
+    };
+    let is_text = |r: &tg::HistoryRow| matches!(&r.kind, tg::RowKind::Text(t) if !t.trim().is_empty());
+    let pick = App::picked_row(ring, cursor, |r| is_text(r) && (!r.outgoing || cursor == Some(r.id)))
+        .map(|r| r.id);
+    let (Some(id), Some(peer)) = (pick, app.open) else {
+        app.status = tr("nessun messaggio di testo da tradurre").into();
+        return;
+    };
+    app.toggle_translation(peer, id);
+    if !app.translate.ready() {
+        app.status = tr("configura la traduzione in Impostazioni → Traduzione (rondine-gui) o in ~/.config/rondine/translate.conf").into();
     }
 }
 

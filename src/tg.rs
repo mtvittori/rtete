@@ -429,7 +429,7 @@ fn config_base() -> PathBuf {
     base
 }
 
-fn config_dir() -> PathBuf {
+pub fn config_dir() -> PathBuf {
     config_base().join(APP_DIR)
 }
 

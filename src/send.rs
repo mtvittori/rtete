@@ -143,6 +143,16 @@ pub enum Request {
     Sessions,
     /// chiude una sessione, o tutte le altre con `None`
     EndSession(Option<i64>),
+    /// traduce il testo di un messaggio (`auto`: chat tradotta da sola)
+    Translate {
+        peer: PeerId,
+        id: i32,
+        text: String,
+        cfg: Box<crate::translate::Config>,
+        auto: bool,
+    },
+    /// traduce una frase di prova (Impostazioni → Traduzione)
+    TranslateTest(Box<crate::translate::Config>),
 }
 
 /// Risposte dei worker: un solo canale verso il ciclo; ogni variante ha
@@ -202,6 +212,14 @@ pub enum Response {
     ProfileSaved(Result<(), String>),
     Sessions(Result<Vec<tg::Session>, String>),
     SessionEnded(Result<Option<i64>, String>),
+    Translated {
+        peer: PeerId,
+        id: i32,
+        auto: bool,
+        target: String,
+        res: Result<crate::translate::Translated, String>,
+    },
+    TranslateTest(Result<crate::translate::Translated, String>),
     /// il probe wl-clipboard ha girato a thread fuori dal ciclo eventi
     Clipboard(ClipboardHit),
 }

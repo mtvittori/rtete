@@ -8,6 +8,7 @@ pub mod loader;
 pub mod send;
 pub mod sync;
 pub mod tg;
+pub mod translate;
 pub mod worker;
 
 /// Variabile d'ambiente `RONDINE_<key>`; vale ancora il vecchio nome

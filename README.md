@@ -52,6 +52,17 @@ automatico, miniature, misura delle foto), dati e archiviazione (spazio
 usato, svuota cache, tetto della cache), dispositivi (sessioni attive da
 chiudere) e link.
 
+## Traduzione dei messaggi
+
+Con una chiave **DeepL** (predefinito; il piano «API Free» è gratuito) o di
+un servizio compatibile OpenAI (**Groq**, OpenRouter, Ollama in locale) i
+messaggi si traducono: «🌐 Traduci» nelle azioni del messaggio nella GUI,
+`Ctrl-G` nella TUI. Dalla scheda di una chat si attiva la traduzione
+automatica dei messaggi in arrivo. Si configura in Impostazioni →
+Traduzione (servizio, chiave, lingua di destinazione, pulsante «Prova»);
+la configurazione sta in `~/.config/rondine/translate.conf` (0600). I testi
+vanno al servizio scelto solo quando si traduce.
+
 ## Lingue
 
 L'interfaccia (GUI e TUI) è in italiano e in inglese: segue la lingua del
@@ -127,6 +138,7 @@ messaggio selezionato invece che sull'ultimo.
 | `Ctrl+C` / `Cmd+C` | copia il messaggio selezionato; **senza selezione esce** (`q` per uscire sempre) |
 | `Ctrl+V` / `Cmd+V` | incolla dagli appunti via `wl-paste`: se c'è un'**immagine** (png/jpeg) la prepara in tmp → Invio la invia come foto alla chat aperta (il testo del compose è la didascalia); testo altrimenti (multi-riga nel compose, spazi in ricerca) |
 | `Ctrl-F` | ricerca server-side nella chat aperta: la query si scrive nel riquadro in fondo (multifila, `Invio` cerca) |
+| `Ctrl-G` | traduce il messaggio selezionato (o l'ultimo ricevuto); di nuovo `Ctrl-G` torna all'originale |
 | `click` su un messaggio | lo seleziona (come ↑/↓); sulla colonna contatti non fa nulla |
 | `click` su un link | apre il browser di default (`xdg-open`); l'URL funziona anche se spezzato su più righe |
 

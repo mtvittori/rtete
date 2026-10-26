@@ -17,7 +17,7 @@ use rondine::clipboard;
 use rondine::send::{Request, SendJob, SendKind};
 use rondine::sync::{handle_response, handle_update};
 use rondine::tg;
-use rondine::{i18n, tr, trf};
+use rondine::{i18n, tr, trf, translate};
 use grammers_client::tl;
 
 use crate::net::{Carrier, Link, NetEvent};
@@ -115,6 +115,21 @@ pub enum Msg {
     LoadPreview(i32),
     /// lingua dell'interfaccia (None: quella del sistema)
     Lang(Option<i18n::Lang>),
+    /// mostra o nasconde la traduzione di un messaggio
+    Translate(i32),
+    /// traduzione automatica della chat aperta
+    AutoTranslate(bool),
+    TrProvider(translate::Provider),
+    TrDeeplKey(String),
+    TrUrl(String),
+    TrKey(String),
+    TrModel(String),
+    /// un servizio pronto (Groq, OpenRouter, Ollama)
+    TrPreset(usize),
+    /// lingua di destinazione (None: quella dell'interfaccia)
+    TrTarget(Option<String>),
+    /// traduce una frase di prova
+    TrTest,
     Quit,
 }
 
@@ -129,6 +144,7 @@ pub enum SettingsPage {
     Storage,
     Devices,
     Links,
+    Translation,
 }
 
 /// Le parti della cache che si possono svuotare.
@@ -286,7 +302,11 @@ fn boot() -> Gui {
         settings_page: SettingsPage::Main,
         pf: tg::MyProfile::default(),
         cache_usage: [(0, 0); 3],
-        app: App { media_prefs: settings.media_prefs(), ..App::default() },
+        app: App {
+            media_prefs: settings.media_prefs(),
+            translate: translate::Config::load(),
+            ..App::default()
+        },
         phase: Phase::Connecting(0, tr("avvio…").into()),
         link: None,
         filter: String::new(),
@@ -817,6 +837,69 @@ impl Gui {
                 i18n::set(self.settings.lang.resolve());
                 Task::none()
             }
+            Msg::Translate(id) => {
+                if let Some(peer) = self.app.open {
+                    self.app.toggle_translation(peer, id);
+                    self.app.msg_cursor = None;
+                }
+                Task::none()
+            }
+            Msg::AutoTranslate(on) => {
+                if let Some(peer) = self.app.open {
+                    self.app.translate.set_auto(peer, on);
+                    self.save_translate();
+                    if on {
+                        self.app.auto_translate(peer, rondine::app::AUTO_TRANSLATE_LAST);
+                    }
+                }
+                Task::none()
+            }
+            Msg::TrProvider(p) => {
+                self.app.translate.provider = p;
+                self.save_translate();
+                Task::none()
+            }
+            Msg::TrDeeplKey(k) => {
+                self.app.translate.deepl_key = k.trim().to_string();
+                self.save_translate();
+                Task::none()
+            }
+            Msg::TrUrl(u) => {
+                self.app.translate.oa_url = u.trim().to_string();
+                self.save_translate();
+                Task::none()
+            }
+            Msg::TrKey(k) => {
+                self.app.translate.oa_key = k.trim().to_string();
+                self.save_translate();
+                Task::none()
+            }
+            Msg::TrModel(m) => {
+                self.app.translate.oa_model = m.trim().to_string();
+                self.save_translate();
+                Task::none()
+            }
+            Msg::TrPreset(i) => {
+                if let Some((_, url, model)) = translate::PRESETS.get(i) {
+                    self.app.translate.oa_url = url.to_string();
+                    self.app.translate.oa_model = model.to_string();
+                    self.save_translate();
+                }
+                Task::none()
+            }
+            Msg::TrTarget(t) => {
+                self.app.translate.target = t;
+                self.save_translate();
+                Task::none()
+            }
+            Msg::TrTest => {
+                if let Some(req) = self.req() {
+                    self.app.tr_test = None;
+                    let _ = req.send(Request::TranslateTest(Box::new(self.app.translate.clone())));
+                    self.app.status = tr("provo la traduzione…").into();
+                }
+                Task::none()
+            }
             Msg::Quit => return iced::exit(),
             Msg::SetTheme(choice) => {
                 self.settings.theme = choice;
@@ -1020,6 +1103,14 @@ impl Gui {
             .and_then(|r| f(&r.kind))
     }
 
+    /// Salva la configurazione della traduzione (file 0600, con le chiavi).
+    fn save_translate(&mut self) {
+        self.app.tr_test = None;
+        if let Err(e) = self.app.translate.save() {
+            self.app.status = trf!("traduzione: {}", e);
+        }
+    }
+
     /// Le preferenze dei media cambiate: salvate e passate allo stato.
     fn media_changed(&mut self) -> Task<Msg> {
         self.settings.save();
@@ -1086,6 +1177,7 @@ impl Gui {
         self.app.request_quoted(&req);
         self.app.request_avatars(&req);
         self.app.refresh_preview_queue(&req);
+        self.app.flush_translations(&req);
         if self.app.show_sticker && self.app.set_level {
             if let Some(docs) = self.app.open_set.and_then(|id| self.app.set_docs.get(&id)).cloned() {
                 self.app.ensure_previews(&req, docs.iter());

@@ -97,6 +97,9 @@ pub async fn handle_update(
             let row = tg::HistoryRow::from_message(&m, dialog_or(app, peer_id, tg::sender_name(&m)));
             app.set_last(peer_id, &row);
             let open_id = app.current_chat().map(|c| c.peer_id);
+            if !outgoing && app.translate.is_auto(peer_id) && app.histories.contains_key(&peer_id) {
+                app.tr_queue.push((peer_id, row.id, true));
+            }
             if Some(peer_id) == open_id {
                 app.push_row(peer_id, row);
                 if !outgoing && app.read_mark_due() {
@@ -229,6 +232,7 @@ pub async fn handle_response(
                 return;
             };
             app.push_rows(peer, rows);
+            app.auto_translate(peer, crate::app::AUTO_TRANSLATE_LAST);
             if is_open {
                 app.status = String::new();
                 // la storia è arrivata e la chat è a fuoco: il badge
@@ -486,6 +490,32 @@ pub async fn handle_response(
             }
             Err(err) => app.status = trf!("dispositivi: {}", err),
         },
+        Response::Translated { peer, id, auto, target, res } => match res {
+            Ok(t) if t.same_as(&target) => {
+                app.translations.insert((peer, id), crate::app::TrState::Same);
+                if !auto {
+                    app.status = tr("il messaggio è già nella tua lingua").into();
+                }
+            }
+            Ok(t) => {
+                app.translations.insert((peer, id), crate::app::TrState::Shown(t));
+            }
+            Err(err) => {
+                app.translations.remove(&(peer, id));
+                app.status = trf!("traduzione: {}", err);
+                if auto {
+                    // niente raffiche di errori: la chat smette di tradursi
+                    // da sola finché non la si riattiva
+                    app.translate.set_auto(peer, false);
+                }
+            }
+        },
+        Response::TranslateTest(res) => {
+            app.tr_test = Some(res.map(|t| match t.source {
+                Some(src) => format!("{} ({} → {})", t.text, src.to_uppercase(), app.translate.target_lang().to_uppercase()),
+                None => t.text,
+            }));
+        }
         Response::Dialogs(res) => match res {
             Ok(mut list) => {
                 crate::app::pinned_first(&mut list);

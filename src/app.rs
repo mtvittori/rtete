@@ -99,6 +99,21 @@ pub fn preview_media(kind: &tg::RowKind) -> Option<&Media> {
     }
 }
 
+/// La traduzione di un messaggio.
+#[derive(Clone, Debug)]
+pub enum TrState {
+    /// chiesta, in arrivo
+    Busy,
+    Shown(crate::translate::Translated),
+    /// nascosta dall'utente: si rimostra senza richiederla
+    Hidden(crate::translate::Translated),
+    /// era già nella lingua di destinazione
+    Same,
+}
+
+/// messaggi recenti tradotti aprendo una chat a traduzione automatica
+pub const AUTO_TRANSLATE_LAST: usize = 20;
+
 #[derive(Default)]
 pub struct App {
     pub contacts: Vec<tg::DialogInfo>,
@@ -200,6 +215,13 @@ pub struct App {
     /// il mio profilo e i dispositivi collegati (impostazioni)
     pub profile: Option<tg::MyProfile>,
     pub sessions: Option<Vec<tg::Session>>,
+    /// servizio di traduzione e chat tradotte da sole
+    pub translate: crate::translate::Config,
+    pub translations: HashMap<(PeerId, i32), TrState>,
+    /// messaggi da tradurre: (chat, id, automatica)
+    pub tr_queue: Vec<(PeerId, i32, bool)>,
+    /// esito della traduzione di prova nelle impostazioni
+    pub tr_test: Option<Result<String, String>>,
     pub quit: bool,
 }
 
@@ -585,6 +607,71 @@ impl App {
         let _ = req.send(Request::Quoted { peer_ref, peer, ids });
     }
 
+    /// Il testo traducibile di un messaggio (solo i messaggi di testo).
+    fn row_text(&self, peer: PeerId, id: i32) -> Option<String> {
+        self.histories
+            .get(&peer)?
+            .iter()
+            .find(|r| r.id == id)
+            .and_then(|r| match &r.kind {
+                tg::RowKind::Text(t) if !t.trim().is_empty() => Some(t.clone()),
+                _ => None,
+            })
+    }
+
+    /// Mostra o nasconde la traduzione di un messaggio (chiesta la prima volta).
+    pub fn toggle_translation(&mut self, peer: PeerId, id: i32) {
+        match self.translations.get(&(peer, id)).cloned() {
+            Some(TrState::Shown(t)) => {
+                self.translations.insert((peer, id), TrState::Hidden(t));
+            }
+            Some(TrState::Hidden(t)) => {
+                self.translations.insert((peer, id), TrState::Shown(t));
+            }
+            Some(TrState::Busy) => {}
+            Some(TrState::Same) | None => self.tr_queue.push((peer, id, false)),
+        }
+    }
+
+    /// Chat a traduzione automatica: mette in coda i messaggi in arrivo
+    /// non ancora tradotti (gli ultimi `last`).
+    pub fn auto_translate(&mut self, peer: PeerId, last: usize) {
+        if !self.translate.is_auto(peer) || !self.translate.ready() {
+            return;
+        }
+        let Some(ring) = self.histories.get(&peer) else { return };
+        let ids: Vec<i32> = ring
+            .iter()
+            .rev()
+            .filter(|r| !r.outgoing && matches!(&r.kind, tg::RowKind::Text(t) if !t.trim().is_empty()))
+            .take(last)
+            .map(|r| r.id)
+            .filter(|id| !self.translations.contains_key(&(peer, *id)))
+            .collect();
+        self.tr_queue.extend(ids.into_iter().map(|id| (peer, id, true)));
+    }
+
+    /// Manda al worker le traduzioni in coda.
+    pub fn flush_translations(&mut self, req: &mpsc::UnboundedSender<Request>) {
+        if self.tr_queue.is_empty() {
+            return;
+        }
+        if !self.translate.ready() {
+            self.tr_queue.clear();
+            self.status = crate::tr("configura la traduzione in Impostazioni → Traduzione").into();
+            return;
+        }
+        for (peer, id, auto) in std::mem::take(&mut self.tr_queue) {
+            if matches!(self.translations.get(&(peer, id)), Some(TrState::Busy)) {
+                continue;
+            }
+            let Some(text) = self.row_text(peer, id) else { continue };
+            self.translations.insert((peer, id), TrState::Busy);
+            let cfg = Box::new(self.translate.clone());
+            let _ = req.send(Request::Translate { peer, id, text, cfg, auto });
+        }
+    }
+
     /// Toglie una chat eliminata (o da cui si è usciti) da lista e memoria.
     pub fn forget_chat(&mut self, peer: PeerId) {
         let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
@@ -599,6 +686,7 @@ impl App {
         self.peer_info.remove(&peer);
         self.shared.retain(|(p, _), _| *p != peer);
         self.shared_asked.retain(|(p, _)| *p != peer);
+        self.translations.retain(|(p, _), _| *p != peer);
         if self.open == Some(peer) {
             self.open = None;
             self.msg_cursor = None;

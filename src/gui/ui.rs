@@ -12,7 +12,7 @@ use iced::widget::{
 };
 use iced::{Alignment, Center, Element, Fill, Font, Length};
 
-use rondine::app::App;
+use rondine::app::{App, TrState};
 use rondine::tg::{self, HistoryRow, RowKind};
 use rondine::{tr, trf};
 
@@ -624,6 +624,24 @@ fn message<'a>(
         ),
         _ => content.push(column![body(g, r), meta(g, r)].spacing(4).align_x(Alignment::End)),
     };
+    // la traduzione sotto il testo, con la lingua d'origine
+    if let (RowKind::Text(_), Some(peer)) = (&r.kind, app.open) {
+        match app.translations.get(&(peer, r.id)) {
+            Some(TrState::Shown(t)) => {
+                let label = match &t.source {
+                    Some(src) => trf!("🌐 tradotto da {}", src.to_uppercase()),
+                    None => tr("🌐 tradotto").to_string(),
+                };
+                let line = container(space()).width(Fill).height(1).style(style::fill(iced::Color { a: 0.25, ..p.text }));
+                content = content.push(
+                    column![line, text(label).size(11).color(p.link), container(linked(&t.text)).max_width(BUBBLE_W - 30.0)]
+                        .spacing(4),
+                );
+            }
+            Some(TrState::Busy) => content = content.push(text(tr("🌐 traduco…")).size(11).color(p.muted)),
+            _ => {}
+        }
+    }
     if !r.reactions.is_empty() {
         let chips = r.reactions.iter().map(|it| {
             let emoticon = tg::QUICK_REACTIONS
@@ -661,7 +679,7 @@ fn message<'a>(
         // la barra si apre scendendo
         let h = g.bar.interpolate(0.0, 160.0, g.now);
         col = col.push(
-            container(actions(r)).max_height(h).clip(true).padding(iced::Padding::ZERO.top(4)),
+            container(actions(g, r)).max_height(h).clip(true).padding(iced::Padding::ZERO.top(4)),
         );
     }
     col.into()
@@ -886,7 +904,7 @@ fn linked(t: &str) -> Element<'_, Msg> {
 }
 
 /// la barra azioni sotto il messaggio selezionato
-fn actions(r: &HistoryRow) -> Element<'_, Msg> {
+fn actions<'a>(g: &Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     let act = |label: &'static str, m: Msg| {
         button(text(label).size(13)).on_press(m).padding([4, 8]).style(style::flat(false))
     };
@@ -903,6 +921,14 @@ fn actions(r: &HistoryRow) -> Element<'_, Msg> {
     bar = bar.push(space().width(8)).push(act(tr("↱ Rispondi"), Msg::Reply(r.id)));
     if r.outgoing && matches!(r.kind, RowKind::Text(_)) {
         bar = bar.push(act(tr("✎ Modifica"), Msg::Edit(r.id)));
+    }
+    if matches!(&r.kind, RowKind::Text(t) if !t.trim().is_empty()) {
+        let shown = g
+            .app
+            .open
+            .and_then(|p| g.app.translations.get(&(p, r.id)))
+            .is_some_and(|s| matches!(s, TrState::Shown(_)));
+        bar = bar.push(act(if shown { tr("🌐 Originale") } else { tr("🌐 Traduci") }, Msg::Translate(r.id)));
     }
     bar = bar.push(act(tr("↪ Inoltra"), Msg::Forward(r.id)));
     bar = bar.push(act(tr("⧉ Copia"), Msg::Copy(r.id)));
@@ -1171,6 +1197,7 @@ fn settings(g: &Gui) -> Element<'_, Msg> {
         SettingsPage::Storage => (tr("Dati e archiviazione"), settings_storage(g)),
         SettingsPage::Devices => (tr("Dispositivi"), settings_devices(g)),
         SettingsPage::Links => ("Link", settings_links(g)),
+        SettingsPage::Translation => (tr("Traduzione"), settings_translation(g)),
     };
     let mut head = Row::new().spacing(8).align_y(Center);
     if g.settings_page != SettingsPage::Main {
@@ -1258,6 +1285,7 @@ fn settings_main(g: &Gui) -> Element<'_, Msg> {
         entry("🖼", tr("Immagini e media"), tr("download automatico, miniature, misura delle foto"), SettingsPage::Media),
         entry("💾", tr("Dati e archiviazione"), tr("cache e spazio su disco"), SettingsPage::Storage),
         entry("💻", tr("Dispositivi"), tr("sessioni attive dell'account"), SettingsPage::Devices),
+        entry("🌐", tr("Traduzione"), tr("traduzione dei messaggi con DeepL, Groq e altri"), SettingsPage::Translation),
         entry("🔗", "Link", tr("t.me e tg:// dentro Rondine"), SettingsPage::Links),
     ]
     .spacing(2);
@@ -1552,6 +1580,94 @@ fn settings_devices(g: &Gui) -> Element<'_, Msg> {
     col.into()
 }
 
+/// Servizio di traduzione: DeepL o compatibile OpenAI, chiavi, lingua, prova.
+fn settings_translation<'a>(g: &'a Gui) -> Element<'a, Msg> {
+    use rondine::translate::{Provider, PRESETS, TARGETS};
+    let p = style::p();
+    let c = &g.app.translate;
+    let mut col = column![
+        section(tr("SERVIZIO")),
+        row![
+            choice("DeepL".into(), c.provider == Provider::DeepL, Msg::TrProvider(Provider::DeepL)),
+            choice(tr("Compatibile OpenAI (Groq…)").into(), c.provider == Provider::OpenAi, Msg::TrProvider(Provider::OpenAi)),
+        ]
+        .spacing(8),
+    ]
+    .spacing(14);
+    let field = |label: &'static str, ph: &'static str, value: &'a str, secret: bool, on: fn(String) -> Msg| -> Element<'a, Msg> {
+        column![
+            text(label).size(12).color(p.muted),
+            text_input(ph, value).secure(secret).on_input(on).style(style::input).padding(9),
+        ]
+        .spacing(4)
+        .into()
+    };
+    match c.provider {
+        Provider::DeepL => {
+            col = col
+                .push(field(tr("Chiave API DeepL"), "xxxxxxxx-xxxx-…:fx", &c.deepl_key, true, Msg::TrDeeplKey))
+                .push(
+                    text(tr("La chiave si crea gratis su deepl.com (piano «DeepL API Free»); quelle gratuite finiscono con «:fx»."))
+                        .size(12)
+                        .color(p.muted),
+                );
+        }
+        Provider::OpenAi => {
+            let presets = Row::with_children(PRESETS.iter().enumerate().map(|(i, (name, url, _))| {
+                choice(name.to_string(), c.oa_url == *url, Msg::TrPreset(i))
+            }))
+            .spacing(8);
+            col = col
+                .push(presets)
+                .push(field(tr("Indirizzo"), "https://api.groq.com/openai/v1", &c.oa_url, false, Msg::TrUrl))
+                .push(field(tr("Chiave API"), "gsk_…", &c.oa_key, true, Msg::TrKey))
+                .push(field(tr("Modello"), "llama-3.3-70b-versatile", &c.oa_model, false, Msg::TrModel))
+                .push(
+                    text(tr("La chiave di Groq si crea su console.groq.com; con Ollama in locale non serve."))
+                        .size(12)
+                        .color(p.muted),
+                );
+        }
+    }
+    let ui_lang = rondine::i18n::lang();
+    let targets = Row::with_children(
+        std::iter::once(choice(
+            trf!("Come l'interfaccia ({})", ui_lang.name()),
+            c.target.is_none(),
+            Msg::TrTarget(None),
+        ))
+        .chain(TARGETS.iter().map(|(code, name)| {
+            choice(name.to_string(), c.target.as_deref() == Some(*code), Msg::TrTarget(Some(code.to_string())))
+        })),
+    )
+    .spacing(8)
+    .wrap();
+    let mut test = row![
+        button(text(tr("Prova")))
+            .on_press_maybe(c.ready().then_some(Msg::TrTest))
+            .padding([8, 16])
+            .style(style::primary),
+    ]
+    .spacing(12)
+    .align_y(Center);
+    match &g.app.tr_test {
+        Some(Ok(t)) => test = test.push(text(format!("✓ {t}")).color(p.link).width(Fill)),
+        Some(Err(e)) => test = test.push(text(format!("✕ {e}")).color(p.danger).width(Fill)),
+        None if !c.ready() => test = test.push(text(tr("inserisci prima la chiave")).size(12).color(p.muted)),
+        None => {}
+    }
+    col.push(section(tr("TRADURRE IN")))
+        .push(targets)
+        .push(test)
+        .push(section(tr("PRIVACY")))
+        .push(
+            text(tr("I messaggi da tradurre vengono inviati al servizio scelto, solo quando premi «🌐 Traduci» o nelle chat a traduzione automatica (si attiva dalla scheda della chat). La chiave resta in ~/.config/rondine/translate.conf, leggibile solo da te."))
+                .size(12)
+                .color(p.muted),
+        )
+        .into()
+}
+
 fn settings_links(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
     let handler_is_us = g.tg_handler == "rondine-gui.desktop";
@@ -1670,6 +1786,9 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
         tr("🚪 Esci dal gruppo")
     };
     acts = acts.push(act(del_label.into(), p.danger, Msg::AskDeleteChat));
+    let auto_tr = iced::widget::toggler(app.translate.is_auto(chat.peer_id))
+        .label(tr("🌐 Traduci da solo i messaggi di questa chat"))
+        .on_toggle(Msg::AutoTranslate);
 
     let tabs = Row::with_children(tg::SharedTab::ALL.iter().map(|&t| {
         button(text(t.label()).size(13))
@@ -1702,7 +1821,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     };
 
     let sep = || container(space()).width(Fill).height(1).style(style::fill(p.selected));
-    let body = column![top, face, details, sep(), acts, sep(), tabs, shared]
+    let body = column![top, face, details, sep(), acts, auto_tr, sep(), tabs, shared]
         .spacing(14)
         .padding(iced::Padding::new(18.0).right(24.0));
     container(scrollable(body).height(Fill))

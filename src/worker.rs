@@ -213,6 +213,8 @@ pub fn run_worker(
     let cl = client;
     let out = res_tx;
     let conv_permits = Arc::new(tokio::sync::Semaphore::new(2));
+    // traduzioni: poche alla volta, per non sbattere sui limiti del servizio
+    let tr_permits = Arc::new(tokio::sync::Semaphore::new(3));
     tokio::spawn(async move {
         // sveglia del player audio in corsa: generazione sul watch
         let mut play_alert: Option<tokio::sync::watch::Sender<u64>> = None;
@@ -347,6 +349,27 @@ pub fn run_worker(
                 Request::EndSession(hash) => tokio::spawn(async move {
                     let res = tg::end_session(&cl, hash).await.map(|()| hash);
                     let _ = out.send(Response::SessionEnded(res));
+                }),
+                Request::Translate { peer, id, text, cfg, auto } => {
+                    let gate = Arc::clone(&tr_permits);
+                    tokio::spawn(async move {
+                        let _gate = gate.acquire_owned().await;
+                        let target = cfg.target_lang();
+                        let to = target.clone();
+                        let res = tokio::task::spawn_blocking(move || crate::translate::translate(&cfg, &text, &to))
+                            .await
+                            .unwrap_or_else(|e| Err(e.to_string()));
+                        let _ = out.send(Response::Translated { peer, id, auto, target, res });
+                    })
+                }
+                Request::TranslateTest(cfg) => tokio::spawn(async move {
+                    let res = tokio::task::spawn_blocking(move || {
+                        let sample = "Hello! This is a test message from Rondine 🙂";
+                        crate::translate::translate(&cfg, sample, &cfg.target_lang())
+                    })
+                    .await
+                    .unwrap_or_else(|e| Err(e.to_string()));
+                    let _ = out.send(Response::TranslateTest(res));
                 }),
                 Request::Dialogs => tokio::spawn(async move {
                     let res = tg::load_dialogs(&cl).await.map_err(|e| e.to_string());
