@@ -1,0 +1,1203 @@
+# Rondine — traduzione inglese.
+# Blocchi di due righe: il testo italiano del codice, poi la traduzione.
+# I {} sono i valori, nello stesso ordine.
+
+registra un vocale
+is recording a voice message
+
+invia un video
+is sending a video
+
+invia una foto
+is sending a photo
+
+invia un file
+is sending a file
+
+sceglie uno sticker
+is choosing a sticker
+
+sta scrivendo
+is typing
+
+🖼 foto
+🖼 photo
+
+🎤 messaggio vocale
+🎤 voice message
+
+📹 videomessaggio
+📹 video message
+
+messaggio vocale
+voice message
+
+media non supportato
+unsupported media
+
+Prima configurazione di Rondine.
+First-time setup of Rondine.
+
+Verifico l'accesso al tuo account…
+Checking access to your account…
+
+Rete non pronta ({}): ritento tra {}s ({}/{})…
+Network not ready ({}): retrying in {}s ({}/{})…
+
+⚠️  Digita ogni dato SOLO quando compare la domanda, poi conferma con Invio.
+⚠️  Type each answer ONLY when the question appears, then press Enter.
+
+    (Se scrivi prima che la richiesta appaia, l'input va perso.)
+    (If you type before the prompt appears, the input is lost.)
+
+Numero di telefono (+39…): 
+Phone number (with country code, e.g. +44…): 
+
+Numero troppo corto. Usa il solo mobile (es. 3391234567) o il formato +39 completo.
+Number too short. Use the full international format, e.g. +447700900123.
+
+Codice ricevuto: 
+Code received: 
+
+Account senza Telegram: crea prima un account con l'app ufficiale.
+No Telegram account for this number: sign up with the official app first.
+
+Codice errato, riavvia e riprova.
+Wrong code, restart and try again.
+
+2FA errata, riavvia e riprova.
+Wrong 2FA password, restart and try again.
+
+Connesso come {}
+Signed in as {}
+
+senza nome
+unnamed
+
+📇 contatto: {} {}
+📇 contact: {} {}
+
+📊 sondaggio: {}
+📊 poll: {}
+
+📍 posizione
+📍 location
+
+🗺 luogo
+🗺 venue
+
+username già in uso
+username already taken
+
+username non valido (5-32 caratteri: lettere, cifre, _)
+invalid username (5-32 characters: letters, digits, _)
+
+una sessione appena aperta non può chiudere le altre: riprova fra 24 ore
+a newly opened session can't close the others: try again in 24 hours
+
+@{} non esiste
+@{} doesn't exist
+
+@{} non è raggiungibile
+@{} can't be reached
+
+chat dell'invito non valida
+invalid invite chat
+
+chat privata: non è fra le tue
+private chat: you're not a member
+
+questo invito si apre solo nell'app ufficiale
+this invite can only be opened in the official app
+
+File
+Files
+
+Musica
+Music
+
+Vocali
+Voice
+
+Password 2FA: 
+2FA password: 
+
+Password 2FA ({}): 
+2FA password ({}): 
+
+qualcuno
+someone
+
+· {} messaggi cancellati in chat
+· {} messages deleted in chat
+
+cronologia: {}
+history: {}
+
+inizio della cronologia
+beginning of history
+
+cronologia precedente: {}
+older history: {}
+
+messaggi citati: {}
+quoted messages: {}
+
+modifica salvata
+edit saved
+
+invio: {}
+send: {}
+
+cancellazione: {}
+delete: {}
+
+cancellato
+deleted
+
+ricerca: {} risultati (↓ per muoverti, Esc chiude)
+search: {} results (↓ to move, Esc closes)
+
+ricerca: {}
+search: {}
+
+salvato in {}
+saved to {}
+
+salvataggio: {}
+save: {}
+
+riproduzione: {}
+playback: {}
+
+reazione salvata
+reaction saved
+
+reazione: {}
+reaction: {}
+
+sei entrato nella chat
+you joined the chat
+
+inoltrato a {}
+forwarded to {}
+
+inoltro: {}
+forward: {}
+
+utente bloccato
+user blocked
+
+utente sbloccato
+user unblocked
+
+blocco: {}
+block: {}
+
+chat eliminata
+chat deleted
+
+eliminazione chat: {}
+chat deletion: {}
+
+profilo: {}
+profile: {}
+
+profilo aggiornato
+profile updated
+
+dispositivi: {}
+devices: {}
+
+sessione chiusa
+session terminated
+
+tutte le altre sessioni sono state chiuse
+all other sessions were terminated
+
+lista chat: {}
+chat list: {}
+
+link: {}
+link: {}
+
+info: {}
+info: {}
+
+set: {}
+sticker set: {}
+
+apri prima una chat
+open a chat first
+
+cronologia non ancora caricata
+history not loaded yet
+
+limite di {} messaggi in memoria
+limit of {} messages in memory
+
+carico messaggi precedenti…
+loading older messages…
+
+nome file vuoto o inutilizzabile
+empty or unusable file name
+
+spostamento: {}
+move: {}
+
+nessun player: installa mpv o ffplay
+no player: install mpv or ffplay
+
+player: non parte
+player: failed to start
+
+niente testo da copiare in questo messaggio
+no text to copy in this message
+
+copiato negli appunti: «{}…»
+copied to clipboard: “{}…”
+
+foto ({} KB) pronta — Invio invia, il testo del compose è la didascalia
+photo ({} KB) ready — Enter sends, the typed text is the caption
+
+appunti: non leggo l'immagine
+clipboard: can't read the image
+
+appunti incollati nella ricerca
+clipboard pasted into search
+
+appunti: {} caratteri incollati
+clipboard: {} characters pasted
+
+appunti vuoti (serve wl-clipboard)
+clipboard empty (wl-clipboard needed)
+
+non è un file: {}
+not a file: {}
+
+foto «{}» pronta — Invio invia, il testo del compose è la didascalia
+photo “{}” ready — Enter sends, the typed text is the caption
+
+file «{}» pronto — Invio invia, il testo del compose è la didascalia
+file “{}” ready — Enter sends, the typed text is the caption
+
+appunti…
+clipboard…
+
+ (solo il primo di {} file)
+ (only the first of {} files)
+
+📷 foto
+📷 photo
+
+🎙 vocale
+🎙 voice
+
+↱ messaggio eliminato
+↱ deleted message
+
+risposta a #{}
+reply to #{}
+
+inoltrato da {}
+forwarded from {}
+
+modificato
+edited
+
+Esc per uscire
+Esc to leave
+
+ › ricerca
+ › search
+
+apri
+open
+
+Invio
+Enter
+
+esci
+quit
+
+↑↓ scegli una conversazione
+↑↓ pick a conversation
+
+invia
+send
+
+rispondi
+reply
+
+edita
+edit
+
+canc
+delete
+
+copia
+copy
+
+ricerca
+search
+
+ reazioni · ←/→ o 1..8 · Invio toggle · Esc chiude 
+ reactions · ←/→ or 1..8 · Enter toggles · Esc closes 
+
+ ☠ Invio = CANCELLA · Esc annulla 
+ ☠ Enter = DELETE · Esc cancels 
+
+ 🖼 foto dagli appunti · Invio invia · testo = didascalia · Esc scarta 
+ 🖼 photo from clipboard · Enter sends · text = caption · Esc discards 
+
+ 📎 {} · Invio invia · testo = didascalia · Esc scarta 
+ 📎 {} · Enter sends · text = caption · Esc discards 
+
+ ✎ modifica #{} · Invio salva · Esc annulla 
+ ✎ edit #{} · Enter saves · Esc cancels 
+
+ · Esc annulla 
+ · Esc cancels 
+
+(in arrivo…)
+(loading…)
+
+ scrivi la frase, Invio la cerca sul server
+ type the phrase, Enter searches the server
+
+ {} risultati · cursore {} 
+ {} results · cursor {} 
+
+esci 
+quit 
+
+Ricerca
+Search
+
+ ✎ query — Invio cerca · Esc chiude 
+ ✎ query — Enter searches · Esc closes 
+
+scrivi la frase da cercare e premi Invio
+type what to search for and press Enter
+
+nessun risultato
+no results
+
+Set sticker
+Sticker sets
+
+chiudi
+close
+
+caricamento set…
+loading sets…
+
+nessun set di sticker installato
+no sticker sets installed
+
+set vuoto
+empty set
+
+indietro
+back
+
+In evidenza
+Selected
+
+muoviti nella griglia con ←→↑↓
+move around the grid with ←→↑↓
+
+ sticker {} di {}
+ sticker {} of {}
+
+ ⏎ invia alla chat
+ ⏎ send to chat
+
+ (modificato)
+ (edited)
+
+ (tgs animato, non renderizzato)
+ (animated tgs, not rendered)
+
+ · Ctrl-O salva
+ · Ctrl-O saves
+
+🎙 vocale {}
+🎙 voice {}
+
+ · Ctrl-P riproduce
+ · Ctrl-P plays
+
+reazioni: ←/→ o 1..8 · Invio toggle · Esc chiude
+reactions: ←/→ or 1..8 · Enter toggles · Esc closes
+
+reazioni: chiuse
+reactions: closed
+
+appunti: foto scartata
+clipboard: photo discarded
+
+modifica annullata
+edit cancelled
+
+risposta annullata
+reply cancelled
+
+cancellazione annullata
+deletion cancelled
+
+selezione chiusa
+selection closed
+
+scarico i set di sticker…
+downloading sticker sets…
+
+nessun tuo messaggio di testo da modificare
+none of your text messages to edit
+
+seleziona prima un messaggio (↑/↓)
+select a message first (↑/↓)
+
+↱ scrivi la risposta · Invio invia · Esc annulla
+↱ type your reply · Enter sends · Esc cancels
+
+puoi cancellare solo messaggi tuoi
+you can only delete your own messages
+
+nessun tuo messaggio da cancellare
+none of your messages to delete
+
+nessun audio nella cronologia caricata
+no audio in the loaded history
+
+nessun documento da salvare nella cronologia caricata
+no document to save in the loaded history
+
+reazione via…
+removing reaction…
+
+invio sticker…
+sending sticker…
+
+sticker ancora in scaricamento…
+sticker still downloading…
+
+carico la cronologia…
+loading history…
+
+niente da cancellare
+nothing to delete
+
+scrivi cosa cercare
+type what to search for
+
+invio la foto…
+sending photo…
+
+invio il file…
+sending file…
+
+testo vuoto: niente da modificare
+empty text: nothing to edit
+
+invio…
+sending…
+
+reazioni: {} (Invio per applicare)
+reactions: {} (Enter to apply)
+
+limite di {} caratteri
+limit of {} characters
+
+✎ sto modificando il messaggio #{} — Invio per confermare
+✎ editing message #{} — Enter to confirm
+
+⚠️ Invio = cancella il tuo messaggio #{} (Esc per annullare)
+⚠️ Enter = delete your message #{} (Esc to cancel)
+
+scarico «{}» e la riproduco…
+downloading “{}” to play it…
+
+salvo «{}» in ~/Downloads…
+saving “{}” to ~/Downloads…
+
+apro {}…
+opening {}…
+
+selezionato #{} — Esc esce
+selected #{} — Esc leaves
+
+scarico il set {}…
+downloading set {}…
+
+reazione {} su #{}…
+reaction {} on #{}…
+
+cancello il messaggio #{}…
+deleting message #{}…
+
+cerco «{}»…
+searching “{}”…
+
+salvo la modifica #{}…
+saving edit #{}…
+
+Carico le conversazioni…
+Loading conversations…
+
+rete: {}
+network: {}
+
+inoltrato
+forwarded
+
+↪ inoltrato
+↪ forwarded
+
+↪ inoltrato da {}
+↪ forwarded from {}
+
+cancello il messaggio…
+deleting the message…
+
+copiato negli appunti
+copied to clipboard
+
+scarico il set…
+downloading the set…
+
+il nome non può essere vuoto
+the first name can't be empty
+
+salvo il profilo…
+saving profile…
+
+carico la foto profilo…
+uploading profile photo…
+
+cache sfoltita
+cache trimmed
+
+vale dal prossimo avvio
+takes effect on next start
+
+xdg-mime non ha funzionato
+xdg-mime didn't work
+
+chiudo la sessione…
+terminating session…
+
+elimino la chat…
+deleting the chat…
+
+link a una chat privata che non è fra le tue
+link to a private chat you're not a member of
+
+apro il link…
+opening the link…
+
+c'è un invio in corso: riprova dopo
+an upload is in progress: try again later
+
+cache svuotata
+cache cleared
+
+immagine dagli appunti
+clipboard image
+
+salvo la modifica…
+saving edit…
+
+avvio…
+starting…
+
+inoltro a {}…
+forwarding to {}…
+
+Allega un file
+Attach a file
+
+Nuova foto profilo
+New profile photo
+
+Immagini
+Images
+
+entro in «{}»…
+joining “{}”…
+
+blocco l'utente…
+blocking user…
+
+sblocco l'utente…
+unblocking user…
+
+link non riconosciuto: {}
+unrecognized link: {}
+
+nuovo messaggio
+new message
+
+nessuna credenziale: avvia prima `rondine` nel terminale per l'accesso
+no credentials: run `rondine` in a terminal first to sign in
+
+mi collego a Telegram…
+connecting to Telegram…
+
+verifico l'account…
+checking the account…
+
+sessione non autorizzata: accedi una volta con `rondine` nel terminale
+session not authorized: sign in once with `rondine` in a terminal
+
+rete non pronta ({}), ritento…
+network not ready ({}), retrying…
+
+carico le conversazioni…
+loading conversations…
+
+Apri
+Open
+
+A ogni avvio Rondine toglie i file più vecchi oltre il tetto.
+At every start Rondine removes the oldest files above the limit.
+
+ALTRE SESSIONI
+OTHER SESSIONS
+
+Abbandona
+Leave
+
+Abbandonare «{}»?
+Leave “{}”?
+
+Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)
+GPU acceleration: smooth scrolling, ~115 MB instead of ~80 (on next start)
+
+Annulla
+Cancel
+
+Apri fuori
+Open externally
+
+Apri i link t.me e tg:// dentro Rondine
+Open t.me and tg:// links inside Rondine
+
+Aspetto
+Appearance
+
+Audio e video già riprodotti e immagini incollate dagli appunti.
+Audio and video already played, and images pasted from the clipboard.
+
+Automatica (sistema)
+Automatic (system)
+
+Bio
+Bio
+
+Blocca
+Block
+
+Bloccare {}?
+Block {}?
+
+Cambia foto
+Change photo
+
+Cancella
+Delete
+
+Cancellare i file temporanei?
+Delete temporary files?
+
+Caricamento delle chat
+Loading chats
+
+Cerca chat…
+Search chats…
+
+Chiudere questa sessione?
+Terminate this session?
+
+Chiudere tutte le altre sessioni?
+Terminate all other sessions?
+
+Chiudi
+Close
+
+Chiudi tutte
+Terminate all
+
+Chiudi tutte le altre sessioni
+Terminate all other sessions
+
+Cognome
+Last name
+
+Con il tema Omarchy i colori seguono `omarchy theme set` mentre Rondine è aperta.
+With the Omarchy theme the colors follow `omarchy theme set` while Rondine is open.
+
+Connessione a Telegram
+Connecting to Telegram
+
+Controlla la connessione; il primo accesso si fa con `rondine` nel terminale.
+Check your connection; the first sign-in is done with `rondine` in a terminal.
+
+DIMENSIONE
+SIZE
+
+DISEGNO
+RENDERING
+
+DOWNLOAD AUTOMATICO
+AUTOMATIC DOWNLOAD
+
+Dati e archiviazione
+Data and storage
+
+Didascalia…
+Caption…
+
+Dispositivi
+Devices
+
+Dispositivo
+Device
+
+Elimina
+Delete
+
+Elimina anche per {}
+Also delete for {}
+
+Eliminare il messaggio per tutti?
+Delete the message for everyone?
+
+Eliminare la chat con {}?
+Delete the chat with {}?
+
+Esci
+Leave
+
+Esci dal gruppo e la chat sparisce dalla lista. Per rientrare servirà un nuovo invito.
+You leave the group and the chat disappears from the list. You'll need a new invite to rejoin.
+
+File temporanei (audio, video, appunti)
+Temporary files (audio, video, clipboard)
+
+Foto
+Photo
+
+Foto profilo
+Profile photos
+
+Foto profilo nella lista chat
+Profile photos in the chat list
+
+Foto, sticker e miniature
+Photos, stickers and thumbnails
+
+Foto, sticker e miniature salvati sul disco vengono cancellati; si riscaricano quando servono.
+Photos, stickers and thumbnails saved on disk are deleted; they're downloaded again when needed.
+
+GIF in caricamento…
+GIF loading…
+
+Gli sticker restano sempre visibili; i media condivisi nella scheda della chat si scaricano quando la apri.
+Stickers are always shown; shared media in the chat profile are downloaded when you open it.
+
+Ieri
+Yesterday
+
+Il canale sparisce dalla lista e non riceverai più i suoi messaggi.
+The channel disappears from the list and you won't receive its messages anymore.
+
+Il dispositivo viene disconnesso e per usarlo dovrà accedere di nuovo.
+The device is signed out and will have to sign in again.
+
+Il mio account
+My account
+
+Immagine dagli appunti
+Clipboard image
+
+Immagini e media
+Images and media
+
+Impostazioni
+Settings
+
+Info canale
+Channel info
+
+Info gruppo
+Group info
+
+Info utente
+User info
+
+Inoltra a…
+Forward to…
+
+Interfaccia  {}%
+Interface  {}%
+
+Invia
+Send
+
+Invito a «{}» · {} membri
+Invite to “{}” · {} members
+
+LINGUA
+LANGUAGE
+
+La cronologia non resta sul disco: si salvano solo anteprime e foto profilo.
+History isn't kept on disk: only previews and profile photos are saved.
+
+La cronologia sparisce da tutti i tuoi dispositivi. Non si può annullare.
+The history disappears from all your devices. This can't be undone.
+
+Le foto profilo salvate vengono cancellate; si riscaricano quando servono.
+Saved profile photos are deleted; they're downloaded again when needed.
+
+Link tg:// da browser e altre app
+tg:// links from the browser and other apps
+
+MISURA DELLE FOTO IN CHAT
+PHOTO SIZE IN CHATS
+
+Messaggio vocale
+Voice message
+
+Miniature dei video
+Video thumbnails
+
+Mostra il testo del messaggio
+Show the message text
+
+Nessun brano
+No music
+
+Nessun file
+No files
+
+Nessun link
+No links
+
+Nessun messaggio vocale
+No voice messages
+
+Nessuna foto o video
+No photos or videos
+
+Nome
+First name
+
+Nome (obbligatorio)
+First name (required)
+
+Non potrà più scriverti, chiamarti né vedere il tuo ultimo accesso. Puoi sbloccarlo quando vuoi.
+They won't be able to message you, call you or see your last seen. You can unblock them anytime.
+
+Notifiche
+Notifications
+
+Notifiche dei messaggi nuovi (non per le chat silenziate)
+New message notifications (not for muted chats)
+
+Oggi
+Today
+
+Oggi li apre: {}
+Currently opened by: {}
+
+Potrà di nuovo scriverti e chiamarti.
+They will be able to message and call you again.
+
+QUESTO DISPOSITIVO
+THIS DEVICE
+
+Qualche parola su di te
+A few words about you
+
+Rondine non riesce a partire
+Rondine can't start
+
+Rondine scuro
+Rondine dark
+
+SPAZIO USATO
+STORAGE USED
+
+Salva
+Save
+
+Sblocca
+Unblock
+
+Sbloccare {}?
+Unblock {}?
+
+Scarica da solo le foto e le GIF delle chat
+Automatically download photos and GIFs in chats
+
+Scegli una chat a sinistra
+Pick a chat on the left
+
+Scrivi un messaggio…
+Write a message…
+
+Sfoltisci ora
+Trim now
+
+Spento: al posto della foto compare «Mostra la foto», e si scarica con un click.
+Off: a “Show photo” button appears instead, and the photo downloads with one click.
+
+Svuota
+Clear
+
+Svuotare la cache dei media?
+Clear the media cache?
+
+Svuotare le foto profilo?
+Clear profile photos?
+
+TEMA
+THEME
+
+TETTO DELLA CACHE
+CACHE LIMIT
+
+Telegram leggero per Linux
+Lightweight Telegram for Linux
+
+Tema Omarchy
+Omarchy theme
+
+Tema Omarchy · {}
+Omarchy theme · {}
+
+Totale: {}
+Total: {}
+
+Tutti i dispositivi tranne questo vengono disconnessi.
+All devices except this one are signed out.
+
+Una chat letta da un altro dispositivo toglie da sola la sua notifica.
+A chat read on another device removes its own notification.
+
+Unisciti
+Join
+
+Usa Rondine
+Use Rondine
+
+Uscire da «{}»?
+Leave “{}”?
+
+Username
+Username
+
+Verifica dell'account
+Checking the account
+
+Video
+Video
+
+avvisi dei messaggi nuovi
+alerts for new messages
+
+bio
+bio
+
+cache e spazio su disco
+cache and disk space
+
+canale
+channel
+
+canale · {} iscritti
+channel · {} subscribers
+
+carico i dispositivi…
+loading devices…
+
+carico i set…
+loading sets…
+
+carico il profilo…
+loading profile…
+
+carico le informazioni…
+loading info…
+
+carico…
+loading…
+
+chat privata
+private chat
+
+descrizione
+description
+
+download automatico, miniature, misura delle foto
+automatic download, thumbnails, photo size
+
+gruppo
+group
+
+gruppo · {} membri
+group · {} members
+
+lingua, tema, dimensione, accelerazione GPU
+language, theme, size, GPU acceleration
+
+link: t.me/{}
+link: t.me/{}
+
+messaggi precedenti
+older messages
+
+messaggio
+message
+
+messaggio eliminato
+deleted message
+
+nascosto
+hidden
+
+nessuna app
+no app
+
+niente qui: aggiungi sticker ai preferiti da Telegram
+nothing here: add stickers to your favorites in Telegram
+
+nome, username, bio e foto
+name, username, bio and photo
+
+online
+online
+
+rotella per lo zoom · trascina per spostare · Esc chiude
+scroll to zoom · drag to move · Esc closes
+
+scarico gli sticker…
+downloading stickers…
+
+senza username ti trova solo chi ha il tuo numero
+without a username only people with your number can find you
+
+sessioni attive dell'account
+active sessions of the account
+
+sticker animato
+animated sticker
+
+t.me e tg:// dentro Rondine
+t.me and tg:// inside Rondine
+
+telefono
+phone
+
+telefono · si cambia dall'app ufficiale
+phone · change it from the official app
+
+ultima attività: {}
+last active: {}
+
+ultimo accesso alle {}
+last seen at {}
+
+ultimo accesso di recente
+last seen recently
+
+ultimo accesso il {} alle {}
+last seen {} at {}
+
+ultimo accesso questa settimana
+last seen this week
+
+ultimo accesso questo mese
+last seen this month
+
+username
+username
+
+{} file · {}
+{} files · {}
+
+{} · scrivi una didascalia e premi Invio
+{} · write a caption and press Enter
+
+{}/70 · la vedono tutti nel tuo profilo
+{}/70 · everyone sees it on your profile
+
+↪ Inoltra
+↪ Forward
+
+↱ Rispondi
+↱ Reply
+
+↱ Rispondi a {}
+↱ Reply to {}
+
+☰ Set
+☰ Sets
+
+✅ Sblocca utente
+✅ Unblock user
+
+✎ Modifica
+✎ Edit
+
+✎ Modifica del messaggio — Invio salva
+✎ Editing message — Enter saves
+
+⧉ Copia
+⧉ Copy
+
+⬆ Invio di «{}» in corso…
+⬆ Sending “{}”…
+
+⬇ Mostra la GIF
+⬇ Show GIF
+
+⬇ Mostra la foto
+⬇ Show photo
+
+⭐ Preferiti
+⭐ Favorites
+
+🕘 Recenti
+🕘 Recent
+
+🖼 foto in caricamento…
+🖼 photo loading…
+
+🗑 Elimina
+🗑 Delete
+
+🗑 Elimina chat
+🗑 Delete chat
+
+🚪 Abbandona canale
+🚪 Leave channel
+
+🚪 Esci dal gruppo
+🚪 Leave group
+
+🚫 Blocca utente
+🚫 Block user
+
+🚫 Hai bloccato questo utente
+🚫 You blocked this user
+
+modificato 
+edited 
+
+Conversazioni
+Conversations
+
+Disconnetti
+Sign out

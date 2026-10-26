@@ -19,7 +19,8 @@ pub fn show(peer: PeerId, title: &str, body: &str, icon: Option<&std::path::Path
         .ok()
         .and_then(|g| g.as_ref().and_then(|m| m.get(&peer).copied()));
     let mut cmd = Command::new("notify-send");
-    cmd.args(["-a", "Rondine", "-p", "-A", "default=Apri"]);
+    cmd.args(["-a", "Rondine", "-p", "-A"]);
+    cmd.arg(format!("default={}", rondine::tr("Apri")));
     match icon {
         Some(p) => cmd.arg("-i").arg(p),
         None => cmd.args(["-i", "telegram"]),

@@ -65,7 +65,7 @@ pub fn ctrl_copy(app: &mut App) {
         return;
     }
     let Some(chat) = app.current_chat() else {
-        app.status = "apri prima una chat".into();
+        app.status = crate::tr("apri prima una chat").into();
         return;
     };
     let ring = app.histories.get(&chat.peer_id);
@@ -75,11 +75,11 @@ pub fn ctrl_copy(app: &mut App) {
         (None, _) => None,
     };
     let Some(text) = picked else {
-        app.status = "niente testo da copiare in questo messaggio".into();
+        app.status = crate::tr("niente testo da copiare in questo messaggio").into();
         return;
     };
     let head: String = text.chars().take(24).collect();
-    app.status = format!("copiato negli appunti: «{head}…»");
+    app.status = crate::trf!("copiato negli appunti: «{}…»", head);
     std::thread::spawn(move || {
         // il testo va su stdin: come argomento, un messaggio che inizia
         // per "-" ("Adesso -n ciao") veniva preso per una opzione wl-copy
@@ -140,18 +140,19 @@ pub fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
                 app.discard_pending_photo();
                 app.disarm_delete();
                 app.pending_photo = Some(path.display().to_string());
-                app.status = format!(
-                    "foto ({kb} KB) pronta — Invio invia, il testo del compose è la didascalia"
+                app.status = crate::trf!(
+                    "foto ({} KB) pronta — Invio invia, il testo del compose è la didascalia",
+                    kb
                 );
             }
-            None => app.status = "appunti: non leggo l'immagine".into(),
+            None => app.status = crate::tr("appunti: non leggo l'immagine").into(),
         },
         ClipboardHit::Files(paths) => {
             let n = paths.len();
             if let Some(path) = paths.into_iter().next() {
                 attach_file(app, path);
                 if n > 1 {
-                    app.status.push_str(&format!(" (solo il primo di {n} file)"));
+                    app.status.push_str(&crate::trf!(" (solo il primo di {} file)", n));
                 }
             }
         }
@@ -159,19 +160,19 @@ pub fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
             if app.show_search {
                 let clean = paste_text(&text, false, 200);
                 app.search_q.push_str(&clean);
-                app.status = "appunti incollati nella ricerca".into();
+                app.status = crate::tr("appunti incollati nella ricerca").into();
             } else if app.open.is_some() && app.editing.is_none() {
                 let cap = app.compose_cap().saturating_sub(app.compose.chars().count());
                 let clean = paste_text(&text, true, cap);
                 app.compose.push_str(&clean);
                 app.disarm_delete();
                 let n = clean.chars().count();
-                app.status = format!("appunti: {n} caratteri incollati");
+                app.status = crate::trf!("appunti: {} caratteri incollati", n);
             } else {
-                app.status = "apri prima una chat".into();
+                app.status = crate::tr("apri prima una chat").into();
             }
         }
-        ClipboardHit::Empty => app.status = "appunti vuoti (serve wl-clipboard)".into(),
+        ClipboardHit::Empty => app.status = crate::tr("appunti vuoti (serve wl-clipboard)").into(),
     }
 }
 
@@ -179,14 +180,17 @@ pub fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
 /// didascalia. Prende il posto di un'eventuale foto in attesa.
 pub fn attach_file(app: &mut App, path: std::path::PathBuf) {
     if !path.is_file() {
-        app.status = format!("non è un file: {}", path.display());
+        app.status = crate::trf!("non è un file: {}", path.display());
         return;
     }
     app.discard_pending_photo();
     app.disarm_delete();
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let what = if tg::is_photo_file(&path) { "foto" } else { "file" };
-    app.status = format!("{what} «{name}» pronto — Invio invia, il testo del compose è la didascalia");
+    app.status = if tg::is_photo_file(&path) {
+        crate::trf!("foto «{}» pronta — Invio invia, il testo del compose è la didascalia", name)
+    } else {
+        crate::trf!("file «{}» pronto — Invio invia, il testo del compose è la didascalia", name)
+    };
     app.pending_file = Some(path);
 }
 
@@ -303,7 +307,7 @@ pub fn ctrl_paste(app: &mut App, res: &mpsc::UnboundedSender<Response>) {
     if !(app.show_search || (app.open.is_some() && app.editing.is_none())) {
         return;
     }
-    app.status = "appunti…".into();
+    app.status = crate::tr("appunti…").into();
     let res = res.clone();
     std::thread::spawn(move || {
         let hit = probe_clipboard();

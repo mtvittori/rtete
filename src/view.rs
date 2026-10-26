@@ -19,6 +19,7 @@ use ratatui::Frame;
 use crate::gfx;
 use crate::styles::*;
 use crate::tg;
+use rondine::{tr, trf};
 use crate::app::{App, STICKER_COLS};
 
 /// Comando grafico da eseguire dopo il frame ratatui.
@@ -128,8 +129,10 @@ pub fn msg_label(time: &str, name: &str) -> String {
 /// il messaggio (`reply_line`).
 fn row_lead(row: &tg::HistoryRow) -> String {
     let mut out = String::new();
-    if let Some(f) = &row.fwd {
-        out.push_str(&format!("⤳ {f}: "));
+    match &row.fwd {
+        Some(f) if f.is_empty() => out.push_str("⤳ "),
+        Some(f) => out.push_str(&format!("⤳ {f}: ")),
+        None => {}
     }
     out
 }
@@ -155,7 +158,7 @@ fn row_summary(row: &tg::HistoryRow) -> String {
         tg::RowKind::Text(t) => t.clone(),
         tg::RowKind::Sticker { emoji, .. } => format!("sticker {emoji}"),
         tg::RowKind::Photo { caption, gif, .. } => {
-            let what = if *gif { "🎞 gif" } else { "📷 foto" };
+            let what = if *gif { "🎞 gif" } else { tr("📷 foto") };
             if caption.is_empty() {
                 what.to_string()
             } else {
@@ -165,7 +168,7 @@ fn row_summary(row: &tg::HistoryRow) -> String {
         tg::RowKind::Doc { name, .. } => format!("📄 {name}"),
         tg::RowKind::Audio { name, voice, .. } => {
             if *voice {
-                "🎙 vocale".to_string()
+                tr("🎙 vocale").to_string()
             } else {
                 format!("🎧 {name}")
             }
@@ -196,7 +199,7 @@ fn reply_line(
     let id = row.reply_to?;
     let fetched = quoted.and_then(|q| q.get(&id));
     if matches!(fetched, Some(None)) && row.reply_quote.is_none() {
-        return Some(vec![fit("↱ messaggio eliminato".to_string(), width)]);
+        return Some(vec![fit(tr("↱ messaggio eliminato").to_string(), width)]);
     }
     let orig = rows
         .iter()
@@ -245,15 +248,17 @@ pub fn row_meta(row: &tg::HistoryRow, tz: &jiff::tz::TimeZone) -> String {
         parts.push(fmt_hhmm(row.date, tz));
     }
     if let Some(r) = row.reply_to {
-        parts.push(format!("risposta a #{r}"));
+        parts.push(trf!("risposta a #{}", r));
     }
-    if let Some(f) = &row.fwd {
-        parts.push(format!("inoltrato da {f}"));
+    match &row.fwd {
+        Some(f) if f.is_empty() => parts.push(tr("inoltrato").into()),
+        Some(f) => parts.push(trf!("inoltrato da {}", f)),
+        None => {}
     }
     if row.edited {
-        parts.push("modificato".into());
+        parts.push(tr("modificato").into());
     }
-    parts.push("Esc per uscire".into());
+    parts.push(tr("Esc per uscire").into());
     parts.join(" — ")
 }
 
@@ -491,7 +496,7 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
         if app.show_sticker {
             spans.push(Span::styled(" › sticker", Style::new().fg(FAINT)));
         } else if app.show_search {
-            spans.push(Span::styled(" › ricerca", Style::new().fg(FAINT)));
+            spans.push(Span::styled(tr(" › ricerca"), Style::new().fg(FAINT)));
         }
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
@@ -573,7 +578,7 @@ fn rail(f: &mut Frame, area: Rect, total: usize, pos: usize) {
 
 fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
     if app.contacts.is_empty() {
-        f.render_widget(pane("Conversazioni", false), area);
+        f.render_widget(pane(tr("Conversazioni"), false), area);
         return;
     }
     let items: Vec<ListItem> = app
@@ -619,14 +624,14 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
     let Some(chat) = app.current_chat() else {
         app.mouse_map.clear();
         app.link_map.clear();
-        let hints = hints_line(&[("apri", "Invio"), ("sticker", "Tab"), ("esci", "q")]);
+        let hints = hints_line(&[(tr("apri"), tr("Invio")), ("sticker", "Tab"), (tr("esci"), "q")]);
         let block = pane("Rondine", true).title_bottom(hints);
         let inner = block.inner(area);
         f.render_widget(block, area);
         if inner.height > 1 {
             f.render_widget(
                 Paragraph::new(Span::styled(
-                    "↑↓ scegli una conversazione",
+                    tr("↑↓ scegli una conversazione"),
                     Style::new().fg(FAINT),
                 ))
                 .alignment(Alignment::Center),
@@ -645,14 +650,14 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
 
     // suggerimenti fissi nella cornice dei messaggi
     let hints = hints_line(&[
-        ("invia", "Invio"),
-        ("rispondi", "Ctrl-R"),
-        ("edita", "Ctrl-E"),
-        ("canc", "Ctrl-D"),
-        ("copia", "Ctrl-Y"),
+        (tr("invia"), tr("Invio")),
+        (tr("rispondi"), "Ctrl-R"),
+        (tr("edita"), "Ctrl-E"),
+        (tr("canc"), "Ctrl-D"),
+        (tr("copia"), "Ctrl-Y"),
         ("audio", "Ctrl-P"),
         ("sticker", "Tab"),
-        ("ricerca", "Ctrl-F"),
+        (tr("ricerca"), "Ctrl-F"),
     ]);
     let block = pane(&chat.name.clone(), true).title_bottom(hints);
     let msgs = block.inner(body[0]);
@@ -665,30 +670,28 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
     let (c_border, c_title): (Color, Option<String>) = if app.react_open {
         (
             ACCENT,
-            Some(" reactions · ←/→ o 1..8 · Invio toggle · Esc chiude ".into()),
+            Some(tr(" reazioni · ←/→ o 1..8 · Invio toggle · Esc chiude ").into()),
         )
     } else if app.del_arm {
         (
             WARNING,
-            Some(" \u{2620} Invio = CANCELLA \u{b7} Esc annulla ".into()),
+            Some(tr(" ☠ Invio = CANCELLA · Esc annulla ").into()),
         )
     } else if app.pending_photo.is_some() {
         (
             ACCENT,
-            Some(" \u{1f5bc} foto dagli appunti · Invio invia · testo = didascalia · Esc scarta ".into()),
+            Some(tr(" 🖼 foto dagli appunti · Invio invia · testo = didascalia · Esc scarta ").into()),
         )
     } else if let Some(path) = &app.pending_file {
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         (
             ACCENT,
-            Some(format!(" \u{1f4ce} {name} · Invio invia · testo = didascalia · Esc scarta ")),
+            Some(trf!(" 📎 {} · Invio invia · testo = didascalia · Esc scarta ", name)),
         )
     } else if let Some(id) = app.editing {
         (
             ACCENT,
-            Some(format!(
-                " \u{270e} modifica #{id} \u{b7} Invio salva \u{b7} Esc annulla "
-            )),
+            Some(trf!(" ✎ modifica #{} · Invio salva · Esc annulla ", id)),
         )
     } else if let Some(id) = app.replying {
         // "↱ Autore: inizio del messaggio · Esc annulla", entro il bordo
@@ -698,7 +701,7 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
         let what = target
             .map(|r| format!("{}: {}", author(r, &app.me), row_summary(r)))
             .unwrap_or_else(|| format!("#{id}"));
-        let tail = " \u{b7} Esc annulla ";
+        let tail = tr(" · Esc annulla ");
         let room = (body[1].width as usize)
             .saturating_sub(4 + 3 + tail.chars().count());
         (
@@ -810,7 +813,7 @@ fn draw_history(f: &mut Frame, app: &mut App, area: Rect, cmds: &mut Vec<Cmd>) {
                 } else if !app.pending.is_empty() && !line.animated {
                     f.render_widget(
                         Paragraph::new(Span::styled(
-                            "(in arrivo…)".to_string(),
+                            tr("(in arrivo…)").to_string(),
                             Style::new()
                                 .fg(INCOMING)
                                 .bg(BG)
@@ -929,25 +932,21 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
     let (res_part, bag_part) = (body[0], body[1]);
     let bottom: Line<'static> = match app.search_results.as_ref() {
         None => Line::from(Span::styled(
-            " scrivi la frase, Invio la cerca sul server",
+            tr(" scrivi la frase, Invio la cerca sul server"),
             Style::new().fg(FAINT),
         ))
         .left_aligned(),
         Some(hits) => Line::from(vec![
             Span::styled(
-                format!(
-                    " {} risultati · cursore {} ",
-                    hits.len(),
-                    app.search_cursor + 1
-                ),
+                trf!(" {} risultati · cursore {} ", hits.len(), app.search_cursor + 1),
                 Style::new().fg(ACCENT),
             ),
-            Span::styled("esci ", Style::new().add_modifier(Modifier::REVERSED)),
+            Span::styled(tr("esci "), Style::new().add_modifier(Modifier::REVERSED)),
             Span::styled("<Esc>", Style::new().fg(ACCENT)),
         ])
         .left_aligned(),
     };
-    let block = pane("Ricerca", true).title_bottom(bottom);
+    let block = pane(tr("Ricerca"), true).title_bottom(bottom);
     let inner = block.inner(res_part);
     f.render_widget(block, res_part);
 
@@ -955,7 +954,7 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
     let (q_border, q_title): (Color, Option<String>) = if app.search_q.is_empty() {
         (
             FAINT,
-            Some(" \u{270e} query — Invio cerca \u{b7} Esc chiude ".into()),
+            Some(tr(" ✎ query — Invio cerca · Esc chiude ").into()),
         )
     } else {
         (ACCENT, None)
@@ -966,7 +965,7 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
         if inner.height > 1 {
             f.render_widget(
                 Paragraph::new(Span::styled(
-                    "scrivi la frase da cercare e premi Invio",
+                    tr("scrivi la frase da cercare e premi Invio"),
                     Style::new().fg(FAINT),
                 ))
                 .alignment(Alignment::Center),
@@ -978,7 +977,7 @@ fn draw_search(f: &mut Frame, app: &App, area: Rect) {
     if hits.is_empty() {
         f.render_widget(
             Paragraph::new(Span::styled(
-                "nessun risultato",
+                tr("nessun risultato"),
                 Style::new().fg(INCOMING).bg(BG),
             )),
             inner,
@@ -1032,8 +1031,8 @@ fn view_wrap_first(text: &str, max: usize) -> String {
 fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
     if !app.set_level {
         // lista dei set installati
-        let block = pane("Set sticker", true)
-            .title_bottom(hints_line(&[("apri", "Invio"), ("chiudi", "Tab")]));
+        let block = pane(tr("Set sticker"), true)
+            .title_bottom(hints_line(&[(tr("apri"), tr("Invio")), (tr("chiudi"), "Tab")]));
         let inner = block.inner(area);
         f.render_widget(block, area);
         render_count(
@@ -1045,7 +1044,7 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
             None => {
                 f.render_widget(
                     Paragraph::new(Span::styled(
-                        "caricamento set…",
+                        tr("caricamento set…"),
                         Style::new().fg(ACCENT_DIM).bg(BG),
                     )),
                     inner,
@@ -1054,7 +1053,7 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
             Some(sets) if sets.is_empty() => {
                 f.render_widget(
                     Paragraph::new(Span::styled(
-                        "nessun set di sticker installato",
+                        tr("nessun set di sticker installato"),
                         Style::new().fg(INCOMING).bg(BG),
                     )),
                     inner,
@@ -1104,7 +1103,7 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
         let inner = block.inner(cells[0]);
         f.render_widget(block, cells[0]);
         f.render_widget(
-            Paragraph::new(Span::styled("set vuoto", Style::new().fg(INCOMING).bg(BG))),
+            Paragraph::new(Span::styled(tr("set vuoto"), Style::new().fg(INCOMING).bg(BG))),
             inner,
         );
         draw_card(f, app, cells[1], cmds, None);
@@ -1133,9 +1132,9 @@ fn draw_stickers(f: &mut Frame, app: &App, area: Rect, cmds: &mut Vec<Cmd>) {
         .map(|s| s.title.clone())
         .unwrap_or_else(|| "Sticker".to_string());
     let block = pane(&sel_title.clone(), true).title_bottom(hints_line(&[
-        ("invia", "Invio"),
-        ("indietro", "h"),
-        ("chiudi", "Tab"),
+        (tr("invia"), tr("Invio")),
+        (tr("indietro"), "h"),
+        (tr("chiudi"), "Tab"),
     ]));
     let inner = block.inner(cells[0]);
     f.render_widget(block, cells[0]);
@@ -1213,13 +1212,13 @@ fn draw_card(
     cmds: &mut Vec<Cmd>,
     sel: Option<(&grammers_client::media::Media, usize, usize)>,
 ) {
-    let block = pane("In evidenza", false);
+    let block = pane(tr("In evidenza"), false);
     let inner = block.inner(area);
     f.render_widget(block, area);
     let Some((media, idx, total)) = sel else {
         f.render_widget(
             Paragraph::new(Span::styled(
-                "muoviti nella griglia con ←→↑↓",
+                tr("muoviti nella griglia con ←→↑↓"),
                 Style::new().fg(FAINT).bg(BG),
             )),
             inner,
@@ -1267,12 +1266,12 @@ fn draw_card(
         lines.push(Line::from(Span::styled(" ", Style::new().fg(FG))));
     }
     lines.push(Line::from(Span::styled(
-        format!(" sticker {} di {}", idx + 1, total),
+        trf!(" sticker {} di {}", idx + 1, total),
         Style::new().fg(FAINT).bg(BG),
     )));
     lines.push(Line::from(Span::styled(" ", Style::new().fg(FG).bg(BG))));
     lines.push(Line::from(Span::styled(
-        " ⏎ invia alla chat",
+        tr(" ⏎ invia alla chat"),
         Style::new().fg(FAINT).bg(BG),
     )));
     f.render_widget(
@@ -1320,7 +1319,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                 let text = &format!(
                     "{}{text}{}",
                     row_lead(row),
-                    if row.edited { " (modificato)" } else { "" }
+                    if row.edited { tr(" (modificato)") } else { "" }
                 );
                 let (pieces, mut span_lines) =
                     wrap_links(text, width.saturating_sub(LABEL_W + 3));
@@ -1377,7 +1376,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     text: format!(
                         "{label}sticker {emoji}{}",
                         if *animated {
-                            " (tgs animato, non renderizzato)"
+                            tr(" (tgs animato, non renderizzato)")
                         } else {
                             ""
                         }
@@ -1412,7 +1411,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                 };
                 let line_text = format!(
                     "{label}{}{}",
-                    if *gif { "🎞 gif" } else { "📷 foto" },
+                    if *gif { "🎞 gif" } else { tr("📷 foto") },
                     cap_txt
                 );
                 lines.push(HistoryLine {
@@ -1442,7 +1441,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     format!(" — “{caption}”")
                 };
                 lines.push(HistoryLine {
-                    text: format!("{label}📄 {name}{size_txt}{cap_txt} · Ctrl-O salva"),
+                    text: format!("{label}📄 {name}{size_txt}{cap_txt}{}", tr(" · Ctrl-O salva")),
                     color: ACCENT_DIM,
                     ..HistoryLine::sep()
                 });
@@ -1459,7 +1458,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                 ..
             } => {
                 let main = if *voice {
-                    format!("🎙 vocale {}", tg::fmt_secs(*seconds))
+                    trf!("🎙 vocale {}", tg::fmt_secs(*seconds))
                 } else {
                     format!("🎧 {}", name)
                 };
@@ -1469,7 +1468,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     format!(" — “{caption}”")
                 };
                 lines.push(HistoryLine {
-                    text: format!("{label}{main}{cap_txt} · Ctrl-P riproduce"),
+                    text: format!("{label}{main}{cap_txt}{}", tr(" · Ctrl-P riproduce")),
                     color: ACCENT_DIM,
                     ..HistoryLine::sep()
                 });

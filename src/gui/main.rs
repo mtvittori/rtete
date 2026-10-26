@@ -17,6 +17,7 @@ use rondine::clipboard;
 use rondine::send::{Request, SendJob, SendKind};
 use rondine::sync::{handle_response, handle_update};
 use rondine::tg;
+use rondine::{i18n, tr, trf};
 use grammers_client::tl;
 
 use crate::net::{Carrier, Link, NetEvent};
@@ -112,6 +113,8 @@ pub enum Msg {
     AskEndSession(Option<i64>),
     /// scarica l'anteprima di una foto (download automatico spento)
     LoadPreview(i32),
+    /// lingua dell'interfaccia (None: quella del sistema)
+    Lang(Option<i18n::Lang>),
     Quit,
 }
 
@@ -214,6 +217,7 @@ pub struct Gui {
 fn main() -> iced::Result {
     // prima di leggere le impostazioni: le cartelle di RTete diventano di Rondine
     tg::migrate_old_dirs();
+    i18n::set(Settings::load().lang.resolve());
     // GPU (wgpu) per uno scorrimento fluido; dalle impostazioni si passa
     // al disegno software (tiny-skia, ~35 MB in meno). ICED_BACKEND vince.
     if std::env::var_os("ICED_BACKEND").is_none() && !Settings::load().gpu {
@@ -283,7 +287,7 @@ fn boot() -> Gui {
         pf: tg::MyProfile::default(),
         cache_usage: [(0, 0); 3],
         app: App { media_prefs: settings.media_prefs(), ..App::default() },
-        phase: Phase::Connecting(0, "avvio…".into()),
+        phase: Phase::Connecting(0, tr("avvio…").into()),
         link: None,
         filter: String::new(),
         tz: jiff::tz::TimeZone::system(),
@@ -417,7 +421,7 @@ impl Gui {
                     (self.forwarding.take(), dest, self.req())
                 {
                     let _ = req.send(Request::Forward { from, id, to, to_name: to_name.clone() });
-                    self.app.status = format!("inoltro a {to_name}…");
+                    self.app.status = trf!("inoltro a {}…", to_name);
                 }
                 Task::none()
             }
@@ -496,7 +500,7 @@ impl Gui {
                     (target, self.app.current_chat(), self.req())
                 {
                     let _ = req.send(Request::Del { peer_ref: chat.peer_ref, id });
-                    self.app.status = "cancello il messaggio…".into();
+                    self.app.status = tr("cancello il messaggio…").into();
                     if self.app.msg_cursor == Some(id) {
                         self.app.msg_cursor = None;
                     }
@@ -533,7 +537,7 @@ impl Gui {
                     .and_then(clipboard::copy_text);
                 match text {
                     Some(t) => {
-                        self.app.status = "copiato negli appunti".into();
+                        self.app.status = tr("copiato negli appunti").into();
                         iced::clipboard::write(t)
                     }
                     None => Task::none(),
@@ -545,7 +549,7 @@ impl Gui {
                     _ => None,
                 });
                 if let (Some((media, name)), Some(req)) = (job, self.req()) {
-                    self.app.status = format!("salvo «{name}» in ~/Downloads…");
+                    self.app.status = trf!("salvo «{}» in ~/Downloads…", name);
                     let _ = req.send(Request::Save { media, name });
                 }
                 Task::none()
@@ -570,7 +574,7 @@ impl Gui {
                     _ => None,
                 });
                 if let (Some((media, fname, label, video)), Some(req)) = (job, self.req()) {
-                    self.app.status = format!("scarico «{label}» e la riproduco…");
+                    self.app.status = trf!("scarico «{}» e la riproduco…", label);
                     let _ = req.send(Request::Play { media, fname, label, video });
                 }
                 Task::none()
@@ -580,7 +584,7 @@ impl Gui {
                     return Task::none();
                 }
                 // portale xdg (FileChooser di GTK): niente librerie GTK nel processo
-                let pick = rfd::AsyncFileDialog::new().set_title("Allega un file").pick_file();
+                let pick = rfd::AsyncFileDialog::new().set_title(tr("Allega un file")).pick_file();
                 Task::perform(pick, |f| Msg::Picked(f.map(|f| f.path().to_path_buf())))
             }
             Msg::Picked(Some(path)) | Msg::Dropped(path) => {
@@ -634,7 +638,7 @@ impl Gui {
                 if !self.app.set_docs.contains_key(&set_id) && !self.app.docs_cooling(set_id) {
                     if let (Some(short), Some(req)) = (short, self.req()) {
                         let _ = req.send(Request::SetDocs { set_id, short });
-                        self.app.status = "scarico il set…".into();
+                        self.app.status = tr("scarico il set…").into();
                     }
                 }
                 Task::none()
@@ -661,7 +665,7 @@ impl Gui {
                     }));
                     self.app.replying = None;
                     self.app.show_sticker = false;
-                    self.app.status = "invio sticker…".into();
+                    self.app.status = tr("invio sticker…").into();
                     return self.snap_bottom();
                 }
                 Task::none()
@@ -737,27 +741,27 @@ impl Gui {
             }
             Msg::PfSave => {
                 if self.pf.first.trim().is_empty() {
-                    self.app.status = "il nome non può essere vuoto".into();
+                    self.app.status = tr("il nome non può essere vuoto").into();
                     return Task::none();
                 }
                 let old_username = self.app.profile.as_ref().map(|p| p.username.clone()).unwrap_or_default();
                 if let Some(req) = self.req() {
                     let _ = req.send(Request::SaveProfile { profile: self.pf.clone(), old_username });
-                    self.app.status = "salvo il profilo…".into();
+                    self.app.status = tr("salvo il profilo…").into();
                 }
                 Task::none()
             }
             Msg::PfPhoto => {
                 let pick = rfd::AsyncFileDialog::new()
-                    .set_title("Nuova foto profilo")
-                    .add_filter("Immagini", &["jpg", "jpeg", "png"])
+                    .set_title(tr("Nuova foto profilo"))
+                    .add_filter(tr("Immagini"), &["jpg", "jpeg", "png"])
                     .pick_file();
                 return Task::perform(pick, |f| Msg::PfPhotoPicked(f.map(|f| f.path().to_path_buf())));
             }
             Msg::PfPhotoPicked(Some(path)) => {
                 if let Some(req) = self.req() {
                     let _ = req.send(Request::ProfilePhoto(path));
-                    self.app.status = "carico la foto profilo…".into();
+                    self.app.status = tr("carico la foto profilo…").into();
                 }
                 Task::none()
             }
@@ -789,7 +793,7 @@ impl Gui {
                 // le anteprime tolte dal disco si riscaricano quando servono
                 self.app.previews.retain(|_, p| p.exists());
                 self.measure_cache();
-                self.app.status = "cache sfoltita".into();
+                self.app.status = tr("cache sfoltita").into();
                 Task::none()
             }
             Msg::AskClear(kind) => {
@@ -805,6 +809,12 @@ impl Gui {
                 if let (Some(media), Some(req)) = (media, self.req()) {
                     self.app.ensure_previews(&req, [&media]);
                 }
+                Task::none()
+            }
+            Msg::Lang(l) => {
+                self.settings.lang = settings::LangChoice(l);
+                self.settings.save();
+                i18n::set(self.settings.lang.resolve());
                 Task::none()
             }
             Msg::Quit => return iced::exit(),
@@ -823,7 +833,7 @@ impl Gui {
             Msg::Gpu(on) => {
                 self.settings.gpu = on;
                 self.settings.save();
-                self.app.status = "vale dal prossimo avvio".into();
+                self.app.status = tr("vale dal prossimo avvio").into();
                 Task::none()
             }
             Msg::LinksInApp(on) => {
@@ -833,7 +843,7 @@ impl Gui {
             }
             Msg::TgHandler => {
                 if !settings::set_tg_handler() {
-                    self.app.status = "xdg-mime non ha funzionato".into();
+                    self.app.status = tr("xdg-mime non ha funzionato").into();
                 }
                 self.tg_handler = settings::tg_handler();
                 Task::none()
@@ -841,7 +851,7 @@ impl Gui {
             Msg::Join => {
                 if let (Some((hash, title, _)), Some(req)) = (self.app.invite.take(), self.req()) {
                     let _ = req.send(Request::Join(hash));
-                    self.app.status = format!("entro in «{title}»…");
+                    self.app.status = trf!("entro in «{}»…", title);
                 }
                 Task::none()
             }
@@ -876,7 +886,7 @@ impl Gui {
                     Some(Confirm::EndSession(hash)) => {
                         if let Some(req) = self.req() {
                             let _ = req.send(Request::EndSession(hash));
-                            self.app.status = "chiudo la sessione…".into();
+                            self.app.status = tr("chiudo la sessione…").into();
                         }
                     }
                     Some(Confirm::ClearCache(kind)) => self.clear_cache(kind),
@@ -891,11 +901,11 @@ impl Gui {
                     match what {
                         Confirm::Block(blocked) => {
                             let _ = req.send(Request::Block { peer_ref, peer, blocked });
-                            self.app.status = if blocked { "blocco l'utente…" } else { "sblocco l'utente…" }.into();
+                            self.app.status = if blocked { tr("blocco l'utente…") } else { tr("sblocco l'utente…") }.into();
                         }
                         Confirm::DeleteChat => {
                             let _ = req.send(Request::DeleteChat { peer_ref, peer, revoke: self.revoke });
-                            self.app.status = "elimino la chat…".into();
+                            self.app.status = tr("elimino la chat…").into();
                             self.show_info = false;
                             notify::dismiss(peer);
                         }
@@ -933,13 +943,13 @@ impl Gui {
             let pid = PeerId::channel(channel);
             match pid.filter(|p| self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, *p))) {
                 Some(p) => self.app.link_open = Some((p, post)),
-                None => self.app.status = "link a una chat privata che non è fra le tue".into(),
+                None => self.app.status = tr("link a una chat privata che non è fra le tue").into(),
             }
             return;
         }
         if let Some(req) = self.req() {
             let _ = req.send(Request::Link(link));
-            self.app.status = "apro il link…".into();
+            self.app.status = tr("apro il link…").into();
         }
     }
 
@@ -952,7 +962,7 @@ impl Gui {
         }
         match tg::parse_link(&url) {
             Some(link) => self.follow(link),
-            None => self.app.status = format!("link non riconosciuto: {url}"),
+            None => self.app.status = trf!("link non riconosciuto: {}", url),
         }
     }
 
@@ -1040,13 +1050,13 @@ impl Gui {
             CacheKind::Temp => {
                 // un invio o un allegato in attesa usano i temporanei
                 if a.uploading.is_some() || a.pending_photo.is_some() {
-                    a.status = "c'è un invio in corso: riprova dopo".into();
+                    a.status = tr("c'è un invio in corso: riprova dopo").into();
                     return;
                 }
                 rondine::loader::clear_dir(&kind.dir());
             }
         }
-        a.status = "cache svuotata".into();
+        a.status = tr("cache svuotata").into();
         self.measure_cache();
     }
 
@@ -1116,7 +1126,7 @@ impl Gui {
             }
             NetEvent::OpenPeer(pid) => self.open_chat(pid),
             NetEvent::UpdateErr(e) => {
-                self.app.status = format!("rete: {e}");
+                self.app.status = trf!("rete: {}", e);
                 Task::none()
             }
             NetEvent::Update(u) => {
@@ -1207,7 +1217,7 @@ impl Gui {
         }
         let text = match (&d.last, self.settings.notify_text) {
             (Some(l), true) => l.text.clone(),
-            _ => "nuovo messaggio".to_string(),
+            _ => tr("nuovo messaggio").to_string(),
         };
         let body = if d.is_group && !d.broadcast && !from.is_empty() {
             format!("{from}: {text}")
@@ -1235,7 +1245,7 @@ impl Gui {
             let _ = req.send(Request::Hist { peer_ref, peer });
         }
         let a = &mut self.app;
-        a.status = "carico la cronologia…".into();
+        a.status = tr("carico la cronologia…").into();
         a.editing = None;
         a.replying = None;
         a.disarm_delete();
@@ -1261,7 +1271,7 @@ impl Gui {
         let a = &mut self.app;
         let kind = if let Some(path) = a.pending_photo.take() {
             a.status.clear();
-            a.uploading = Some("immagine dagli appunti".into());
+            a.uploading = Some(tr("immagine dagli appunti").into());
             SendKind::Photo { path, caption: std::mem::take(&mut a.compose) }
         } else if let Some(path) = a.pending_file.take() {
             a.status.clear();
@@ -1269,14 +1279,14 @@ impl Gui {
             SendKind::File { path: path.display().to_string(), caption: std::mem::take(&mut a.compose) }
         } else if let Some(id) = a.editing {
             if a.compose.trim().is_empty() {
-                a.status = "testo vuoto: niente da modificare".into();
+                a.status = tr("testo vuoto: niente da modificare").into();
                 return Task::none();
             }
             a.editing = None;
-            a.status = "salvo la modifica…".into();
+            a.status = tr("salvo la modifica…").into();
             SendKind::EditText { id, text: std::mem::take(&mut a.compose) }
         } else if !a.compose.trim().is_empty() {
-            a.status = "invio…".into();
+            a.status = tr("invio…").into();
             SendKind::Text(std::mem::take(&mut a.compose))
         } else {
             return Task::none();

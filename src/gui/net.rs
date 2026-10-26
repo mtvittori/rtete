@@ -10,7 +10,7 @@ use iced::futures::{Stream, StreamExt};
 use tokio::sync::mpsc;
 
 use rondine::send::{Request, Response};
-use rondine::{app, loader, tg, worker};
+use rondine::{app, loader, tg, tr, trf, worker};
 
 /// Il runtime della rete: grammers, worker e `mark_read` girano qui, non
 /// nell'executor di iced (così `Handle::enter` basta per gli spawn).
@@ -150,36 +150,36 @@ async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<()
     // la GUI non ha un terminale per numero e codice: l'accesso si fa una
     // volta con `rondine`, che salva credenziali e sessione
     let creds = tg::load_credentials()
-        .ok_or("nessuna credenziale: avvia prima `rondine` nel terminale per l'accesso")?;
+        .ok_or(tr("nessuna credenziale: avvia prima `rondine` nel terminale per l'accesso"))?;
     loader::prune_cache_to(cache_bytes);
 
-    status(0, "mi collego a Telegram…");
+    status(0, tr("mi collego a Telegram…"));
     let mut wait = 2u64;
     let (_session, client, updates) = loop {
         match tg::connect(&creds).await.map_err(|e| e.to_string()) {
             Ok((session, client, updates)) => {
-                status(1, "verifico l'account…");
+                status(1, tr("verifico l'account…"));
                 let authorized = client.is_authorized().await;
                 match authorized {
                     Ok(true) => break (session, client, updates),
                     Ok(false) => {
                         return Err(
-                            "sessione non autorizzata: accedi una volta con `rondine` nel terminale"
+                            tr("sessione non autorizzata: accedi una volta con `rondine` nel terminale")
                                 .into(),
                         )
                     }
-                    Err(e) if wait <= 16 => status(0, &format!("rete non pronta ({e}), ritento…")),
+                    Err(e) if wait <= 16 => status(0, &trf!("rete non pronta ({}), ritento…", e)),
                     Err(e) => return Err(e.to_string()),
                 }
             }
-            Err(e) if wait <= 16 => status(0, &format!("rete non pronta ({e}), ritento…")),
+            Err(e) if wait <= 16 => status(0, &trf!("rete non pronta ({}), ritento…", e)),
             Err(e) => return Err(e.to_string()),
         }
         tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
         wait *= 2;
     };
 
-    status(2, "carico le conversazioni…");
+    status(2, tr("carico le conversazioni…"));
     let mut contacts = tg::load_dialogs(&client).await.map_err(|e| e.to_string())?;
     app::pinned_first(&mut contacts);
     let me = tg::own_name(&client).await;

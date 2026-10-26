@@ -42,6 +42,7 @@ async fn render(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tg::migrate_old_dirs();
+    rondine::i18n::set(rondine::i18n::detect());
     let creds = match tg::load_credentials() {
         Some(c) => c,
         None => tg::prompt_credentials().await?,
@@ -53,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // connect + sign_in: se la rete non è pronta ritenta qualche colpo
     let (_session, client, updates) = tg::connect_and_sign(&creds).await?;
 
-    println!("Carico le conversazioni…");
+    println!("{}", rondine::tr("Carico le conversazioni…"));
     let mut contacts = tg::load_dialogs(&client).await?;
     app::pinned_first(&mut contacts);
     let mut app = App {
@@ -157,7 +158,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
             upd = update_stream.next() => match upd {
                 Ok(u) => handle_update(&mut app, &client, u).await,
-                Err(e) => app.status = format!("rete: {e}"),
+                Err(e) => app.status = rondine::trf!("rete: {}", e),
             },
             done = res_rx.recv() => match done {
                 Some(resp) => handle_response(&mut app, resp, &client, &req_tx).await,

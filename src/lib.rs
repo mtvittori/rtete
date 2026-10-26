@@ -3,6 +3,7 @@
 
 pub mod app;
 pub mod clipboard;
+pub mod i18n;
 pub mod loader;
 pub mod send;
 pub mod sync;
@@ -16,3 +17,5 @@ pub fn env_var(key: &str) -> Option<String> {
         .or_else(|_| std::env::var(format!("RTETE_{key}")))
         .ok()
 }
+
+pub use i18n::tr;

@@ -104,7 +104,7 @@ pub async fn save_job(
     name: String,
 ) -> Result<String, String> {
     let Some(sane) = tg::sanitize_file_name(&name) else {
-        return Err("nome file vuoto o inutilizzabile".into());
+        return Err(crate::tr("nome file vuoto o inutilizzabile").into());
     };
     let dir = tg::downloads_dir();
     let ts = std::time::SystemTime::now()
@@ -118,7 +118,7 @@ pub async fn save_job(
             let target = tg::unique_save_path(&dir, &sane);
             match std::fs::rename(&tmp, &target) {
                 Ok(()) => Ok(target.display().to_string()),
-                Err(e) => Err(format!("spostamento: {e}")),
+                Err(e) => Err(crate::trf!("spostamento: {}", e)),
             }
         }
         Err(e) => Err(e),
@@ -161,7 +161,7 @@ pub async fn play_job(
     let player = crate::env_var("PLAYER")
         .or_else(|| ["mpv", "ffplay"].iter().find(|p| which(p)).map(|p| p.to_string()));
     let Some(p) = player else {
-        let _ = out.send(Response::Played(Err("nessun player: installa mpv o ffplay".into())));
+        let _ = out.send(Response::Played(Err(crate::tr("nessun player: installa mpv o ffplay").into())));
         return;
     };
     let is_mpv = std::path::Path::new(&p)
@@ -182,7 +182,7 @@ pub async fn play_job(
     cmd.kill_on_drop(true);
     let Ok(mut child) = cmd.spawn() else {
         let _ = tokio::fs::remove_file(&target).await;
-        let _ = out.send(Response::Played(Err("player: non parte".into())));
+        let _ = out.send(Response::Played(Err(crate::tr("player: non parte").into())));
         return;
     };
     tokio::select! {

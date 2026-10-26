@@ -9,6 +9,7 @@ use crate::clipboard::{ctrl_copy, ctrl_paste, paste_text};
 use crate::send::{Request, Response, SendJob, SendKind};
 use crate::tg;
 use crate::view;
+use rondine::{tr, trf};
 
 pub(crate) async fn handle_event(
     app: &mut App,
@@ -77,7 +78,7 @@ pub(crate) async fn handle_event(
                             app.react_idx = 0;
                             app.react_open = !app.react_open;
                             app.status = if app.react_open {
-                                "reazioni: ←/→ o 1..8 · Invio toggle · Esc chiude".into()
+                                tr("reazioni: ←/→ o 1..8 · Invio toggle · Esc chiude").into()
                             } else {
                                 String::new()
                             };
@@ -137,25 +138,25 @@ pub(crate) async fn handle_event(
                             app.open_set = None;
                         }
                     } else if app.react_open {
-                        app.status = "reazioni: chiuse".into();
+                        app.status = tr("reazioni: chiuse").into();
                         app.react_open = false;
                     } else if app.pending_photo.is_some() || app.pending_file.is_some() {
-                        app.status = "appunti: foto scartata".into();
+                        app.status = tr("appunti: foto scartata").into();
                         app.discard_pending_photo();
                         app.compose.clear();
                     } else if app.editing.is_some() {
-                        app.status = "modifica annullata".into();
+                        app.status = tr("modifica annullata").into();
                         app.editing = None;
                         app.compose.clear();
                     } else if app.replying.is_some() {
                         // il testo scritto resta: si può mandarlo normale
-                        app.status = "risposta annullata".into();
+                        app.status = tr("risposta annullata").into();
                         app.replying = None;
                     } else if app.del_arm {
-                        app.status = "cancellazione annullata".into();
+                        app.status = tr("cancellazione annullata").into();
                         app.disarm_delete();
                     } else if app.msg_cursor.is_some() {
-                        app.status = "selezione chiusa".into();
+                        app.status = tr("selezione chiusa").into();
                         app.msg_cursor = None;
                     } else {
                         // chiude la chat e torna alla lista contatti
@@ -190,7 +191,7 @@ pub(crate) async fn handle_event(
                     if app.show_sticker {
                         app.sticker_cursor = 0;
                         if app.sets.is_none() {
-                            app.status = "scarico i set di sticker…".into();
+                            app.status = tr("scarico i set di sticker…").into();
                             let _ = req.send(Request::Sets);
                         }
                     }
@@ -210,7 +211,7 @@ pub(crate) async fn handle_event(
                     let n = c.to_digit(10).unwrap_or(0) as usize;
                     if (1..=tg::QUICK_REACTIONS.len()).contains(&n) {
                         app.react_idx = n - 1;
-                        app.status = format!("reazioni: {} (Invio per applicare)", tg::QUICK_REACTIONS[n - 1]);
+                        app.status = trf!("reazioni: {} (Invio per applicare)", tg::QUICK_REACTIONS[n - 1]);
                     }
                 }
                 KeyCode::Char(c) if !app.show_sticker && !app.react_open => {
@@ -220,7 +221,7 @@ pub(crate) async fn handle_event(
                     } else if app.compose.chars().count() < app.compose_cap() {
                         app.compose.push(c);
                     } else {
-                        app.status = format!("limite di {} caratteri", app.compose_cap());
+                        app.status = trf!("limite di {} caratteri", app.compose_cap());
                     }
                 }
                 _ => {}
@@ -290,12 +291,12 @@ pub(crate) fn ctrl_edit(app: &mut App) {
     // l'edit riprende il compose: scarta un'eventuale foto pendente
     app.discard_pending_photo();
     let Some(chat) = app.current_chat() else {
-        app.status = "apri prima una chat".into();
+        app.status = tr("apri prima una chat").into();
         return;
     };
     let ring = app.histories.get(&chat.peer_id);
     let Some(ring) = ring else {
-        app.status = "cronologia non ancora caricata".into();
+        app.status = tr("cronologia non ancora caricata").into();
         return;
     };
     // se c'è un cursore e punta a un tuo messaggio di testo, usa quello
@@ -313,9 +314,9 @@ pub(crate) fn ctrl_edit(app: &mut App) {
             app.editing = Some(id);
             app.del_arm = false;
             app.compose = text;
-            app.status = format!("✎ sto modificando il messaggio #{id} — Invio per confermare");
+            app.status = trf!("✎ sto modificando il messaggio #{} — Invio per confermare", id);
         }
-        None => app.status = "nessun tuo messaggio di testo da modificare".into(),
+        None => app.status = tr("nessun tuo messaggio di testo da modificare").into(),
     }
 }
 
@@ -328,19 +329,19 @@ pub(crate) fn ctrl_reply(app: &mut App) {
         return;
     };
     let Some(id) = cursor.filter(|cid| ring.iter().any(|r| r.id == *cid)) else {
-        app.status = "seleziona prima un messaggio (↑/↓)".into();
+        app.status = tr("seleziona prima un messaggio (↑/↓)").into();
         return;
     };
     if app.replying == Some(id) {
         app.replying = None;
-        app.status = "risposta annullata".into();
+        app.status = tr("risposta annullata").into();
         return;
     }
     app.replying = Some(id);
     app.editing = None;
     app.react_open = false;
     app.disarm_delete();
-    app.status = "↱ scrivi la risposta · Invio invia · Esc annulla".into();
+    app.status = tr("↱ scrivi la risposta · Invio invia · Esc annulla").into();
 }
 
 /// Arma la cancellazione dell'ultimo tuo messaggio (conferma con Invio).
@@ -355,19 +356,19 @@ pub(crate) fn ctrl_delete(app: &mut App) {
     {
         Some(r) if r.outgoing => Some(r.id),
         Some(_) => {
-            app.status = "puoi cancellare solo messaggi tuoi".into();
+            app.status = tr("puoi cancellare solo messaggi tuoi").into();
             return;
         }
         None => ring.iter().rev().find(|r| r.outgoing).map(|r| r.id),
     };
     let Some(last_own) = target else {
-        app.status = "nessun tuo messaggio da cancellare".into();
+        app.status = tr("nessun tuo messaggio da cancellare").into();
         return;
     };
     app.del_arm = true;
     app.del_id = Some(last_own);
     app.editing = None;
-    app.status = format!("⚠️ Invio = cancella il tuo messaggio #{last_own} (Esc per annullare)");
+    app.status = trf!("⚠️ Invio = cancella il tuo messaggio #{} (Esc per annullare)", last_own);
 }
 
 /// Riproduce l'ultimo audio (vocale o brano) della chat aperta.
@@ -403,10 +404,10 @@ pub(crate) fn ctrl_play(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     .and_then(to_job);
     match found {
         Some((media, fname, label)) => {
-            app.status = format!("scarico «{label}» e la riproduco…");
+            app.status = trf!("scarico «{}» e la riproduco…", label);
             let _ = req.send(Request::Play { media, fname, label, video: false });
         }
-        None => app.status = "nessun audio nella cronologia caricata".into(),
+        None => app.status = tr("nessun audio nella cronologia caricata").into(),
     }
 }
 
@@ -429,10 +430,10 @@ pub(crate) fn ctrl_save(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
         Some((media, name)) => {
             // la pulizia del nome sta nel worker (sanitize_file_name): qui
             // l'utente vede il nome originale
-            app.status = format!("salvo «{name}» in ~/Downloads…");
+            app.status = trf!("salvo «{}» in ~/Downloads…", name);
             let _ = req.send(Request::Save { media, name });
         }
-        None => app.status = "nessun documento da salvare nella cronologia caricata".into(),
+        None => app.status = tr("nessun documento da salvare nella cronologia caricata").into(),
     }
 }
 
@@ -453,7 +454,7 @@ pub(crate) fn click_select(app: &mut App, m: crossterm::event::MouseEvent) {
         .find(|(y, x0, x1, _)| *y == m.row && m.column >= *x0 && m.column < *x1)
     {
         let url = url.clone();
-        app.status = format!("apro {url}…");
+        app.status = trf!("apro {}…", url);
         std::thread::spawn(move || {
             use std::process::{Command, Stdio};
             let _ = Command::new("xdg-open")
@@ -472,7 +473,7 @@ pub(crate) fn click_select(app: &mut App, m: crossterm::event::MouseEvent) {
         .map(|(_, id)| *id);
     if let Some(id) = hit.filter(|id| *id != 0) {
         app.msg_cursor = Some(id);
-        app.status = format!("selezionato #{id} — Esc esce");
+        app.status = trf!("selezionato #{} — Esc esce", id);
     }
 }
 
@@ -617,7 +618,7 @@ fn enter_set(app: &mut App, req: &mpsc::UnboundedSender<Request>) {
     app.sticker_cursor = 0;
     // già qui, o in attesa di backoff da un errore recente? via
     if !app.set_docs.contains_key(&set_id) && !app.docs_cooling(set_id) {
-        app.status = format!("scarico il set {title}…");
+        app.status = trf!("scarico il set {}…", title);
         let _ = req.send(Request::SetDocs { set_id, short });
     }
 }
@@ -646,12 +647,12 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
             app.optimistic_react(&emoticon);
             app.react_open = false;
             app.status = if mine_already {
-                "reazione via…".into()
+                tr("reazione via…").into()
             } else {
-                format!("reazione {emoticon} su #{mid}…")
+                trf!("reazione {} su #{}…", emoticon, mid)
             };
         } else {
-            app.status = "seleziona prima un messaggio (↑/↓)".into();
+            app.status = tr("seleziona prima un messaggio (↑/↓)").into();
             app.react_open = false;
         }
         return;
@@ -673,13 +674,13 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
                         reply_to,
                     }));
                     app.replying = None;
-                    app.status = "invio sticker…".into();
+                    app.status = tr("invio sticker…").into();
                 }
             }
             // anteprime: converti tutta la griglia
             app.ensure_previews(req, docs.iter());
         } else {
-            app.status = "sticker ancora in scaricamento…".into();
+            app.status = tr("sticker ancora in scaricamento…").into();
         }
         return;
     }
@@ -695,7 +696,7 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
                 peer_ref: chat.peer_ref,
                 peer: chat.peer_id,
             });
-            app.status = "carico la cronologia…".into();
+            app.status = tr("carico la cronologia…").into();
             app.editing = None;
             app.replying = None;
             app.disarm_delete();
@@ -721,12 +722,12 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
             });
             if let Some(id) = target {
                 let _ = req.send(Request::Del { peer_ref, id });
-                app.status = format!("cancello il messaggio #{id}…");
+                app.status = trf!("cancello il messaggio #{}…", id);
                 if app.msg_cursor == Some(id) {
                     app.msg_cursor = None;
                 }
             } else {
-                app.status = "niente da cancellare".into();
+                app.status = tr("niente da cancellare").into();
             }
         }
         return;
@@ -736,14 +737,14 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
     if app.show_search {
         if let Some(chat) = app.current_chat() {
             if app.search_q.trim().is_empty() {
-                app.status = "scrivi cosa cercare".into();
+                app.status = tr("scrivi cosa cercare").into();
                 return;
             }
             let _ = req.send(Request::Search {
                 peer_ref: chat.peer_ref,
                 query: app.search_q.clone(),
             });
-            app.status = format!("cerco «{}»…", app.search_q);
+            app.status = trf!("cerco «{}»…", app.search_q);
         }
         return;
     }
@@ -765,10 +766,10 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
                 },
                 reply_to,
             }));
-            app.status = "invio la foto…".into();
+            app.status = tr("invio la foto…").into();
         } else {
             app.pending_photo = Some(path);
-            app.status = "apri prima una chat".into();
+            app.status = tr("apri prima una chat").into();
         }
         return;
     }
@@ -787,10 +788,10 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
                 reply_to: app.replying.take(),
             }));
             app.editing = None;
-            app.status = "invio il file…".into();
+            app.status = tr("invio il file…").into();
         } else {
             app.pending_file = Some(path);
-            app.status = "apri prima una chat".into();
+            app.status = tr("apri prima una chat").into();
         }
         return;
     }
@@ -810,10 +811,10 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
                     kind: SendKind::EditText { id: edit_id, text },
                     reply_to: None,
                 }));
-                app.status = format!("salvo la modifica #{edit_id}…");
+                app.status = trf!("salvo la modifica #{}…", edit_id);
             }
         } else {
-            app.status = "testo vuoto: niente da modificare".into();
+            app.status = tr("testo vuoto: niente da modificare").into();
         }
         return;
     }
@@ -830,7 +831,7 @@ pub(crate) async fn on_enter(app: &mut App, req: &mpsc::UnboundedSender<Request>
                 kind: SendKind::Text(text),
                 reply_to: app.replying.take(),
             }));
-            app.status = "invio…".into();
+            app.status = tr("invio…").into();
         }
     }
 }

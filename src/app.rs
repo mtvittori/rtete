@@ -235,13 +235,13 @@ impl App {
             return None;
         }
         let Some(chat) = self.current_chat() else {
-            self.status = "apri prima una chat".into();
+            self.status = crate::tr("apri prima una chat").into();
             return None;
         };
         match self.histories.get(&chat.peer_id) {
             Some(ring) => Some(ring),
             None => {
-                self.status = "cronologia non ancora caricata".into();
+                self.status = crate::tr("cronologia non ancora caricata").into();
                 None
             }
         }
@@ -538,14 +538,14 @@ impl App {
         };
         if ring.len() >= RING_CAP {
             self.older_done.insert(peer);
-            self.status = format!("limite di {RING_CAP} messaggi in memoria");
+            self.status = crate::trf!("limite di {} messaggi in memoria", RING_CAP);
             return;
         }
         let Some(before) = ring.front().map(|r| r.id) else {
             return;
         };
         self.older_busy.insert(peer);
-        self.status = "carico messaggi precedenti…".into();
+        self.status = crate::tr("carico messaggi precedenti…").into();
         let _ = req.send(Request::HistOlder { peer_ref, peer, before });
     }
 

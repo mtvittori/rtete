@@ -15,6 +15,8 @@ use grammers_client::session::updates::UpdatesLike;
 use grammers_client::tl;
 use grammers_client::{Client, InvocationError, SignInError};
 
+use crate::i18n::tr;
+
 pub type ChatRef = grammers_client::session::types::PeerRef;
 
 /// One conversation row in the sidebar.
@@ -127,16 +129,16 @@ pub fn typing_label(a: &tl::enums::SendMessageAction) -> Option<&'static str> {
     match a {
         A::SendMessageCancelAction => None,
         A::SendMessageRecordAudioAction | A::SendMessageUploadAudioAction(_) => {
-            Some("registra un vocale")
+            Some(tr("registra un vocale"))
         }
         A::SendMessageRecordVideoAction
         | A::SendMessageUploadVideoAction(_)
         | A::SendMessageRecordRoundAction
-        | A::SendMessageUploadRoundAction(_) => Some("invia un video"),
-        A::SendMessageUploadPhotoAction(_) => Some("invia una foto"),
-        A::SendMessageUploadDocumentAction(_) => Some("invia un file"),
-        A::SendMessageChooseStickerAction => Some("sceglie uno sticker"),
-        _ => Some("sta scrivendo"),
+        | A::SendMessageUploadRoundAction(_) => Some(tr("invia un video")),
+        A::SendMessageUploadPhotoAction(_) => Some(tr("invia una foto")),
+        A::SendMessageUploadDocumentAction(_) => Some(tr("invia un file")),
+        A::SendMessageChooseStickerAction => Some(tr("sceglie uno sticker")),
+        _ => Some(tr("sta scrivendo")),
     }
 }
 
@@ -186,7 +188,7 @@ pub struct HistoryRow {
     /// citazione parziale scelta da chi risponde (`quote_text`): se c'è, la
     /// riga di citazione mostra questa invece dell'inizio del messaggio.
     pub reply_quote: Option<String>,
-    /// origine di un inoltro (nome dell'autore originale o "inoltrato").
+    /// origine di un inoltro: nome dell'autore originale, vuoto se nascosto.
     pub fwd: Option<String>,
     pub edited: bool,
 }
@@ -212,7 +214,7 @@ impl HistoryRow {
             },
             fwd: m.forward_header().map(|h| {
                 let tl::enums::MessageFwdHeader::Header(h) = h;
-                h.from_name.unwrap_or_else(|| "inoltrato".into())
+                h.from_name.unwrap_or_default()
             }),
             edited: m.edit_date().is_some() && !m.edit_hide(),
         }
@@ -313,7 +315,7 @@ impl RowKind {
             RowKind::Text(t) => t.lines().next().unwrap_or("").to_string(),
             RowKind::Sticker { emoji, .. } => format!("{emoji} sticker"),
             RowKind::Photo { caption, gif, .. } => {
-                let what = if *gif { "GIF" } else { "🖼 foto" };
+                let what = if *gif { "GIF" } else { tr("🖼 foto") };
                 if caption.is_empty() {
                     what.into()
                 } else {
@@ -321,9 +323,9 @@ impl RowKind {
                 }
             }
             RowKind::Doc { name, .. } => format!("📄 {name}"),
-            RowKind::Audio { voice: true, .. } => "🎤 messaggio vocale".into(),
+            RowKind::Audio { voice: true, .. } => tr("🎤 messaggio vocale").into(),
             RowKind::Audio { name, .. } => format!("🎵 {name}"),
-            RowKind::Video { round: true, .. } => "📹 videomessaggio".into(),
+            RowKind::Video { round: true, .. } => tr("📹 videomessaggio").into(),
             RowKind::Video { caption, .. } if !caption.is_empty() => format!("🎥 {caption}"),
             RowKind::Video { .. } => "🎥 video".into(),
             RowKind::Note(s) | RowKind::Service(s) => s.clone(),
@@ -357,12 +359,12 @@ pub fn fmt_size(mut bytes: f64) -> String {
     if unit == 0 {
         format!("{bytes} B")
     } else {
-        // "1,2 MB" col separatore decimale italiano: format! non arriva
-        // (sempre punto), quindi arrotondo alla prima decimale a mano
+        // "1,2 MB" col separatore decimale della lingua: format! usa
+        // sempre il punto, quindi arrotondo alla prima decimale a mano
         let round10 = (bytes * 10.0).round();
         let whole = (round10 / 10.0).trunc() as u64;
         let frac = round10 as i64 % 10;
-        format!("{whole},{frac} {}", UNITS[unit])
+        format!("{whole}{}{frac} {}", crate::i18n::decimal_sep(), UNITS[unit])
     }
 }
 
@@ -386,11 +388,11 @@ fn media_note(doc: &grammers_client::media::Document, text: &str) -> String {
     let base = if mime.starts_with("video/") {
         "video"
     } else if secs > 0 && doc.name().is_none() && mime.contains("ogg") {
-        "messaggio vocale"
+        tr("messaggio vocale")
     } else if mime.starts_with("audio/") {
         "audio"
     } else {
-        "media non supportato"
+        tr("media non supportato")
     };
     let time = if secs > 0 {
         format!(" {secs}s")
@@ -566,7 +568,7 @@ fn parse_creds(raw: &str) -> Option<Credentials> {
 
 /// Interactive first-run prompt; stores the answer in the credentials file.
 pub async fn prompt_credentials() -> Result<Credentials, Box<dyn std::error::Error>> {
-    println!("Prima configurazione di Rondine.");
+    println!("{}", tr("Prima configurazione di Rondine."));
     let _ = write!(std::io::stdout(), "API ID: ");
     let _ = std::io::stdout().flush();
     let mut line = String::new();
@@ -652,14 +654,14 @@ pub async fn connect_and_sign(
 > {
     const ATTEMPTS: u32 = 5;
     let mut wait = 2u64;
-    println!("Verifico l\'accesso al tuo account…");
+    println!("{}", tr("Verifico l'accesso al tuo account…"));
     let mut wobble: Option<Box<dyn std::error::Error>> = None;
     for attempt in 1..=ATTEMPTS {
         // c'era un calo di rete al colpo prima: aspetta e dicilo
         if let Some(e) = wobble.take() {
             eprintln!(
-                "Rete non pronta ({e}): ritento tra {wait}s ({attempt}/{})…",
-                ATTEMPTS - 1
+                "{}",
+                crate::trf!("Rete non pronta ({}): ritento tra {}s ({}/{})…", e, wait, attempt, ATTEMPTS - 1)
             );
             tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
             wait = (wait * 2).min(16);
@@ -735,10 +737,10 @@ pub async fn sign_in(
         return Ok(());
     }
     println!();
-    println!("⚠️  Digita ogni dato SOLO quando compare la domanda, poi conferma con Invio.");
-    println!("    (Se scrivi prima che la richiesta appaia, l'input va perso.)");
+    println!("{}", tr("⚠️  Digita ogni dato SOLO quando compare la domanda, poi conferma con Invio."));
+    println!("{}", tr("    (Se scrivi prima che la richiesta appaia, l'input va perso.)"));
     let phone = loop {
-        let _ = write!(std::io::stdout(), "Numero di telefono (+39…): ");
+        let _ = write!(std::io::stdout(), "{}", tr("Numero di telefono (+39…): "));
         let _ = std::io::stdout().flush();
         let mut phone = String::new();
         if std::io::stdin().read_line(&mut phone)? == 0 {
@@ -756,11 +758,12 @@ pub async fn sign_in(
             break phone;
         }
         println!(
-            "Numero troppo corto. Usa il solo mobile (es. 3391234567) o il formato +39 completo."
+            "{}",
+            tr("Numero troppo corto. Usa il solo mobile (es. 3391234567) o il formato +39 completo.")
         );
     };
     let token = client.request_login_code(&phone, &creds.api_hash).await?;
-    let _ = write!(std::io::stdout(), "Codice ricevuto: ");
+    let _ = write!(std::io::stdout(), "{}", tr("Codice ricevuto: "));
     let _ = std::io::stdout().flush();
     let mut code = String::new();
     std::io::stdin().read_line(&mut code)?;
@@ -771,21 +774,21 @@ pub async fn sign_in(
             // rpassword legge senza eco: la password non resta visibile
             // nella cronologia del terminale come con read_line
             let prompt = if hint.is_empty() {
-                "Password 2FA: ".to_string()
+                tr("Password 2FA: ").to_string()
             } else {
-                format!("Password 2FA ({hint}): ")
+                crate::trf!("Password 2FA ({}): ", hint)
             };
             let pass = rpassword::prompt_password(prompt)?;
             client.check_password(token, pass.trim()).await?
         }
         Err(SignInError::SignUpRequired) => {
-            return Err("Account senza Telegram: crea prima un account con l'app ufficiale.".into())
+            return Err(tr("Account senza Telegram: crea prima un account con l'app ufficiale.").into())
         }
-        Err(SignInError::InvalidCode) => return Err("Codice errato, riavvia e riprova.".into()),
-        Err(SignInError::InvalidPassword(_)) => return Err("2FA errata, riavvia e riprova.".into()),
+        Err(SignInError::InvalidCode) => return Err(tr("Codice errato, riavvia e riprova.").into()),
+        Err(SignInError::InvalidPassword(_)) => return Err(tr("2FA errata, riavvia e riprova.").into()),
         Err(e) => return Err(e.into()),
     };
-    println!("Connesso come {}", user.full_name());
+    println!("{}", crate::trf!("Connesso come {}", user.full_name()));
     Ok(())
 }
 
@@ -795,7 +798,7 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
     let mut iter = client.iter_dialogs();
     while let Some(dialog) = iter.next().await? {
         let peer = dialog.peer().clone();
-        let name = peer.name().unwrap_or("senza nome").to_string();
+        let name = peer.name().unwrap_or(tr("senza nome")).to_string();
         let is_group = !matches!(peer, grammers_client::peer::Peer::User(_));
         let (photo_id, seen) = peer_extras(&peer);
         let read_unread = match &dialog.raw {
@@ -849,7 +852,7 @@ pub async fn dialog_from_message(
         broadcast: is_broadcast(&peer),
         photo_id,
         seen,
-        name: peer.name().unwrap_or("senza nome").to_string(),
+        name: peer.name().unwrap_or(tr("senza nome")).to_string(),
         is_group: !matches!(peer, grammers_client::peer::Peer::User(_)),
         peer_id: m.peer_id(),
         peer_ref,
@@ -930,14 +933,14 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
         // anteprime dei link: conta solo il testo del messaggio
         Some(Media::WebPage(_)) => RowKind::Text(text),
         Some(other) => RowKind::Note(match other {
-            Media::Contact(c) => format!("📇 contatto: {} {}", c.first_name(), c.last_name()),
+            Media::Contact(c) => crate::trf!("📇 contatto: {} {}", c.first_name(), c.last_name()),
             Media::Poll(p) => match p.question() {
                 tl::enums::TextWithEntities::Entities(t) => {
-                    format!("📊 sondaggio: {}", t.text)
+                    crate::trf!("📊 sondaggio: {}", t.text)
                 }
             },
-            Media::Geo(_) | Media::GeoLive(_) => "📍 posizione".to_string(),
-            Media::Venue(_) => "🗺 luogo".to_string(),
+            Media::Geo(_) | Media::GeoLive(_) => tr("📍 posizione").to_string(),
+            Media::Venue(_) => tr("🗺 luogo").to_string(),
             Media::Dice(d) => format!("🎲 {} ({})", d.emoji(), d.value()),
             _ => format!("{other:?}"),
         }),
@@ -1319,10 +1322,10 @@ impl SharedTab {
     pub fn label(self) -> &'static str {
         match self {
             SharedTab::Media => "Media",
-            SharedTab::Files => "File",
+            SharedTab::Files => tr("File"),
             SharedTab::Links => "Link",
-            SharedTab::Audio => "Musica",
-            SharedTab::Voice => "Vocali",
+            SharedTab::Audio => tr("Musica"),
+            SharedTab::Voice => tr("Vocali"),
         }
     }
 
@@ -1519,9 +1522,9 @@ pub async fn save_profile(client: &Client, p: &MyProfile, old_username: &str) ->
             .invoke(&tl::functions::account::UpdateUsername { username: username.to_string() })
             .await
             .map_err(|e| match e.to_string() {
-                s if s.contains("USERNAME_OCCUPIED") => "username già in uso".to_string(),
+                s if s.contains("USERNAME_OCCUPIED") => tr("username già in uso").to_string(),
                 s if s.contains("USERNAME_INVALID") => {
-                    "username non valido (5-32 caratteri: lettere, cifre, _)".to_string()
+                    tr("username non valido (5-32 caratteri: lettere, cifre, _)").to_string()
                 }
                 s => s,
             })?;
@@ -1611,7 +1614,7 @@ pub async fn end_session(client: &Client, hash: Option<i64>) -> Result<(), Strin
     }
     .map_err(|e| match e.to_string() {
         s if s.contains("FRESH_RESET_AUTHORISATION_FORBIDDEN") => {
-            "una sessione appena aperta non può chiudere le altre: riprova fra 24 ore".to_string()
+            tr("una sessione appena aperta non può chiudere le altre: riprova fra 24 ore").to_string()
         }
         s => s,
     })
@@ -1810,12 +1813,12 @@ pub async fn resolve_link(client: &Client, link: TgLink) -> Result<LinkHit, Stri
                 .resolve_username(&name)
                 .await
                 .map_err(|e| e.to_string())?
-                .ok_or_else(|| format!("@{name} non esiste"))?;
+                .ok_or_else(|| crate::trf!("@{} non esiste", name))?;
             let peer_ref = peer
                 .to_ref()
                 .await
                 .map_err(|e| e.to_string())?
-                .ok_or_else(|| format!("@{name} non è raggiungibile"))?;
+                .ok_or_else(|| crate::trf!("@{} non è raggiungibile", name))?;
             let (photo_id, seen) = peer_extras(&peer);
             Ok(LinkHit::Chat {
                 dialog: DialogInfo {
@@ -1843,10 +1846,10 @@ pub async fn resolve_link(client: &Client, link: TgLink) -> Result<LinkHit, Stri
             match res {
                 tl::enums::ChatInvite::Already(a) => chat_peer_id(&a.chat)
                     .map(LinkHit::Already)
-                    .ok_or_else(|| "chat dell'invito non valida".into()),
+                    .ok_or_else(|| tr("chat dell'invito non valida").into()),
                 tl::enums::ChatInvite::Peek(p) => chat_peer_id(&p.chat)
                     .map(LinkHit::Already)
-                    .ok_or_else(|| "chat dell'invito non valida".into()),
+                    .ok_or_else(|| tr("chat dell'invito non valida").into()),
                 tl::enums::ChatInvite::Invite(i) => Ok(LinkHit::Invite {
                     hash,
                     title: i.title,
@@ -1854,7 +1857,7 @@ pub async fn resolve_link(client: &Client, link: TgLink) -> Result<LinkHit, Stri
                 }),
             }
         }
-        TgLink::Private { .. } => Err("chat privata: non è fra le tue".into()),
+        TgLink::Private { .. } => Err(tr("chat privata: non è fra le tue").into()),
     }
 }
 
@@ -1865,7 +1868,7 @@ pub async fn join_invite(client: &Client, hash: String) -> Result<LinkHit, Strin
         .await
         .map_err(|e| e.to_string())?;
     let tl::enums::messages::ChatInviteJoinResult::Ok(ok) = res else {
-        return Err("questo invito si apre solo nell'app ufficiale".into());
+        return Err(tr("questo invito si apre solo nell'app ufficiale").into());
     };
     let chats = match ok.updates {
         tl::enums::Updates::Updates(u) => u.chats,

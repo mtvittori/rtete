@@ -51,6 +51,15 @@ bio, foto profilo), aspetto, notifiche, immagini e media (download
 automatico, miniature, misura delle foto), dati e archiviazione (spazio
 usato, svuota cache, tetto della cache), dispositivi (sessioni attive da
 chiudere) e link.
+
+## Lingue
+
+L'interfaccia (GUI e TUI) è in italiano e in inglese: segue la lingua del
+sistema (`LANG`), e nella GUI si sceglie anche da Impostazioni → Aspetto.
+I testi italiani nel codice fanno da chiave; le traduzioni stanno in
+`locales/<lingua>.txt`, a blocchi di due righe (italiano, traduzione). Per
+aggiungere una lingua basta un file nuovo e una voce in `src/i18n.rs`;
+`cargo test` segnala i testi senza traduzione.
 Disegna in software (tiny-skia, ~75 MB di RAM); `ICED_BACKEND=wgpu` usa
 la GPU (~105 MB).
 

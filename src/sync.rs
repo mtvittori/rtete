@@ -8,7 +8,9 @@ use tokio::sync::mpsc;
 use crate::app::{App, OLDER_PAGE};
 use crate::clipboard::handle_clipboard;
 use crate::send::{Request, Response, SendDone};
+use crate::i18n::tr;
 use crate::tg;
+use crate::trf;
 
 /// Segna la chat come letta con la richiesta fuori dal flusso eventi:
 /// lo spawn async parte subito ma l'input non aspetta la rete.
@@ -48,7 +50,7 @@ fn typing(
                 .iter()
                 .find(|d| tg::same_peer(d.peer_id, w))
                 .map(|d| d.name.split_whitespace().next().unwrap_or("").to_string())
-                .unwrap_or_else(|| "qualcuno".into());
+                .unwrap_or_else(|| tr("qualcuno").into());
             format!("{name} {what}")
         }
         None => what.to_string(),
@@ -146,7 +148,7 @@ pub async fn handle_update(
                 }
             }
             if !ids.is_empty() {
-                app.status = format!("· {} messaggi cancellati in chat", ids.len());
+                app.status = trf!("· {} messaggi cancellati in chat", ids.len());
             }
         }
         Update::Raw(raw) => {
@@ -222,7 +224,7 @@ pub async fn handle_response(
                 // storia vuota e storia guasta sono cose diverse: un errore
                 // di rete non deve apparire come "nessun messaggio"
                 if is_open {
-                    app.status = format!("cronologia: {}", rows.err().unwrap_or_default());
+                    app.status = trf!("cronologia: {}", rows.err().unwrap_or_default());
                 }
                 return;
             };
@@ -265,7 +267,7 @@ pub async fn handle_response(
                     if got < OLDER_PAGE || entered < got {
                         app.older_done.insert(peer);
                         if is_open {
-                            app.status = "inizio della cronologia".into();
+                            app.status = tr("inizio della cronologia").into();
                         }
                     } else if is_open {
                         app.status.clear();
@@ -273,7 +275,7 @@ pub async fn handle_response(
                 }
                 Err(e) => {
                     if is_open {
-                        app.status = format!("cronologia precedente: {e}");
+                        app.status = trf!("cronologia precedente: {}", e);
                     }
                 }
             }
@@ -288,7 +290,7 @@ pub async fn handle_response(
                 Err(e) => {
                     app.quoted_failed(peer);
                     if app.current_chat().map(|c| c.peer_id) == Some(peer) {
-                        app.status = format!("messaggi citati: {e}");
+                        app.status = trf!("messaggi citati: {}", e);
                     }
                 }
             }
@@ -303,7 +305,7 @@ pub async fn handle_response(
             }
             Err(err) => {
                 // sets resta None: riaprendo il pannello con Tab ritenta
-                app.status = format!("set: {err}");
+                app.status = trf!("set: {}", err);
             }
         },
         Response::Docs { set_id, docs } => match docs {
@@ -319,7 +321,7 @@ pub async fn handle_response(
                 // non inserire il set in set_docs come "vuoto però caricato"
                 app.docs_failed(set_id);
                 if app.open_set == Some(set_id) {
-                    app.status = format!("set: {err}");
+                    app.status = trf!("set: {}", err);
                 }
             }
         },
@@ -343,35 +345,35 @@ pub async fn handle_response(
                 }
                 Ok(SendDone::Edit(peer_id, row)) => {
                     app.replace_row(peer_id, row);
-                    app.status = "modifica salvata".into();
+                    app.status = tr("modifica salvata").into();
                 }
-                Err(err) => app.status = format!("invio: {err}"),
+                Err(err) => app.status = trf!("invio: {}", err),
             }
         }
         Response::Deleted(res) => match res {
-            Ok(()) => app.status = "cancellato".into(),
-            Err(err) => app.status = format!("cancellazione: {err}"),
+            Ok(()) => app.status = tr("cancellato").into(),
+            Err(err) => app.status = trf!("cancellazione: {}", err),
         },
         Response::Searched(res) => match res {
             Ok(hits) => {
                 let n = hits.len();
                 app.search_results = Some(hits);
                 app.search_cursor = 0;
-                app.status = format!("ricerca: {n} risultati (↓ per muoverti, Esc chiude)");
+                app.status = trf!("ricerca: {} risultati (↓ per muoverti, Esc chiude)", n);
             }
-            Err(err) => app.status = format!("ricerca: {err}"),
+            Err(err) => app.status = trf!("ricerca: {}", err),
         },
         Response::Saved(res) => match res {
-            Ok(path) => app.status = format!("salvato in {path}"),
-            Err(err) => app.status = format!("salvataggio: {err}"),
+            Ok(path) => app.status = trf!("salvato in {}", path),
+            Err(err) => app.status = trf!("salvataggio: {}", err),
         },
         Response::Played(res) => match res {
             Ok(label) => app.status = label,
-            Err(err) => app.status = format!("riproduzione: {err}"),
+            Err(err) => app.status = trf!("riproduzione: {}", err),
         },
         Response::Reacted(res) => match res {
-            Ok(()) => app.status = "reazione salvata".into(),
-            Err(err) => app.status = format!("reazione: {err}"),
+            Ok(()) => app.status = tr("reazione salvata").into(),
+            Err(err) => app.status = trf!("reazione: {}", err),
         },
         Response::Clipboard(hit) => handle_clipboard(app, hit),
         Response::Link(res) => match res {
@@ -398,9 +400,9 @@ pub async fn handle_response(
             Ok(tg::LinkHit::Joined(pid)) => {
                 let _ = req.send(Request::Dialogs);
                 app.link_open = pid.map(|p| (p, None));
-                app.status = "sei entrato nella chat".into();
+                app.status = tr("sei entrato nella chat").into();
             }
-            Err(err) => app.status = format!("link: {err}"),
+            Err(err) => app.status = trf!("link: {}", err),
         },
         Response::Avatar { photo_id, path } => {
             // in caso di errore resta in avatar_asked: niente ritenti a raffica
@@ -409,14 +411,14 @@ pub async fn handle_response(
             }
         }
         Response::Forwarded(res) => match res {
-            Ok(to) => app.status = format!("inoltrato a {to}"),
-            Err(err) => app.status = format!("inoltro: {err}"),
+            Ok(to) => app.status = trf!("inoltrato a {}", to),
+            Err(err) => app.status = trf!("inoltro: {}", err),
         },
         Response::Info { peer, info } => match info {
             Ok(info) => {
                 app.peer_info.insert(peer, info);
             }
-            Err(err) => app.status = format!("info: {err}"),
+            Err(err) => app.status = trf!("info: {}", err),
         },
         Response::Shared { peer, tab, items } => match items {
             Ok(items) => {
@@ -443,34 +445,34 @@ pub async fn handle_response(
                 if let Some(info) = app.peer_info.get_mut(&peer) {
                     info.blocked = blocked;
                 }
-                app.status = if blocked { "utente bloccato" } else { "utente sbloccato" }.into();
+                app.status = if blocked { tr("utente bloccato") } else { tr("utente sbloccato") }.into();
             }
-            Err(err) => app.status = format!("blocco: {err}"),
+            Err(err) => app.status = trf!("blocco: {}", err),
         },
         Response::ChatDeleted { peer, res } => match res {
             Ok(()) => {
                 app.forget_chat(peer);
-                app.status = "chat eliminata".into();
+                app.status = tr("chat eliminata").into();
             }
-            Err(err) => app.status = format!("eliminazione chat: {err}"),
+            Err(err) => app.status = trf!("eliminazione chat: {}", err),
         },
         Response::Profile(res) => match res {
             Ok(p) => {
                 app.me = format!("{} {}", p.first, p.last).trim().to_string();
                 app.profile = Some(p);
             }
-            Err(err) => app.status = format!("profilo: {err}"),
+            Err(err) => app.status = trf!("profilo: {}", err),
         },
         Response::ProfileSaved(res) => match res {
             Ok(()) => {
-                app.status = "profilo aggiornato".into();
+                app.status = tr("profilo aggiornato").into();
                 let _ = req.send(Request::Profile);
             }
-            Err(err) => app.status = format!("profilo: {err}"),
+            Err(err) => app.status = trf!("profilo: {}", err),
         },
         Response::Sessions(res) => match res {
             Ok(list) => app.sessions = Some(list),
-            Err(err) => app.status = format!("dispositivi: {err}"),
+            Err(err) => app.status = trf!("dispositivi: {}", err),
         },
         Response::SessionEnded(res) => match res {
             Ok(hash) => {
@@ -478,11 +480,11 @@ pub async fn handle_response(
                     list.retain(|s| s.current || hash.is_some_and(|h| h != s.hash));
                 }
                 app.status = match hash {
-                    Some(_) => "sessione chiusa".into(),
-                    None => "tutte le altre sessioni sono state chiuse".into(),
+                    Some(_) => tr("sessione chiusa").into(),
+                    None => tr("tutte le altre sessioni sono state chiuse").into(),
                 };
             }
-            Err(err) => app.status = format!("dispositivi: {err}"),
+            Err(err) => app.status = trf!("dispositivi: {}", err),
         },
         Response::Dialogs(res) => match res {
             Ok(mut list) => {
@@ -493,7 +495,7 @@ pub async fn handle_response(
                     .and_then(|s| app.contacts.iter().position(|c| tg::same_peer(c.peer_id, s)))
                     .unwrap_or(0);
             }
-            Err(err) => app.status = format!("lista chat: {err}"),
+            Err(err) => app.status = trf!("lista chat: {}", err),
         },
     }
 }

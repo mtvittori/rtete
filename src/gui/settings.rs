@@ -3,6 +3,18 @@
 
 use std::path::PathBuf;
 
+use rondine::i18n::{self, Lang};
+
+/// La lingua dell'interfaccia: quella del sistema o una scelta.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct LangChoice(pub Option<Lang>);
+
+impl LangChoice {
+    pub fn resolve(self) -> Lang {
+        self.0.unwrap_or_else(i18n::detect)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ThemeChoice {
     /// i colori del tema Omarchy corrente, aggiornati al cambio tema
@@ -34,6 +46,7 @@ pub struct Settings {
     pub photo_px: u16,
     /// tetto della cache di foto e sticker, in MB (sfoltita all'avvio)
     pub cache_mb: u32,
+    pub lang: LangChoice,
 }
 
 /// le misure delle foto in chat proposte nelle impostazioni
@@ -55,6 +68,7 @@ impl Default for Settings {
             avatars: true,
             photo_px: 320,
             cache_mb: 32,
+            lang: LangChoice(None),
         }
     }
 }
@@ -102,6 +116,7 @@ impl Settings {
                         s.photo_px = n.clamp(160, 600);
                     }
                 }
+                ("lingua", v) => s.lang = LangChoice(Lang::from_code(v)),
                 ("cache_mb", v) => {
                     if let Ok(n) = v.parse::<u32>() {
                         s.cache_mb = n.clamp(16, 8192);
@@ -126,7 +141,7 @@ impl Settings {
             p,
             format!(
                 "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n\
-                 foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\n",
+                 foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n",
                 self.scale,
                 self.links_in_app,
                 self.gpu,
@@ -136,7 +151,8 @@ impl Settings {
                 self.video_thumbs,
                 self.avatars,
                 self.photo_px,
-                self.cache_mb
+                self.cache_mb,
+                self.lang.0.map_or("auto", |l| l.code())
             ),
         );
     }

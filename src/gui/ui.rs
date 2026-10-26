@@ -14,6 +14,7 @@ use iced::{Alignment, Center, Element, Fill, Font, Length};
 
 use rondine::app::App;
 use rondine::tg::{self, HistoryRow, RowKind};
+use rondine::{tr, trf};
 
 use crate::style;
 use crate::settings::ThemeChoice;
@@ -95,7 +96,7 @@ fn photo_viewer(path: &std::path::Path) -> Element<'_, Msg> {
     let p = style::p();
     let bar = row![
         space().width(Fill),
-        button(text("Apri fuori").size(13))
+        button(text(tr("Apri fuori")).size(13))
             .on_press(Msg::Link(format!("file://{}", path.display())))
             .style(style::flat(false)),
         button(text("✕").size(18)).on_press(Msg::Cancel).style(style::flat(false)),
@@ -111,7 +112,7 @@ fn photo_viewer(path: &std::path::Path) -> Element<'_, Msg> {
                 .min_scale(0.5)
                 .max_scale(8.0)
                 .scale_step(0.15),
-            container(text("rotella per lo zoom · trascina per spostare · Esc chiude").size(12).color(p.muted))
+            container(text(tr("rotella per lo zoom · trascina per spostare · Esc chiude")).size(12).color(p.muted))
                 .center_x(Fill)
                 .padding(8),
         ],
@@ -164,9 +165,9 @@ fn spinner<'a>(g: &Gui, size: f32) -> Element<'a, Msg> {
 /// da fare) con la riga di stato che arriva dalla rete.
 fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
     let p = style::p();
-    const STEPS: [&str; 3] = ["Connessione a Telegram", "Verifica dell'account", "Caricamento delle chat"];
+    let steps_l = [tr("Connessione a Telegram"), tr("Verifica dell'account"), tr("Caricamento delle chat")];
     let mut steps = Column::new().spacing(8);
-    for (i, label) in STEPS.iter().enumerate() {
+    for (i, label) in steps_l.iter().enumerate() {
         let (mark, color) = match (i as u8).cmp(&step) {
             std::cmp::Ordering::Less => ("✓", p.link),
             std::cmp::Ordering::Equal => ("●", p.text),
@@ -182,7 +183,7 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
     centered(column![
         logo(p.accent),
         text("Rondine").size(30).font(BOLD),
-        text("Telegram leggero per Linux").size(13).color(p.muted),
+        text(tr("Telegram leggero per Linux")).size(13).color(p.muted),
         space().height(14),
         spinner(g, 54.0),
         text(status).size(13).color(p.muted),
@@ -198,13 +199,13 @@ fn failed(e: &str) -> Element<'_, Msg> {
         container(text("!").size(46).font(BOLD).color(iced::Color::WHITE))
             .center(92)
             .style(style::avatar(p.danger)),
-        text("Rondine non riesce a partire").size(22).font(BOLD),
+        text(tr("Rondine non riesce a partire")).size(22).font(BOLD),
         container(text(e).color(p.danger).align_x(Center)).max_width(520),
-        text("Controlla la connessione; il primo accesso si fa con `rondine` nel terminale.")
+        text(tr("Controlla la connessione; il primo accesso si fa con `rondine` nel terminale."))
             .size(12)
             .color(p.muted),
         space().height(6),
-        button(text("Chiudi")).on_press(Msg::Quit).padding([8, 18]).style(style::primary),
+        button(text(tr("Chiudi"))).on_press(Msg::Quit).padding([8, 18]).style(style::primary),
     ])
 }
 
@@ -311,7 +312,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
                 .style(style::chat_item(is_open))
                 .into()
         });
-    let search = text_input("Cerca chat…", &g.filter)
+    let search = text_input(tr("Cerca chat…"), &g.filter)
         .style(style::input)
         .on_input(Msg::Filter)
         .padding(9);
@@ -347,7 +348,6 @@ fn ticks<'a>(id: i32, read_out: i32, size: f32) -> Element<'a, Msg> {
 
 /// ora di oggi, giorno della settimana, oppure la data
 fn list_time(g: &Gui, secs: i64) -> String {
-    const GIORNI: [&str; 7] = ["lun", "mar", "mer", "gio", "ven", "sab", "dom"];
     let Some(z) = local(g, secs) else {
         return String::new();
     };
@@ -356,7 +356,7 @@ fn list_time(g: &Gui, secs: i64) -> String {
     if d == today {
         z.strftime("%H:%M").to_string()
     } else if (today - d).get_days() < 7 && d < today {
-        GIORNI[d.weekday().to_monday_zero_offset() as usize].to_string()
+        rondine::i18n::weekdays()[d.weekday().to_monday_zero_offset() as usize].to_string()
     } else {
         z.strftime("%d/%m/%y").to_string()
     }
@@ -417,7 +417,7 @@ fn initial<'a>(name: &str, size: f32) -> Element<'a, Msg> {
 fn chat(g: &Gui) -> Element<'_, Msg> {
     let app = &g.app;
     let Some(chat) = app.current_chat() else {
-        return container(text("Scegli una chat a sinistra").color(style::p().muted))
+        return container(text(tr("Scegli una chat a sinistra")).color(style::p().muted))
             .center(Fill)
             .style(style::fill(style::p().bg))
             .into();
@@ -479,25 +479,25 @@ fn subtitle<'a>(g: &Gui, chat: &tg::DialogInfo) -> Element<'a, Msg> {
     let members = g.app.peer_info.get(&chat.peer_id).and_then(|i| i.members);
     let line = match chat.seen {
         _ if chat.broadcast => match members {
-            Some(n) => format!("canale · {n} iscritti"),
-            None => "canale".to_string(),
+            Some(n) => trf!("canale · {} iscritti", n),
+            None => tr("canale").to_string(),
         },
         _ if chat.is_group => match members {
-            Some(n) => format!("gruppo · {n} membri"),
-            None => "gruppo".to_string(),
+            Some(n) => trf!("gruppo · {} membri", n),
+            None => tr("gruppo").to_string(),
         },
-        s if s.online(now) => return text("online").size(12).color(p.link).into(),
+        s if s.online(now) => return text(tr("online")).size(12).color(p.link).into(),
         tg::Seen::Online(t) | tg::Seen::Offline(t) => match local(g, t) {
             Some(z) if z.date() == jiff::Zoned::now().date() => {
-                format!("ultimo accesso alle {}", z.strftime("%H:%M"))
+                trf!("ultimo accesso alle {}", z.strftime("%H:%M"))
             }
-            Some(z) => format!("ultimo accesso il {}", z.strftime("%d/%m alle %H:%M")),
-            None => "chat privata".into(),
+            Some(z) => trf!("ultimo accesso il {} alle {}", z.strftime("%d/%m"), z.strftime("%H:%M")),
+            None => tr("chat privata").into(),
         },
-        tg::Seen::Recently => "ultimo accesso di recente".into(),
-        tg::Seen::LastWeek => "ultimo accesso questa settimana".into(),
-        tg::Seen::LastMonth => "ultimo accesso questo mese".into(),
-        tg::Seen::Unknown => "chat privata".into(),
+        tg::Seen::Recently => tr("ultimo accesso di recente").into(),
+        tg::Seen::LastWeek => tr("ultimo accesso questa settimana").into(),
+        tg::Seen::LastMonth => tr("ultimo accesso questo mese").into(),
+        tg::Seen::Unknown => tr("chat privata").into(),
     };
     text(line).size(12).color(p.muted).into()
 }
@@ -505,7 +505,7 @@ fn subtitle<'a>(g: &Gui, chat: &tg::DialogInfo) -> Element<'a, Msg> {
 fn history(g: &Gui) -> Element<'_, Msg> {
     let app = &g.app;
     let Some(ring) = app.open_history() else {
-        return container(text("carico la cronologia…").color(style::p().muted))
+        return container(text(tr("carico la cronologia…")).color(style::p().muted))
             .center(Fill)
             .into();
     };
@@ -513,9 +513,9 @@ fn history(g: &Gui) -> Element<'_, Msg> {
     let mut col = Column::new().padding([12, 18]);
     if !app.older_done.contains(&peer) {
         let label = if app.older_busy.contains(&peer) {
-            "carico…"
+            tr("carico…")
         } else {
-            "messaggi precedenti"
+            tr("messaggi precedenti")
         };
         col = col.push(
             container(
@@ -570,7 +570,7 @@ fn meta<'a>(g: &Gui, r: &HistoryRow) -> Row<'a, Msg> {
     let p = style::p();
     let mut label = String::new();
     if r.edited {
-        label.push_str("modificato ");
+        label.push_str(tr("modificato "));
     }
     if let Some(z) = local(g, r.date) {
         label.push_str(&z.strftime("%H:%M").to_string());
@@ -606,8 +606,8 @@ fn message<'a>(
         );
     }
     if let Some(f) = &r.fwd {
-        // senza autore noto il core mette «inoltrato»: niente doppione
-        let label = if f == "inoltrato" { "↪ inoltrato".to_string() } else { format!("↪ inoltrato da {f}") };
+        // autore nascosto: solo «inoltrato»
+        let label = if f.is_empty() { tr("↪ inoltrato").to_string() } else { trf!("↪ inoltrato da {}", f) };
         content = content.push(text(label).size(12).color(p.link));
     }
     if r.reply_to.is_some() {
@@ -676,7 +676,7 @@ fn quote<'a>(app: &'a App, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
     });
     let (who, what) = match target {
         Some(Some(t)) => (author(app, t).to_string(), t.kind.summary()),
-        Some(None) => (String::new(), "messaggio eliminato".into()),
+        Some(None) => (String::new(), tr("messaggio eliminato").into()),
         None => (String::new(), "…".into()),
     };
     // come Telegram: barretta colorata, autore sopra, inizio del testo
@@ -783,7 +783,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             (false, Some(img)) => img,
             (true, _) => column![
                 text(emoji.as_str()).size(64),
-                text("sticker animato").size(11).color(style::p().muted)
+                text(tr("sticker animato")).size(11).color(style::p().muted)
             ]
             .into(),
             _ => text(emoji.as_str()).size(64).into(),
@@ -800,13 +800,13 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             c = c.push(pic.unwrap_or_else(|| {
                 // download automatico spento: la foto arriva con un click
                 if !app.media_prefs.photos && !app.pending.contains(&tg::media_key(media)) {
-                    return button(text(if *gif { "⬇ Mostra la GIF" } else { "⬇ Mostra la foto" }).size(13))
+                    return button(text(if *gif { tr("⬇ Mostra la GIF") } else { tr("⬇ Mostra la foto") }).size(13))
                         .on_press(Msg::LoadPreview(r.id))
                         .padding([10, 16])
                         .style(style::flat(true))
                         .into();
                 }
-                text(if *gif { "GIF in caricamento…" } else { "🖼 foto in caricamento…" })
+                text(if *gif { tr("GIF in caricamento…") } else { tr("🖼 foto in caricamento…") })
                     .color(style::p().muted)
                     .into()
             }));
@@ -823,7 +823,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             let mut c = column![row![
                 text("📄").size(28),
                 text(info).width(Length::Shrink),
-                button(text("Salva").size(13)).on_press(Msg::Save(r.id)).style(style::primary),
+                button(text(tr("Salva")).size(13)).on_press(Msg::Save(r.id)).style(style::primary),
             ]
             .spacing(10)
             .align_y(Center)]
@@ -834,7 +834,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             c.into()
         }
         RowKind::Audio { name, seconds, caption, voice, .. } => {
-            let label = if *voice { "Messaggio vocale".to_string() } else { name.clone() };
+            let label = if *voice { tr("Messaggio vocale").to_string() } else { name.clone() };
             let mut c = column![row![
                 button(text("▶")).on_press(Msg::Play(r.id)).style(style::primary),
                 column![
@@ -900,15 +900,15 @@ fn actions(r: &HistoryRow) -> Element<'_, Msg> {
                 .style(style::flat(mine)),
         );
     }
-    bar = bar.push(space().width(8)).push(act("↱ Rispondi", Msg::Reply(r.id)));
+    bar = bar.push(space().width(8)).push(act(tr("↱ Rispondi"), Msg::Reply(r.id)));
     if r.outgoing && matches!(r.kind, RowKind::Text(_)) {
-        bar = bar.push(act("✎ Modifica", Msg::Edit(r.id)));
+        bar = bar.push(act(tr("✎ Modifica"), Msg::Edit(r.id)));
     }
-    bar = bar.push(act("↪ Inoltra", Msg::Forward(r.id)));
-    bar = bar.push(act("⧉ Copia", Msg::Copy(r.id)));
+    bar = bar.push(act(tr("↪ Inoltra"), Msg::Forward(r.id)));
+    bar = bar.push(act(tr("⧉ Copia"), Msg::Copy(r.id)));
     if r.outgoing {
         bar = bar.push(
-            button(text("🗑 Elimina").size(13))
+            button(text(tr("🗑 Elimina")).size(13))
                 .on_press(Msg::AskDelete(r.id))
                 .padding([4, 8])
                 .style(style::flat(false)),
@@ -937,9 +937,9 @@ fn banners(app: &App) -> Element<'_, Msg> {
     let mut col = Column::new();
     if app.del_arm {
         col = col.push(bar(
-            "Eliminare il messaggio per tutti?".into(),
+            tr("Eliminare il messaggio per tutti?").into(),
             Some(
-                button(text("Elimina").size(13))
+                button(text(tr("Elimina")).size(13))
                     .on_press(Msg::ConfirmDelete)
                     .style(style::danger)
                     .into(),
@@ -951,12 +951,12 @@ fn banners(app: &App) -> Element<'_, Msg> {
             .open_history()
             .and_then(|ring| ring.iter().find(|r| r.id == id))
             .map(|r| format!("{}: {}", author(app, r), r.kind.summary()))
-            .unwrap_or_else(|| "messaggio".into());
+            .unwrap_or_else(|| tr("messaggio").into());
         let what: String = what.chars().take(100).collect();
-        col = col.push(bar(format!("↱ Rispondi a {what}"), None));
+        col = col.push(bar(trf!("↱ Rispondi a {}", what), None));
     }
     if app.editing.is_some() {
-        col = col.push(bar("✎ Modifica del messaggio — Invio salva".into(), None));
+        col = col.push(bar(tr("✎ Modifica del messaggio — Invio salva").into(), None));
     }
     if let Some(e) = attachment(app) {
         col = col.push(e);
@@ -964,7 +964,7 @@ fn banners(app: &App) -> Element<'_, Msg> {
     if let Some(name) = &app.uploading {
         col = col.push(
             container(
-                text(format!("⬆ Invio di «{name}» in corso…")).size(13).color(style::p().muted),
+                text(trf!("⬆ Invio di «{}» in corso…", name)).size(13).color(style::p().muted),
             )
             .padding([6, 16])
             .width(Fill)
@@ -977,7 +977,7 @@ fn banners(app: &App) -> Element<'_, Msg> {
 /// L'allegato in attesa: miniatura (se è un'immagine), nome e peso.
 fn attachment(app: &App) -> Option<Element<'_, Msg>> {
     let (path, name) = match (&app.pending_photo, &app.pending_file) {
-        (Some(p), _) => (std::path::PathBuf::from(p), "Immagine dagli appunti".to_string()),
+        (Some(p), _) => (std::path::PathBuf::from(p), tr("Immagine dagli appunti").to_string()),
         (None, Some(p)) => (
             p.clone(),
             p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
@@ -994,7 +994,7 @@ fn attachment(app: &App) -> Option<Element<'_, Msg>> {
     let p = style::p();
     let info = column![
         text(ellipsize(&name, 60)).font(BOLD),
-        text(format!("{size} · scrivi una didascalia e premi Invio")).size(12).color(p.muted),
+        text(trf!("{} · scrivi una didascalia e premi Invio", size)).size(12).color(p.muted),
     ]
     .spacing(2)
     .width(Fill);
@@ -1009,7 +1009,7 @@ fn attachment(app: &App) -> Option<Element<'_, Msg>> {
 
 fn composer(app: &App) -> Element<'_, Msg> {
     let attached = app.pending_photo.is_some() || app.pending_file.is_some();
-    let placeholder = if attached { "Didascalia…" } else { "Scrivi un messaggio…" };
+    let placeholder = if attached { tr("Didascalia…") } else { tr("Scrivi un messaggio…") };
     container(
         row![
             button(text("📎").size(18))
@@ -1026,7 +1026,7 @@ fn composer(app: &App) -> Element<'_, Msg> {
                 .on_submit(Msg::Submit)
                 .padding(10)
                 .width(Fill),
-            button(text("Invia")).on_press(Msg::Submit).padding([8, 16]).style(style::primary),
+            button(text(tr("Invia"))).on_press(Msg::Submit).padding([8, 16]).style(style::primary),
         ]
         .spacing(8)
         .align_y(Center),
@@ -1052,16 +1052,16 @@ fn stickers(app: &App) -> Element<'_, Msg> {
             .unwrap_or(""),
     };
     let head = row![
-        tab("⭐ Preferiti", here == Some(tg::FAVED_SET), Msg::OpenSet(tg::FAVED_SET)),
-        tab("🕘 Recenti", here == Some(tg::RECENT_SET), Msg::OpenSet(tg::RECENT_SET)),
-        tab("☰ Set", here.is_none(), Msg::SetsBack),
+        tab(tr("⭐ Preferiti"), here == Some(tg::FAVED_SET), Msg::OpenSet(tg::FAVED_SET)),
+        tab(tr("🕘 Recenti"), here == Some(tg::RECENT_SET), Msg::OpenSet(tg::RECENT_SET)),
+        tab(tr("☰ Set"), here.is_none(), Msg::SetsBack),
         text(title).font(BOLD).wrapping(text::Wrapping::None),
     ]
     .spacing(6)
     .align_y(Center);
     let inner: Element<'_, Msg> = match here {
         None => match &app.sets {
-            None => text("carico i set…").color(style::p().muted).into(),
+            None => text(tr("carico i set…")).color(style::p().muted).into(),
             Some(sets) => {
                 let items = sets.iter().map(|s| {
                     button(text(s.title.as_str()))
@@ -1076,8 +1076,8 @@ fn stickers(app: &App) -> Element<'_, Msg> {
         },
         Some(set_id) => {
             let grid: Element<'_, Msg> = match app.set_docs.get(&set_id) {
-                None => text("scarico gli sticker…").color(style::p().muted).into(),
-                Some(docs) if docs.is_empty() => text("niente qui: aggiungi sticker ai preferiti da Telegram")
+                None => text(tr("scarico gli sticker…")).color(style::p().muted).into(),
+                Some(docs) if docs.is_empty() => text(tr("niente qui: aggiungi sticker ai preferiti da Telegram"))
                     .color(style::p().muted)
                     .into(),
                 Some(docs) => {
@@ -1126,18 +1126,14 @@ fn local(g: &Gui, secs: i64) -> Option<jiff::Zoned> {
 }
 
 fn day_label(d: jiff::civil::Date) -> String {
-    const MESI: [&str; 12] = [
-        "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto",
-        "settembre", "ottobre", "novembre", "dicembre",
-    ];
     let today = jiff::Zoned::now().date();
     if d == today {
-        return "Oggi".into();
+        return tr("Oggi").into();
     }
     if today.yesterday().ok() == Some(d) {
-        return "Ieri".into();
+        return tr("Ieri").into();
     }
-    let mese = MESI[(d.month() - 1) as usize];
+    let mese = rondine::i18n::months()[(d.month() - 1) as usize];
     if d.year() == today.year() {
         format!("{} {mese}", d.day())
     } else {
@@ -1151,8 +1147,8 @@ fn invite<'a>(title: &str, members: i32) -> Element<'a, Msg> {
     let p = style::p();
     container(
         row![
-            text(format!("Invito a «{title}» · {members} membri")).color(p.link).width(Fill),
-            button(text("Unisciti").size(13)).on_press(Msg::Join).style(style::primary),
+            text(trf!("Invito a «{}» · {} membri", title, members)).color(p.link).width(Fill),
+            button(text(tr("Unisciti")).size(13)).on_press(Msg::Join).style(style::primary),
             button(text("✕")).on_press(Msg::Cancel).style(style::flat(false)),
         ]
         .spacing(8)
@@ -1167,13 +1163,13 @@ fn invite<'a>(title: &str, members: i32) -> Element<'a, Msg> {
 fn settings(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
     let (title, body) = match g.settings_page {
-        SettingsPage::Main => ("Impostazioni", settings_main(g)),
-        SettingsPage::Account => ("Il mio account", settings_account(g)),
-        SettingsPage::Appearance => ("Aspetto", settings_appearance(g)),
-        SettingsPage::Notifications => ("Notifiche", settings_notifications(g)),
-        SettingsPage::Media => ("Immagini e media", settings_media(g)),
-        SettingsPage::Storage => ("Dati e archiviazione", settings_storage(g)),
-        SettingsPage::Devices => ("Dispositivi", settings_devices(g)),
+        SettingsPage::Main => (tr("Impostazioni"), settings_main(g)),
+        SettingsPage::Account => (tr("Il mio account"), settings_account(g)),
+        SettingsPage::Appearance => (tr("Aspetto"), settings_appearance(g)),
+        SettingsPage::Notifications => (tr("Notifiche"), settings_notifications(g)),
+        SettingsPage::Media => (tr("Immagini e media"), settings_media(g)),
+        SettingsPage::Storage => (tr("Dati e archiviazione"), settings_storage(g)),
+        SettingsPage::Devices => (tr("Dispositivi"), settings_devices(g)),
         SettingsPage::Links => ("Link", settings_links(g)),
     };
     let mut head = Row::new().spacing(8).align_y(Center);
@@ -1256,13 +1252,13 @@ fn settings_main(g: &Gui) -> Element<'_, Msg> {
         .into()
     };
     let list = column![
-        entry("👤", "Il mio account", "nome, username, bio e foto", SettingsPage::Account),
-        entry("🎨", "Aspetto", "tema, dimensione, accelerazione GPU", SettingsPage::Appearance),
-        entry("🔔", "Notifiche", "avvisi dei messaggi nuovi", SettingsPage::Notifications),
-        entry("🖼", "Immagini e media", "download automatico, miniature, misura delle foto", SettingsPage::Media),
-        entry("💾", "Dati e archiviazione", "cache e spazio su disco", SettingsPage::Storage),
-        entry("💻", "Dispositivi", "sessioni attive dell'account", SettingsPage::Devices),
-        entry("🔗", "Link", "t.me e tg:// dentro Rondine", SettingsPage::Links),
+        entry("👤", tr("Il mio account"), tr("nome, username, bio e foto"), SettingsPage::Account),
+        entry("🎨", tr("Aspetto"), tr("lingua, tema, dimensione, accelerazione GPU"), SettingsPage::Appearance),
+        entry("🔔", tr("Notifiche"), tr("avvisi dei messaggi nuovi"), SettingsPage::Notifications),
+        entry("🖼", tr("Immagini e media"), tr("download automatico, miniature, misura delle foto"), SettingsPage::Media),
+        entry("💾", tr("Dati e archiviazione"), tr("cache e spazio su disco"), SettingsPage::Storage),
+        entry("💻", tr("Dispositivi"), tr("sessioni attive dell'account"), SettingsPage::Devices),
+        entry("🔗", "Link", tr("t.me e tg:// dentro Rondine"), SettingsPage::Links),
     ]
     .spacing(2);
     column![
@@ -1292,7 +1288,7 @@ fn form_field<'a>(
 fn settings_account(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
     let Some(saved) = g.app.profile.as_ref() else {
-        return text("carico il profilo…").color(p.muted).into();
+        return text(tr("carico il profilo…")).color(p.muted).into();
     };
     let pf = &g.pf;
     let changed = saved.first != pf.first
@@ -1301,41 +1297,41 @@ fn settings_account(g: &Gui) -> Element<'_, Msg> {
         || saved.about != pf.about;
     let photo = column![
         my_photo(g, 96.0),
-        button(text("Cambia foto").size(13)).on_press(Msg::PfPhoto).style(style::flat(true)),
+        button(text(tr("Cambia foto")).size(13)).on_press(Msg::PfPhoto).style(style::flat(true)),
     ]
     .spacing(8)
     .align_x(Center)
     .width(Fill);
-    let mut bio = column![form_field("Bio", "Qualche parola su di te", &pf.about, Msg::PfAbout)].spacing(2);
+    let mut bio = column![form_field(tr("Bio"), tr("Qualche parola su di te"), &pf.about, Msg::PfAbout)].spacing(2);
     bio = bio.push(
-        text(format!("{}/70 · la vedono tutti nel tuo profilo", pf.about.chars().count()))
+        text(trf!("{}/70 · la vedono tutti nel tuo profilo", pf.about.chars().count()))
             .size(11)
             .color(p.muted),
     );
-    let mut user = column![form_field("Username", "username", &pf.username, Msg::PfUser)].spacing(2);
+    let mut user = column![form_field(tr("Username"), tr("username"), &pf.username, Msg::PfUser)].spacing(2);
     user = user.push(
         text(if pf.username.is_empty() {
-            "senza username ti trova solo chi ha il tuo numero".to_string()
+            tr("senza username ti trova solo chi ha il tuo numero").to_string()
         } else {
-            format!("link: t.me/{}", pf.username)
+            trf!("link: t.me/{}", pf.username)
         })
         .size(11)
         .color(p.muted),
     );
-    let phone = if saved.phone.is_empty() { "nascosto".to_string() } else { saved.phone.clone() };
+    let phone = if saved.phone.is_empty() { tr("nascosto").to_string() } else { saved.phone.clone() };
     column![
         photo,
         row![
-            container(form_field("Nome", "Nome (obbligatorio)", &pf.first, Msg::PfFirst)).width(Fill),
-            container(form_field("Cognome", "Cognome", &pf.last, Msg::PfLast)).width(Fill),
+            container(form_field(tr("Nome"), tr("Nome (obbligatorio)"), &pf.first, Msg::PfFirst)).width(Fill),
+            container(form_field(tr("Cognome"), tr("Cognome"), &pf.last, Msg::PfLast)).width(Fill),
         ]
         .spacing(12),
         user,
         bio,
-        info_field(text(phone).into(), "telefono · si cambia dall'app ufficiale"),
+        info_field(text(phone).into(), tr("telefono · si cambia dall'app ufficiale")),
         row![
             space().width(Fill),
-            button(text("Salva"))
+            button(text(tr("Salva")))
                 .on_press_maybe(changed.then_some(Msg::PfSave))
                 .padding([8, 18])
                 .style(style::primary),
@@ -1349,29 +1345,42 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
     let s = &g.settings;
     let omarchy_label = match style::omarchy_name() {
-        Some(n) => format!("Tema Omarchy · {n}"),
-        None => "Tema Omarchy".into(),
+        Some(n) => trf!("Tema Omarchy · {}", n),
+        None => tr("Tema Omarchy").into(),
     };
     column![
-        section("TEMA"),
+        section(tr("LINGUA")),
+        Row::with_children(
+            std::iter::once(choice(
+                tr("Automatica (sistema)").to_string(),
+                s.lang.0.is_none(),
+                Msg::Lang(None),
+            ))
+            .chain(rondine::i18n::Lang::ALL.into_iter().map(|l| {
+                choice(l.name().to_string(), s.lang.0 == Some(l), Msg::Lang(Some(l)))
+            })),
+        )
+        .spacing(8)
+        .wrap(),
+        section(tr("TEMA")),
         row![
             choice(omarchy_label, s.theme == ThemeChoice::Omarchy, Msg::SetTheme(ThemeChoice::Omarchy)),
-            choice("Rondine scuro".into(), s.theme == ThemeChoice::Rondine, Msg::SetTheme(ThemeChoice::Rondine)),
+            choice(tr("Rondine scuro").into(), s.theme == ThemeChoice::Rondine, Msg::SetTheme(ThemeChoice::Rondine)),
         ]
         .spacing(8),
-        text("Con il tema Omarchy i colori seguono `omarchy theme set` mentre Rondine è aperta.")
+        text(tr("Con il tema Omarchy i colori seguono `omarchy theme set` mentre Rondine è aperta."))
             .size(12)
             .color(p.muted),
-        section("DIMENSIONE"),
+        section(tr("DIMENSIONE")),
         row![
-            text(format!("Interfaccia  {:.0}%", s.scale * 100.0)).width(170),
+            text(trf!("Interfaccia  {}%", format!("{:.0}", s.scale * 100.0))).width(170),
             iced::widget::slider(0.7..=1.6, s.scale, Msg::Scale).step(0.05_f32),
         ]
         .spacing(12)
         .align_y(Center),
-        section("DISEGNO"),
+        section(tr("DISEGNO")),
         iced::widget::toggler(s.gpu)
-            .label("Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)")
+            .label(tr("Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)"))
             .on_toggle(Msg::Gpu),
     ]
     .spacing(14)
@@ -1382,12 +1391,12 @@ fn settings_notifications(g: &Gui) -> Element<'_, Msg> {
     let s = &g.settings;
     column![
         iced::widget::toggler(s.notify)
-            .label("Notifiche dei messaggi nuovi (non per le chat silenziate)")
+            .label(tr("Notifiche dei messaggi nuovi (non per le chat silenziate)"))
             .on_toggle(Msg::Notify),
         iced::widget::toggler(s.notify_text)
-            .label("Mostra il testo del messaggio")
+            .label(tr("Mostra il testo del messaggio"))
             .on_toggle(Msg::NotifyText),
-        text("Una chat letta da un altro dispositivo toglie da sola la sua notifica.")
+        text(tr("Una chat letta da un altro dispositivo toglie da sola la sua notifica."))
             .size(12)
             .color(style::p().muted),
     ]
@@ -1405,22 +1414,22 @@ fn settings_media(g: &Gui) -> Element<'_, Msg> {
     .spacing(8)
     .wrap();
     column![
-        section("DOWNLOAD AUTOMATICO"),
+        section(tr("DOWNLOAD AUTOMATICO")),
         iced::widget::toggler(s.auto_photos)
-            .label("Scarica da solo le foto e le GIF delle chat")
+            .label(tr("Scarica da solo le foto e le GIF delle chat"))
             .on_toggle(Msg::AutoPhotos),
-        text("Spento: al posto della foto compare «Mostra la foto», e si scarica con un click.")
+        text(tr("Spento: al posto della foto compare «Mostra la foto», e si scarica con un click."))
             .size(12)
             .color(p.muted),
         iced::widget::toggler(s.video_thumbs)
-            .label("Miniature dei video")
+            .label(tr("Miniature dei video"))
             .on_toggle(Msg::VideoThumbs),
         iced::widget::toggler(s.avatars)
-            .label("Foto profilo nella lista chat")
+            .label(tr("Foto profilo nella lista chat"))
             .on_toggle(Msg::Avatars),
-        section("MISURA DELLE FOTO IN CHAT"),
+        section(tr("MISURA DELLE FOTO IN CHAT")),
         sizes,
-        text("Gli sticker restano sempre visibili; i media condivisi nella scheda della chat si scaricano quando la apri.")
+        text(tr("Gli sticker restano sempre visibili; i media condivisi nella scheda della chat si scaricano quando la apri."))
             .size(12)
             .color(p.muted),
     ]
@@ -1432,9 +1441,9 @@ fn settings_media(g: &Gui) -> Element<'_, Msg> {
 fn settings_storage(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
     let kinds = [
-        (CacheKind::Media, "Foto, sticker e miniature"),
-        (CacheKind::Avatars, "Foto profilo"),
-        (CacheKind::Temp, "File temporanei (audio, video, appunti)"),
+        (CacheKind::Media, tr("Foto, sticker e miniature")),
+        (CacheKind::Avatars, tr("Foto profilo")),
+        (CacheKind::Temp, tr("File temporanei (audio, video, appunti)")),
     ];
     let mut usage = Column::new().spacing(10);
     let mut total = 0u64;
@@ -1443,10 +1452,10 @@ fn settings_storage(g: &Gui) -> Element<'_, Msg> {
         total += bytes;
         usage = usage.push(
             row![
-                column![text(label), text(format!("{n} file · {}", tg::fmt_size(bytes as f64))).size(12).color(p.muted)]
+                column![text(label), text(trf!("{} file · {}", n, tg::fmt_size(bytes as f64))).size(12).color(p.muted)]
                     .spacing(1)
                     .width(Fill),
-                button(text("Svuota").size(13))
+                button(text(tr("Svuota")).size(13))
                     .on_press_maybe((n > 0).then_some(Msg::AskClear(kind)))
                     .padding([5, 12])
                     .style(style::flat(true)),
@@ -1461,20 +1470,20 @@ fn settings_storage(g: &Gui) -> Element<'_, Msg> {
     .spacing(8)
     .wrap();
     column![
-        section("SPAZIO USATO"),
+        section(tr("SPAZIO USATO")),
         container(usage).padding(14).style(style::pill(p.sidebar)),
-        text(format!("Totale: {}", tg::fmt_size(total as f64))).font(BOLD),
-        text("La cronologia non resta sul disco: si salvano solo anteprime e foto profilo.")
+        text(trf!("Totale: {}", tg::fmt_size(total as f64))).font(BOLD),
+        text(tr("La cronologia non resta sul disco: si salvano solo anteprime e foto profilo."))
             .size(12)
             .color(p.muted),
-        section("TETTO DELLA CACHE"),
+        section(tr("TETTO DELLA CACHE")),
         limits,
         row![
-            text("A ogni avvio Rondine toglie i file più vecchi oltre il tetto.")
+            text(tr("A ogni avvio Rondine toglie i file più vecchi oltre il tetto."))
                 .size(12)
                 .color(p.muted)
                 .width(Fill),
-            button(text("Sfoltisci ora").size(13)).on_press(Msg::PruneNow).style(style::flat(true)),
+            button(text(tr("Sfoltisci ora")).size(13)).on_press(Msg::PruneNow).style(style::flat(true)),
         ]
         .spacing(8)
         .align_y(Center),
@@ -1487,21 +1496,21 @@ fn settings_storage(g: &Gui) -> Element<'_, Msg> {
 fn settings_devices(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
     let Some(list) = &g.app.sessions else {
-        return text("carico i dispositivi…").color(p.muted).into();
+        return text(tr("carico i dispositivi…")).color(p.muted).into();
     };
     let mut col = Column::new().spacing(10);
     for (i, s) in list.iter().enumerate() {
         if i == 1 {
-            col = col.push(section("ALTRE SESSIONI"));
+            col = col.push(section(tr("ALTRE SESSIONI")));
         } else if i == 0 && s.current {
-            col = col.push(section("QUESTO DISPOSITIVO"));
+            col = col.push(section(tr("QUESTO DISPOSITIVO")));
         }
-        let mut top = row![text(if s.device.is_empty() { "Dispositivo" } else { s.device.as_str() }).font(BOLD).width(Fill)]
+        let mut top = row![text(if s.device.is_empty() { tr("Dispositivo") } else { s.device.as_str() }).font(BOLD).width(Fill)]
             .spacing(8)
             .align_y(Center);
         if !s.current {
             top = top.push(
-                button(text("Chiudi").size(12))
+                button(text(tr("Disconnetti")).size(12))
                     .on_press(Msg::AskEndSession(Some(s.hash)))
                     .padding([4, 10])
                     .style(style::flat(true)),
@@ -1513,9 +1522,9 @@ fn settings_devices(g: &Gui) -> Element<'_, Msg> {
             .collect::<Vec<_>>()
             .join(" · ");
         let when = if s.current {
-            "online".to_string()
+            tr("online").to_string()
         } else {
-            format!("ultima attività: {}", list_time(g, s.active))
+            trf!("ultima attività: {}", list_time(g, s.active))
         };
         col = col.push(
             container(
@@ -1534,7 +1543,7 @@ fn settings_devices(g: &Gui) -> Element<'_, Msg> {
     }
     if list.iter().filter(|s| !s.current).count() > 0 {
         col = col.push(
-            button(text("Chiudi tutte le altre sessioni"))
+            button(text(tr("Chiudi tutte le altre sessioni")))
                 .on_press(Msg::AskEndSession(None))
                 .padding([8, 16])
                 .style(style::danger),
@@ -1547,25 +1556,25 @@ fn settings_links(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
     let handler_is_us = g.tg_handler == "rondine-gui.desktop";
     let handler_label = if g.tg_handler.is_empty() {
-        "nessuna app".to_string()
+        tr("nessuna app").to_string()
     } else {
         g.tg_handler.trim_end_matches(".desktop").to_string()
     };
-    let mut handler_row = row![text(format!("Oggi li apre: {handler_label}")).color(p.muted).width(Fill)]
+    let mut handler_row = row![text(trf!("Oggi li apre: {}", handler_label)).color(p.muted).width(Fill)]
         .spacing(8)
         .align_y(Center);
     if !handler_is_us {
         handler_row = handler_row.push(
-            button(text("Usa Rondine").size(13))
+            button(text(tr("Usa Rondine")).size(13))
                 .on_press(Msg::TgHandler)
                 .style(style::primary),
         );
     }
     column![
         iced::widget::toggler(g.settings.links_in_app)
-            .label("Apri i link t.me e tg:// dentro Rondine")
+            .label(tr("Apri i link t.me e tg:// dentro Rondine"))
             .on_toggle(Msg::LinksInApp),
-        text("Link tg:// da browser e altre app").color(p.text),
+        text(tr("Link tg:// da browser e altre app")).color(p.text),
         handler_row,
     ]
     .spacing(14)
@@ -1586,11 +1595,11 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     let info = app.peer_info.get(&chat.peer_id);
     let user = !chat.is_group;
     let title = if user {
-        "Info utente"
+        tr("Info utente")
     } else if chat.broadcast {
-        "Info canale"
+        tr("Info canale")
     } else {
-        "Info gruppo"
+        tr("Info gruppo")
     };
     let top = row![
         text(title).size(16).font(BOLD).width(Fill),
@@ -1609,11 +1618,11 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     let mut details = Column::new().spacing(12);
     match info {
         None => {
-            details = details.push(text("carico le informazioni…").size(12).color(p.muted));
+            details = details.push(text(tr("carico le informazioni…")).size(12).color(p.muted));
         }
         Some(i) => {
             if let Some(phone) = &i.phone {
-                details = details.push(info_field(text(phone.as_str()).into(), "telefono"));
+                details = details.push(info_field(text(phone.as_str()).into(), tr("telefono")));
             }
             if let Some(u) = &i.username {
                 let url = format!("https://t.me/{u}");
@@ -1623,15 +1632,15 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
                         .padding(0)
                         .style(|_: &iced::Theme, _| button::Style::default())
                         .into(),
-                    "username",
+                    tr("username"),
                 ));
             }
             if !i.about.is_empty() {
-                let label = if user { "bio" } else { "descrizione" };
+                let label = if user { tr("bio") } else { tr("descrizione") };
                 details = details.push(info_field(linked(&i.about), label));
             }
             if i.blocked {
-                details = details.push(text("🚫 Hai bloccato questo utente").size(13).color(p.danger));
+                details = details.push(text(tr("🚫 Hai bloccato questo utente")).size(13).color(p.danger));
             }
         }
     }
@@ -1647,18 +1656,18 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     let mut acts = Column::new().spacing(2);
     if let Some(i) = info.filter(|i| user && !i.me) {
         let (label, m) = if i.blocked {
-            ("✅ Sblocca utente", Msg::AskBlock(false))
+            (tr("✅ Sblocca utente"), Msg::AskBlock(false))
         } else {
-            ("🚫 Blocca utente", Msg::AskBlock(true))
+            (tr("🚫 Blocca utente"), Msg::AskBlock(true))
         };
         acts = acts.push(act(label.into(), p.text, m));
     }
     let del_label = if user {
-        "🗑 Elimina chat"
+        tr("🗑 Elimina chat")
     } else if chat.broadcast {
-        "🚪 Abbandona canale"
+        tr("🚪 Abbandona canale")
     } else {
-        "🚪 Esci dal gruppo"
+        tr("🚪 Esci dal gruppo")
     };
     acts = acts.push(act(del_label.into(), p.danger, Msg::AskDeleteChat));
 
@@ -1672,14 +1681,14 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     .spacing(4)
     .wrap();
     let shared: Element<'_, Msg> = match app.shared.get(&(chat.peer_id, g.info_tab)) {
-        None => text("carico…").size(12).color(p.muted).into(),
+        None => text(tr("carico…")).size(12).color(p.muted).into(),
         Some(items) if items.is_empty() => {
             let what = match g.info_tab {
-                tg::SharedTab::Media => "Nessuna foto o video",
-                tg::SharedTab::Files => "Nessun file",
-                tg::SharedTab::Links => "Nessun link",
-                tg::SharedTab::Audio => "Nessun brano",
-                tg::SharedTab::Voice => "Nessun messaggio vocale",
+                tg::SharedTab::Media => tr("Nessuna foto o video"),
+                tg::SharedTab::Files => tr("Nessun file"),
+                tg::SharedTab::Links => tr("Nessun link"),
+                tg::SharedTab::Audio => tr("Nessun brano"),
+                tg::SharedTab::Voice => tr("Nessun messaggio vocale"),
             };
             text(what).size(12).color(p.muted).into()
         }
@@ -1771,7 +1780,7 @@ fn shared_row<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             "📄",
             name.clone(),
             size.map(|s| tg::fmt_size(s as f64)).unwrap_or_default(),
-            Some(("Salva", Msg::Save(r.id))),
+            Some((tr("Salva"), Msg::Save(r.id))),
         ),
         RowKind::Audio { voice: true, seconds, .. } => (
             "🎤",
@@ -1784,11 +1793,11 @@ fn shared_row<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         }
         RowKind::Video { round, seconds, .. } => (
             if *round { "📹" } else { "🎥" },
-            if *round { author(&g.app, r).to_string() } else { "Video".into() },
+            if *round { author(&g.app, r).to_string() } else { tr("Video").into() },
             tg::fmt_secs(*seconds),
             Some(("▶", Msg::Play(r.id))),
         ),
-        RowKind::Photo { .. } => ("🖼", "Foto".into(), String::new(), Some(("Apri", Msg::View(r.id)))),
+        RowKind::Photo { .. } => ("🖼", tr("Foto").into(), String::new(), Some((tr("Apri"), Msg::View(r.id)))),
         other => ("💬", other.summary(), String::new(), None),
     };
     let sub = [extra, when].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
@@ -1848,63 +1857,63 @@ fn confirm_dialog(g: &Gui, what: Confirm) -> Element<'_, Msg> {
     let me = chat.and_then(|c| g.app.peer_info.get(&c.peer_id)).is_some_and(|i| i.me);
     let (title, body, yes, harmful) = match what {
         Confirm::EndSession(Some(_)) => (
-            "Chiudere questa sessione?".to_string(),
-            "Il dispositivo viene disconnesso e per usarlo dovrà accedere di nuovo.",
-            "Chiudi",
+            tr("Chiudere questa sessione?").to_string(),
+            tr("Il dispositivo viene disconnesso e per usarlo dovrà accedere di nuovo."),
+            tr("Chiudi"),
             true,
         ),
         Confirm::EndSession(None) => (
-            "Chiudere tutte le altre sessioni?".to_string(),
-            "Tutti i dispositivi tranne questo vengono disconnessi.",
-            "Chiudi tutte",
+            tr("Chiudere tutte le altre sessioni?").to_string(),
+            tr("Tutti i dispositivi tranne questo vengono disconnessi."),
+            tr("Chiudi tutte"),
             true,
         ),
         Confirm::ClearCache(CacheKind::Media) => (
-            "Svuotare la cache dei media?".to_string(),
-            "Foto, sticker e miniature salvati sul disco vengono cancellati; si riscaricano quando servono.",
-            "Svuota",
+            tr("Svuotare la cache dei media?").to_string(),
+            tr("Foto, sticker e miniature salvati sul disco vengono cancellati; si riscaricano quando servono."),
+            tr("Svuota"),
             true,
         ),
         Confirm::ClearCache(CacheKind::Avatars) => (
-            "Svuotare le foto profilo?".to_string(),
-            "Le foto profilo salvate vengono cancellate; si riscaricano quando servono.",
-            "Svuota",
+            tr("Svuotare le foto profilo?").to_string(),
+            tr("Le foto profilo salvate vengono cancellate; si riscaricano quando servono."),
+            tr("Svuota"),
             true,
         ),
         Confirm::ClearCache(CacheKind::Temp) => (
-            "Cancellare i file temporanei?".to_string(),
-            "Audio e video già riprodotti e immagini incollate dagli appunti.",
-            "Cancella",
+            tr("Cancellare i file temporanei?").to_string(),
+            tr("Audio e video già riprodotti e immagini incollate dagli appunti."),
+            tr("Cancella"),
             true,
         ),
         Confirm::Block(true) => (
-            format!("Bloccare {name}?"),
-            "Non potrà più scriverti, chiamarti né vedere il tuo ultimo accesso. Puoi sbloccarlo quando vuoi.",
-            "Blocca",
+            trf!("Bloccare {}?", name),
+            tr("Non potrà più scriverti, chiamarti né vedere il tuo ultimo accesso. Puoi sbloccarlo quando vuoi."),
+            tr("Blocca"),
             true,
         ),
         Confirm::Block(false) => (
-            format!("Sbloccare {name}?"),
-            "Potrà di nuovo scriverti e chiamarti.",
-            "Sblocca",
+            trf!("Sbloccare {}?", name),
+            tr("Potrà di nuovo scriverti e chiamarti."),
+            tr("Sblocca"),
             false,
         ),
         Confirm::DeleteChat if user => (
-            format!("Eliminare la chat con {name}?"),
-            "La cronologia sparisce da tutti i tuoi dispositivi. Non si può annullare.",
-            "Elimina",
+            trf!("Eliminare la chat con {}?", name),
+            tr("La cronologia sparisce da tutti i tuoi dispositivi. Non si può annullare."),
+            tr("Elimina"),
             true,
         ),
         Confirm::DeleteChat if broadcast => (
-            format!("Abbandonare «{name}»?"),
-            "Il canale sparisce dalla lista e non riceverai più i suoi messaggi.",
-            "Abbandona",
+            trf!("Abbandonare «{}»?", name),
+            tr("Il canale sparisce dalla lista e non riceverai più i suoi messaggi."),
+            tr("Abbandona"),
             true,
         ),
         Confirm::DeleteChat => (
-            format!("Uscire da «{name}»?"),
-            "Esci dal gruppo e la chat sparisce dalla lista. Per rientrare servirà un nuovo invito.",
-            "Esci",
+            trf!("Uscire da «{}»?", name),
+            tr("Esci dal gruppo e la chat sparisce dalla lista. Per rientrare servirà un nuovo invito."),
+            tr("Esci"),
             true,
         ),
     };
@@ -1916,7 +1925,7 @@ fn confirm_dialog(g: &Gui, what: Confirm) -> Element<'_, Msg> {
     if what == Confirm::DeleteChat && user && !me {
         card = card.push(
             iced::widget::checkbox(g.revoke)
-                .label(format!("Elimina anche per {name}"))
+                .label(trf!("Elimina anche per {}", name))
                 .on_toggle(Msg::Revoke),
         );
     }
@@ -1925,7 +1934,7 @@ fn confirm_dialog(g: &Gui, what: Confirm) -> Element<'_, Msg> {
     card = card.push(
         row![
             space().width(Fill),
-            button(text("Annulla")).on_press(Msg::Cancel).padding([8, 16]).style(style::flat(false)),
+            button(text(tr("Annulla"))).on_press(Msg::Cancel).padding([8, 16]).style(style::flat(false)),
             confirm,
         ]
         .spacing(8)
@@ -1981,11 +1990,11 @@ fn forward_picker(g: &Gui) -> Element<'_, Msg> {
     container(
         column![
             row![
-                text("Inoltra a…").size(20).font(BOLD).width(Fill),
+                text(tr("Inoltra a…")).size(20).font(BOLD).width(Fill),
                 button(text("✕")).on_press(Msg::Cancel).style(style::flat(false)),
             ]
             .align_y(Center),
-            text_input("Cerca chat…", &g.fwd_filter)
+            text_input(tr("Cerca chat…"), &g.fwd_filter)
                 .style(style::input)
                 .id(FWD_SEARCH)
                 .on_input(Msg::FwdFilter)
