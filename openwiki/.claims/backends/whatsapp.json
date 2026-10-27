@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:c5629728be95d93a1ffbf522daa9dd0e67aa32de80ff84849a81cf43e1871257",
+  "claims": [
+    {
+      "id": "claim_5cb8692ae44448d799d916645812f11c",
+      "statement": "start_with opens the local Store and the whatsapp.db session under <data>/rondine/whatsapp, supports QR or 8-character pair-code linking, waits for the first Connected event, then starts the dispatcher and returns stored dialogs and the push name.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/mod.rs#L386-L458",
+          "version": "repo-lines-v1:sha256:19a208a3b940daba1cd1cfeaf3bfd9dabeed0407ef3419a7aff92379318d87dc:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmNTZkYzg2Y2E5NDg1NTUxMWNiNTMzMDMxM2QzNjU5OTMwYWE0OTQzMjMwOWY3ZmRjMjg5ZTYyNWE5MjE0NTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmODJkZGYzMTNkZmMyNGQ3ODIwYTgxNzUwNzkyZDBmMjg3MDI5NDRkMWVmM2NjZTFjMmQwNTc3YWNlMTM0ZTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4ba5fa23e6484640861c9b2598e5d8f3",
+      "statement": "has_session() reports an existing WhatsApp link solely by the presence of whatsapp/whatsapp.db.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/mod.rs#L367-L370",
+          "version": "repo-lines-v1:sha256:b184aa112cd06e62f93aa4081747dcf50a5104e6d19ff6145b99e5af2d07fa02:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODlhZjkwNjJiOWU1MzU2ODE3NDhhMzQzYjk2ZTA5ODNmOTIzZmJkYmViYmRmZWZmNjhkYmJlZmRhN2IzOTNmNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjA2M2M0ZDFhZjhjZDg5YmIwYmRkNzY1N2ZmY2JmNjgwNmE2MTBkNzlkNmM4ZDRjMzA3YzI0MWRmMzkwMDUyMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWJjOTdjZDYyOGFmMDE4NzFlNjI2NmM1MTBmNDJiOWNkOWY3NGQwZDExYTI4NGY1NjIyNjUzZWI3NDQ3ZWRiNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_f49803a957ba42b895444479721fde71",
+      "statement": "Because the WhatsApp server keeps no history, chats are stored in chats.json and messages in msgs/<chat_id>.jsonl, one message per line.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/store.rs#L1-L10",
+          "version": "repo-lines-v1:sha256:0d8e4763dbfb49302aaf63a29ea2aa5ac114bb344f740157f987013f913d1e2d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3MDQ3YjA2ODYwODZhNDgyNTBiYzljZmFlNTA3N2M5MWFjNDRkNDEyZjA4MzEzYzQ5ZjJhMzQ2YjUxOGEyYzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyZTMyMGI5NzBkMjAwNjkwMzhmYjY5ZTA5YTFhNDUxZjAwZGQ0NTViYWQ2NDc4NmE5ZDRmMjVmYzRlM2NjNWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlNGRkNjlhODE3NTllMzNiYTljYjc3Y2ZkMjA2MjhlODE0MDhkYjE1YmU5N2Y1NTM0YWM3ZDg0ZjRiOGNlYzUifQ"
+        },
+        {
+          "resource": "repo://src/backend/wa/store.rs#L360-L362",
+          "version": "repo-lines-v1:sha256:8a820d0cc65ef48cb7fe40b25e5c0281ced19ae6f492cf2551c0b106572db9bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTgwODY3ZmQ2YTZiOTI3NDMzMWZhZWE5OTU1MzhjMDA3Y2NjZGU1NTFmODA3NzYyNTQ2MjkwZjAxYzVjZGFlMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODU0NjQ1YmQ4OWUyM2I1ZmE2N2ZhMTkxODMzNDFlZGEwZTgxZDZkNGNkNzNiNzkyM2UyMTk5OWU5YmNjYjdlNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTI4ZGMzYzE3ZjYyMWUxOTkyOWE2MDQzZjk5NDdhN2I3MWRlN2EzZWJhYmZlMTgxY2NiYjg0OTdlM2ZhZDg1MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_61e948cbc6ff4928a6f6bb13ba276c2d",
+      "statement": "Only the messages of the 8 most recently touched chats are kept in RAM; others are re-read from disk on demand.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/store.rs#L23-L24",
+          "version": "repo-lines-v1:sha256:daae130ba3b22c4d642cab08191d7b41fa8b1ae5064b9f47831bea5d1b03821a:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjM4OGRiY2UxMDQ5ZDMwZjBjY2U3MGRiN2ZhMGE0ZmNjMjQ4Zjg5MDcyZTAxOTU3YWZhYmYyMGYzM2E1ZmQxZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjU0MmE5NThiMDViMjdlYjJkNjdlMWJlNWQyYzNkOTI5NjhkYTg3YzU0ZDExMzU3N2JlZGE5YzA5NmYxOTYwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzU0M2YzNzQxMjg1YmU1MTEwZWEwZTU2ZWQyNTA5OTZlMjc5MjY1ZjA0YTE4MzM4ZDZhNmQxYTk2NzQzYmQ5ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODkyYTA0YjM2YzA0ZTBhMWM2M2JjODA3YzQ1ZDNmZjNkOWFlYmU1OTZhY2Q5ZTVjMTc5NWFmNTE2ZGMwNmYxMSJ9"
+        },
+        {
+          "resource": "repo://src/backend/wa/store.rs#L364-L384",
+          "version": "repo-lines-v1:sha256:838d3bb217cad1e09bc0c83c7b94769a0bcd15dc3f4996c481c8be40e6ff2f6e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE4NTliMzcxODczNzQzNjg2MDJkZDVjZDlmY2QxYmE2MzFiYTUwYmFiM2Y5MzQ2MDU3ODBlM2Q5NzMxOWQ1ZjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIzNTUyZGFlYTZjYWI4YjBjN2YxNDBlNGU1YTFmYjA1ZjYyYTEyZjUxZDJlZGUzNjMxMTA3YmMyZDQ5YTIzMmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5NDI3OGUwYTc2ZTFkNWMyYjc1NDNjNzU2YzNjZmZlNWJmZTQ3Y2YzNWNlOTdiNjJmNTc5YTAwYjllY2E0ZmMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5376f2bfd24b43e399984cc01fe49382",
+      "statement": "Inserting messages skips already-stored WhatsApp ids, assigns sequential per-chat numeric ids, appends to the JSONL file when all are newer and otherwise rewrites the file atomically.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/store.rs#L417-L463",
+          "version": "repo-lines-v1:sha256:9c8f4c0bdbaaa7acac7d14cadf1eb14d87c9a4ec76e972a694bfa1693e0052b1:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwN2Y4MzJmNjhjNDllMDM1MTIwMmFmNjBiN2Y1OGQyNDgzOTIzYWFkNWFiMzZlMjI0OGE1OGQzZDQxYjc4NDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc3ZGI0ZGEyMDVmNWZkYmIyYTUzOGU5NjE5YzU5NzkyNjk2ZDU3NjRkNTA4NWM0MzJhYzg3YmFhN2NlMTBjYjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ZGY3ZjE2NDhiYTUzYjI0MTNkYzRjMjI5ODVlNTU4YjQ4MzgyOWYyYzlhMjNiNGY1MTVhZWE1NjkwYzNjYTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f1f40af5ca7d468c85a7d683c1268ab9",
+      "statement": "chats.json is saved atomically via a temp file and rename.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/store.rs#L190-L201",
+          "version": "repo-lines-v1:sha256:c9526405daadafc4085af6e807b4b120452c0ad0b9055f182df1bd5481af3aac:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU0NzFiMjU1NWQ2OWEwYmE2ZmY2Y2M0ODg1NmQxZjI4ZDEzM2QyMzBhZDc3NDI2NmI4YWViZmFjYzZiMDYyNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4ODdhZDc2NjA2MWJiZTQxMGJiMjI0ZDdiNjA1M2ZjNDk4ZGEzZmEzZWVkZWUyYTIxOTA3MzI3YWVkYjA0ZTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE4YzA0MTc3ZDE5MTg0MTNkYmVhNzU5NzEyOWQ1NGNkNWZlOWJjMmVmZDdjNjY1NTRiY2MzMTZjMDI5ZmRiZTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_97155558e6f343f0833a6b43fe751446",
+      "statement": "Chats under an anonymous @lid JID are linked to the phone-number JID and merged into one chat, combining messages, unread counts and flags.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/store.rs#L228-L278",
+          "version": "repo-lines-v1:sha256:4a441ff00c44c793eb72e2561d7d69b9cc4853ca32d0df70025a9458bfd1e9ad:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkZjI1MmUwMTQyODFkNjgxOTY2NmVlYjIxZTQ1YmUzN2Q5N2Y4MTJjZTM5ZjdjNGU0MzgwMDcyOTBjZDJkMTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRlNTE2Zjc4NTAzYzNjOWFkODk5NzU4MDVjOGZiZDM3Mzc3YzBjNTFjZWQyMzI2MjBkZjZmZjAxMDcwZjRkYTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmZWU5NDY4NGYzNDE3NDViN2VmYjRkYTc3ODYyMDM2MzJkOGI0ZjU3NDRmZmM5ZjRjNTc4ZWE5M2Q4NTYwNWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5c309a79076f40449c555e41a85e109a",
+      "statement": "Status updates older than 24 hours are pruned from status@broadcast on connection.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/live.rs#L189-L196",
+          "version": "repo-lines-v1:sha256:8c6436fd9adabad3c3c1a863ce2d04e0912f0fa7b6cb97c061f21f9a4802fcfb:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGFhNWE2ZjgzMWMwNGVhMTQwYzE0N2MzMGVlOTMxNmIxMGU2ZDVkNmVmZjM2MTNhZWI1ZDYwYjY3MjlmNDM0MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGM2NDc5Y2MyMzA0NDBmZDQxZTgyMjQyMTg2Nzk2OTg1NTlkMjg5M2JkNjdiNDM4MGFmYWI4MTFiMzhhNTVhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDk4OTQ2YzNiYTlmYzZkNTAzYWNiY2RmZjM4M2JkMTZkMWRjOGI0MDlmZmNiMWU1NTVmMzdhMzE5YzZkODFkYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGM5NDk0NTAzNDhkYTc5NmZlN2IyYjY1Y2ViYzU1MDUyMzA1ODlmMjJmZDJjMTFjYTIxMjVjODAxODhkMmUxNiJ9"
+        },
+        {
+          "resource": "repo://src/backend/wa/store.rs#L386-L405",
+          "version": "repo-lines-v1:sha256:f1e955dac32b8458f91f536c65b9851dde5f6b74235b3b2e0402993172a8fa92:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4MDEwZWQyMDczOWNlY2Q2N2Y4ZDU5NGJkNzQwZmUwYTI5OTc0YjExMTExNTc3N2FjZTNiNjUxZDY2NDk3ZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkNWEyNjMxZmQ1YTI4NTg4MmFhZjNhZjQ0ZjFmOTRkOTI5ODgxODE0YTI4NmZkNWY5YzRlNzgwZWFkOGY5YWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIxNDYyODcyNTg0YTdiZDNjZDQyNzZiMTA3ZWZmZWRhZjQ5OGRhYWI2NGQ5MTA0NmU4ZDkxZmVkOTczZjA1YzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_df31b0594399440182440616dc163aad",
+      "statement": "On connection the backend sets presence to available, resolves @lid chats and performs a one-time full app-state sync of contacts and chat state.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/live.rs#L107-L153",
+          "version": "repo-lines-v1:sha256:247cf99caf5fa35f9bfb2791991bc8de4243ff2b65ad5795163654cc6b6f59d2:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkMzc3NjE4NDM2ZjI4YmEyMDlhYTFjOWE3ZTQzYjM5NjI1NzdkYjhlMmY1MGZjMTUzMDJhZmZkN2Y1ZDljOGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEyY2MwZDQ0ZGRlMzkxMDE4YTQ1OWMwNmIwOTBlZWVjOGRmNTA0MTg4Mjk3MzIwMmQwYTc2NWZjOTM1NjRjYTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE0YjdiYmNiYmUwOWE4YTMyOTY3OWZkMGEzZDllNDY0ZmJlMjJiN2U1MzZhNjNiOTE5YmNiNGFjYWZlNjhkYTUifQ"
+        },
+        {
+          "resource": "repo://src/backend/wa/live.rs#L189-L207",
+          "version": "repo-lines-v1:sha256:2ec8c6d968d1d031ec9d1783c686fa585210716bc0b3550fcec24c161384381a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhhYTVhNmY4MzFjMDRlYTE0MGMxNDdjMzBlZTkzMTZiMTBlNmQ1ZDZlZmYzNjEzYWViNWQ2MGI2NzI5ZjQzNDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5ODk0NmMzYmE5ZmM2ZDUwM2FjYmNkZmYzODNiZDE2ZDFkYzhiNDA5ZmZjYjFlNTU1ZjM3YTMxOWM2ZDgxZGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZjOGQ3ODQ2NjU5NjcxNDM2MTVlOTkzNWRhMDNlMWVlMGEwZjM0MjM4NTY1MDE4OTliN2IwOTg0YzA4ODRlMDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_eed2e8edd89448afb7c5ef575b9dc61d",
+      "statement": "Typing indicators are re-emitted every 5 seconds for up to 30 seconds until superseded, since WhatsApp sends composing only once.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/live.rs#L155-L179",
+          "version": "repo-lines-v1:sha256:7aa474e350058168e43bca46c4018e988477d92abb1b3a9b4c6479cc532509bf:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3ZGUzNTUzZGQ5NTgzMTczNjBjMDUxMjJhY2Y2NjlhMDM1YmFmZTE5ZTk3ZTI2M2YxNGVkOGRiOGFmMjk2MDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEyY2MwZDQ0ZGRlMzkxMDE4YTQ1OWMwNmIwOTBlZWVjOGRmNTA0MTg4Mjk3MzIwMmQwYTc2NWZjOTM1NjRjYTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA2NTNlMjhkMTA3M2M5MDU5NzQ4NmI3ZDg5NDZkMzNlNTdlOGVkZTdlZDZhYmFjYzM2ODNiODkzNWM5NzkxMTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a155a40c6d394d1c90648c8199c3eb9b",
+      "statement": "Bursts of chat-list changes are coalesced into one save and one Dialogs response 1.5 s after the first event.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/live.rs#L90-L105",
+          "version": "repo-lines-v1:sha256:1c3647cdd9b9287983188e4ed8463f49293f1b511cc36664edd03ce53f6bc8df:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5NDgyMGJiNTEyZmY0YmRjMjM2NTNlNDhlMDEwMWMyMzY5MDY0YjNkMzY3MTdlYjA0MDU5MjRkM2UzNjg1OGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUyNzZhYmEzOTA0ODBhNWU4ZjJlODJjNzNiYzRiOWQzMDE0YTg5YjkyMThhYTc4MTIxZTljNWZkMTMzZTI5NjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcwMTg1YWEyZTdlYzFmMjg5NWZkY2I4ZDYxNDA0OWIzOTNlNzdkNGYyMDAxNTMwMjNhZmUxMWFkMDY4NzUxMDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c8a32b1c1dce487eb73165d8233879f4",
+      "statement": "build.rs creates an empty sqlite3.lib stub on Windows when the whatsapp feature is enabled, because SQLite symbols come from libsql already linked by grammers.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L26-L28",
+          "version": "repo-lines-v1:sha256:9d51c12b9dd1c22fafd749557693f22b9b354eee3062ed9ffb54c1c713243dc0:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGMzMzI2MmE1ZTdkN2FlODAyYzJmNTcyZjI0YmUxZDMwYWYzZGRlNzk4NjJmZWEzZWE2YzBjYTg4NzdkNmM3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmM5NjgyMmYyMzU4YTNjMDI1YzdmZDAzMTJjMmFkZmQzYjBiZDg5ZjU5ZjVjYTU3ODVjMmZkMTY4ODA4MmFjMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzNmNWRjZjk1ZTkxMDkyNjA3Yzk5ZjViZmZiYzJjMDQzZTY4M2FiM2RhZTU4ZjMzMWVjNDhmZTk4MzQ5NzhmMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzI5ZGEwMjQyMGVkYWM0OWMyZGM3YzgzMjcyZTdhYjIxMGIxOTZhY2QzNTkzYmUxZDA5YTJmYmRlMTJiNWRhOSJ9"
+        },
+        {
+          "resource": "repo://build.rs#L1-L22",
+          "version": "repo-lines-v1:sha256:c3c08cb0d930085983a8367643055695f34429552a83cf6543f036c3d0c518cd:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ZmQyMzZlNDU0YTY1MDBhYmY1NzM3MzNiZDhmMzdjNDU0MjRhMGI5Nzc3YzIxY2VhZDUwMDk5N2JkYTA2NzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_67e5787875484c9495fc13ab78214e4b",
+      "statement": "Deleting a WhatsApp message keeps the row and re-emits it as an edited 'deleted' message.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/worker.rs#L509-L526",
+          "version": "repo-lines-v1:sha256:ad8b7e48b85b2b44c28d03e31ebb9eaa653cfd498214faf8cb43348805102efc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiN2ViMjEzZGZmYTc4Y2JkODM0N2UzM2I4YTA4OTZiYzE3YmE3YTUxOGFlZGMzODc1NmIzYWUzYmU5MDkxZjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjNjQ3OWNjMjMwNDQwZmQ0MWU4MjI0MjE4Njc5Njk4NTU5ZDI4OTNiZDY3YjQzODBhZmFiODExYjM4YTU1YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiNzVlZDZjM2ZiMzFhM2NmYWVhYjk2NDkzY2I1MGQwOTI3ODI1MzE5NzY3YmY3MjBmMzFlMmRmYzhlNmQyMGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiMTc3MDhmNjI0YThlMDMyMWYzODZlYzZkYjI1Yjk5YmQ0ZjI5YWJlNDAzZGFlYjE0YmUxYjhlNDYxZmI1YTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_105d8ddefd9145e2b5919a53e1867a68",
+      "statement": "WhatsApp video previews use the JPEG thumbnail embedded in the message rather than downloading the video.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/mod.rs#L269-L284",
+          "version": "repo-lines-v1:sha256:fa0491f1203b46c636dd67b2483360f9215797a7738e2a21c9b9631f127a9990:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlNzc3OTUxNzA3NWY5ZWNkZWJiODRlODQ1ZDYwZWViNGM2YWI5ZmUxNzA3MzE4MDQ4NjNiZDNhNjhjYTI0YjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzMDVjMDFiNjc3ZDlkMWQzY2U0MDhjNGVmODc4ZTAwZTY2NjNmNjAzYzJmMmY2YzIxMjJlNGNkMDZmMWM3MTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0NjVlYTI1OWNlYjMzODA3NDc2YjIyMTFjMzQ1ODA5MjFiY2I3MGQxZGE5NWNiNmRkYjA1NzA1NmFjNmU2ZGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e2e34bb2a1e2436bb87adb3834b1cd39",
+      "statement": "The README lists forwarding, blocking, chat deletion and GUI as missing for WhatsApp, but the dispatcher implements Forward, Block and DeleteChat.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L142-L148",
+          "version": "repo-lines-v1:sha256:b5a9e6238b540a65fa61107da0570b70d6da72856c57b519f2e36f00e04cf842:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDI0YzA1NDAxMDFjMTExZTJjMTM3YWFiMTUwNWM2ZDhiMzRjYTI4ZmM4OGZkYjIyNjU5MmMwMzBjYmZjMzU1NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDE5M2M2ODA4MTEwZDBmYTFkYzllZWJiZTlhNDhmNDdiNWFmYWMzZWU5ZGE5ZTIyYWZiMzhlYzljN2E4Y2RmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjU0ZWYzMDk5ODEzYzU3MjAwNjVkNDY3MzZhMDZiNDk5M2YxZjQwYjI0NGYwZGU1ODY0MTY0YzdiOWFiYWI3ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWJmNmQ4OGE3MmVkYWRmNTFhNGY4MWE3ZTcyODczYjEzYzYxYzNmYTFhZWY1OGIzZWQyNDdiMmI2ZGRlZWNhOCJ9"
+        },
+        {
+          "resource": "repo://src/backend/wa/worker.rs#L590-L607",
+          "version": "repo-lines-v1:sha256:f93b61dea00b92a2bc99642d6ae2605dc997ac3c5408faa9a44d8990b1ac3bff:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmN2MxYmVkYzEyZGM4YTY4NzBlZWYzZWE3YWVkYTNhYTE2ZTQ2YTAzZTUzMDJiODZlNjVmYzBjZTlkMmIxNzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjNjQ3OWNjMjMwNDQwZmQ0MWU4MjI0MjE4Njc5Njk4NTU5ZDI4OTNiZDY3YjQzODBhZmFiODExYjM4YTU1YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYxYzhlOGVlOTY2MDBjMTA3MTk3M2UxMjFhZDljODVlNzBmZWVlYjBiZjRlMGZjM2Q2YjA0MWRjZTZiZmU0MGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5M2YxMWI3ZDJjN2EzYjI2YWUzMmI4MDI2NWM0NjYxM2ZiZWVhZWZmZTg0ZjYyOGM1YTk2ZjhlNDBmYTM3YmEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

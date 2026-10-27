@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:68704966fa4037b922b6677d1e72286988df30f32fc17f5927bed70ac136aa5b",
+  "claims": [
+    {
+      "id": "claim_9a60443d946f408aa5e55cad6976932b",
+      "statement": "Graphics protocol detection runs once at startup from environment variables and /proc only, never querying the terminal, because a query reply on stdin would swallow the first typed line at login.",
+      "evidence": [
+        {
+          "resource": "repo://src/gfx.rs#L1-L8",
+          "version": "repo-lines-v1:sha256:7bf38d46dfdcc88efc607bd7fc7e5601b5d29dc69b71ff438a8aade0127691e8:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWQ2NWZmNTEzZGM2OGU3NTBmZGE5MDYxNjA1ODllZDNlYjNhMzE2OTU5NjUzMDM2NmVlOWUxYTkyMTBlOWNjMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODcwNmNjOTMxZmEzYWMzOWQ1YTljNDE0MjFlYzI3M2NmNmE0NWY1ZTc3ZjlmOTVlYzkxMDc3ZDViOTk5ZTBhOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjhjNzJiZjk5NTM5ODA2NmZhNTQxZWY1YzU1NDhkNWUwYmU3ZThkMDU4YmEwNjQyODY4YzM1MjdhY2I5ZjU4MiJ9"
+        },
+        {
+          "resource": "repo://src/kitty.rs#L66-L74",
+          "version": "repo-lines-v1:sha256:f70578fc5d3d6831d9419db198b44a07ed35e9ab366b4736afa4d27ae455e10d:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDEzMjg5YmMyOGYxZGY0NzhiY2UxODFmMDBjNWUwODIxOWEyMjA3MDBjNGU3Y2JjMzI3NmJlYjcxY2VjZjNkZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGEwODU5NjEwZjVhODYyNWUyM2QyYmNkYmYyYTQ3NzAwMjQ1MGFmNzhlMTBlNmI1MmNmMzg0NGMxODhmZTZjNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWI1NzFjNDJjODYwMmIwZGViN2M2N2E0YzM2MzkyMTYwNTJlMGIwZWFiNDA5NjE4ZGI4MWI2NTZkYjBjM2FjYSJ9"
+        },
+        {
+          "resource": "repo://src/main.rs#L74-L75",
+          "version": "repo-lines-v1:sha256:5f27adc00edce6c53b699113e97c230be6a87241411a465c4ea179e5e58448ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTJiNWFiNmEwNDU2NTRjNTU0YmYxNjQyODFiZTliNGQxYzUyMjhkOTk5N2E3YTRjY2QyMDU0MDIxY2Y3YTAzNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTRkMmYxZTc0MWNiYzdkNzllZDlmNzIxNDZhOTFhNWE5ZGY2MWZjZjY2ZDA4NDllNzg4OGE0YjZkMzNiY2MxMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTE3YzZlNTExNzEyOGY5MTIwMzdiNjVlZjQwMDFkM2FmMWNkODYyOWVlMmVmZDkyNmU2N2VmNWY0ZjUwMDE1NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjMzNDg4MWE4N2IwMTJlYzUzY2NkZDFiOTYzODliYzMyYTMyNzdlMGVmNjA4MzUxNDAwNjQzYzZjYTVlM2IxNCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_df3c2ca91df6454da93ad9bb91e098da",
+      "statement": "Detection order is forced sixel, forced kitty, foot (TERM or ancestor process) as sixel, then kitty/ghostty/wezterm environment variables, else no graphics; foot is checked first because kitty variables are inherited by child terminals.",
+      "evidence": [
+        {
+          "resource": "repo://src/gfx.rs#L35-L84",
+          "version": "repo-lines-v1:sha256:29e6166aea696795c6b4d2e82300a44355d8e01f005f88f55132b3076f215167:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3ZjU2MDdiNjVlZjMxYmYzYWQ3NDI0MmRmZTJjMGM5MjdlNWQyZmJiZTQ5OTYyMzVjZTI3M2EwMTQ3MTlmOTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY1OTQ0ZDcwYzNiNjEwMTI4YjNjN2RlNjI5MmMyM2VhMzgzZTBkMjk2OTQ5OTY5ZDc1YjQxY2MyYTRhMmNlOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ2ZDUwYjE1ZTVlYmI0Y2M5ZWVjZTNmYzg3ODJiYmU4NGQzYzk3ZTBlNTIxMzZhYzFjMGRjYzAzY2MzNjZlNGYifQ"
+        },
+        {
+          "resource": "repo://src/kitty.rs#L54-L64",
+          "version": "repo-lines-v1:sha256:f6aaa6a3b3450fe6641cd217d316fb4acff9c39ca16ede0934c5338e30bee11b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkMjIyNTgwZTIwNzRhYTcwN2YyNzg0YzJhMWMyNWQ2ZDcwMDIyZDk2YjdlOGU1N2Y5ZmNlN2MwNmI3NTU5NzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU0MjlmZmQyNWFkMzljOTVjMDI5Yzc0YzRjMGM4YTI0ODdiZjgxZGYzMTZmNTE1OTZjYmZlYmFmMTQ4MzgzOTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEzN2Q0MzkwMWMzM2JkNzQxYzM4YjE2Nzk4OWExY2VmNjNiZTk0NTY0NDE1ZDQ0ODgzMTQ1ZWRkZGM2NjYyYTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8d4b6fb63fb54b4f978f76746e04c092",
+      "statement": "Cell pixel size comes from window_size() and defaults to 10x20; RONDINE_CELL_W/H override it, and a size change invalidates sixel images.",
+      "evidence": [
+        {
+          "resource": "repo://src/gfx.rs#L110-L143",
+          "version": "repo-lines-v1:sha256:9a0d6bf376ccb18584359e555eace8e6688c7b78c8a9f765a649631a6619c83c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhkNTNmN2E0MjAzYzA5ZmVkNzhlMjYxMDQzZWEyNTViNzdjMDAxZDlmZDlhZDkzYzk2YzU3OGRkYTQ0ZWE1OWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhNjg1ZjkyOTg3ZDU3YTM0ODhhMWE3OTAzMzk0ZDA0ODE5MzM3OTZiYTYyN2NlNGJmYmEwYmQzNTJjYzc5NGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyMDkxMGQxYTdmOWNjYTBiMGQ2MWRkY2E1NzRjZDM5YTE4NzA3NGFiMTcwOTg3Mzk0MWM2MzA1NTM4NjM2YTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6935c0a6ed1f49fd96b8ad75842168bf",
+      "statement": "Kitty images are transmitted once per path with t=f (the base64-encoded file path) and placed each frame with a=p and a per-copy placement id; RONDINE_B64=1 falls back to chunked base64 content.",
+      "evidence": [
+        {
+          "resource": "repo://src/kitty.rs#L80-L161",
+          "version": "repo-lines-v1:sha256:4e97edd2cb347f9fc13528023609f6bbd48ef6be5ec23419cc4a45bf338d4526:eyJzZWxlY3RlZExpbmVDb3VudCI6ODIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljNGY2NTVhYjY2ZTJjNmFiMDY3YmMxMzMzMDQ1MWE1OTAwMTNhNjY0ZjA4OTdiNTFjYmY4YmI5YjQwYTExYTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhYzM1ODNmNWY0NTI0MDQ4M2NhN2E3ZjY0NzZmM2FmNzdkMjY2NDA2NWZhMWU2NjRiNDVkYjUzYTliZGJiNjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEzYjkyNjI2OWZiYTk4MWY3NmY0MzI1ODM0MDI4YmQ2YmM3ZWI4ZjA4OWYzNjkxZDdlODEyNGNlYjMzN2JkYzgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ed1c78af99dd475ea5600a7c824942f8",
+      "statement": "At the end of each frame, kitty images no longer placed are deleted by id and their path forgotten, replacing a previous global delete that forced retransmission and flicker.",
+      "evidence": [
+        {
+          "resource": "repo://src/kitty.rs#L11-L15",
+          "version": "repo-lines-v1:sha256:6c5b2bed1c5fda236bac93e883ea030eaf1c63bef8f695bf5e2e47e10a7cd5ac:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzYyYjA0YmRlZjA3ZTczOWQyNDU3OWE2ZDkyY2JmODk3N2QwYjJmY2FhMGMzNWRjOGZmYjkyYTc3ZDY0NmE1ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2MxNGFjZDUyNTAyN2YzOGU2MDJmZGFmYjcyMzAwOGYxOTdjMjg1OTRmMWNkZDViNzEzYTI1NDNmODhhMzU5MiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmY0YjA5MzI5ZjA2OTFkMTE2ZjI1NzU1YzYwYzJiZTM3YjEyOTMzZDg4NzcyZDU4MmE0OWRlZjQ2ZTM2YjI0MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzExOGZlNzk5YjI3M2I4MDI4ZjRkNGJhMjI1ODE5MWI1YTY3MzgyODk4MzIwNzgxZWFmZTZhNzViOWQ2MzBlZCJ9"
+        },
+        {
+          "resource": "repo://src/kitty.rs#L173-L213",
+          "version": "repo-lines-v1:sha256:b493a4cd4f43a339e517e0c1297df8c7d19406730a6382ac4cce375502c7c72b:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2N2IyZjFlN2NlMzdkODZmYzJiMWM4MTliM2M2N2IxMDVhOTczY2I3ZDVmNGExZjAxNGQyYTE2MTdjM2JiMzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ4YzQ4YmU4M2VlYzMwMDI2NDY4YjVhNjI0NzdhNmE2MzNhMjZjYTEyYTk5MmU3OGQxYzQ3Mzg3YjQ0NzVjY2YifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7e944ac6d67f4954819d280112c841dd",
+      "statement": "The sixel renderer diffs ratatui buffers to re-emit only damaged images, repaints untouched cells of vanished or moved images, emits images after the last draw inside a DECSET 2026 synchronized update, and skips images touching the last screen row.",
+      "evidence": [
+        {
+          "resource": "repo://src/sixel.rs#L1-L29",
+          "version": "repo-lines-v1:sha256:6872da8587bf895dd09207b974f3a363ad5f6cb488dc38643ef3fb97a885a496:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1OWQ0NjA3YjAxYzBlMDhmYjhhYjYzNWVhOWI0YzM1ZDgwOTY2Yzc0NjgzMzc2NGNmNzQxYzExNGVmNWNmM2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiNTEyNWY2MmY3YjM5ZWZhMDdlZTg4YmVhYjgyZDA1YjcwYmZmOWUyMTdjMTM4MzUzYTQ5MDJjMzBjODk0MzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM1OTdjYTg5Yjc1MGRlNDNjYjk3NjM2YzRiZjhjNTg2MjA0NThjMjY2YmVlOGJmMWY3OTg0YzI4NWNjOGEwZTkifQ"
+        },
+        {
+          "resource": "repo://src/sixel.rs#L45-L48",
+          "version": "repo-lines-v1:sha256:39485f5fedcc9f981455f0bdef9e59ba339f7f635e929d48aaea1ab9683df1e9:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU0MGQxNDU5OTJjYzU2OGI0MjM3OTlkMDRjMGVkNzE2YmUzZDMyNzVkZDI3MWY1YTRjMjNmYjhjMGFiNDkwNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2VjNTRjODI2YzE2NDI5NjFmMTY5Yzg0MDU0YTVmYWFmYjE0NTlkMjZlMzkyNTFlZDE3OTNjYjNlM2JmOGZmOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTBkMmM3NTk1YWIxOGE5MGQzZGE5ZGNhNGNiZTdiNzE0NDgxMTVhNTBlYmJkODQ2NmY1YmMxMjZkMGYzNzI3MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmY4MjMyNTUwZmEzM2RkMDgxN2MyMjc5ZjdkYzEyYmNiMjc4OTc3N2E1OWM2ZmNlOTc4ODQxNmM3MjMwYjM3YyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_37711c2801c54937b99699c2420a24ce",
+      "statement": "Encoded sixel strings are cached per path, size and cell size in an LRU cache capped at 48 MiB.",
+      "evidence": [
+        {
+          "resource": "repo://src/sixel.rs#L20-L25",
+          "version": "repo-lines-v1:sha256:fdabd319a8064fc94e3d20b1f18fa540630fa426c360ea49823e43c639fdcf69:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWYwZGQxZTUxOGZhMGUyZjMxOWNiNWVhZDhkZGUyM2RlYzY5YWI0MTU0NmJkZWIwNGMxMzkzN2FlNmJjMDgzYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWU4N2RiZDkwYTlkYjMzNDU0ZDU2Mjk3ZTgzMGEwYzg4N2UzMDYyMzAyZDVmNWNjNmZhZTM1ZTI5YTU4Y2U1ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTkxNzFkYjdhY2E3YzQwYjliZmU0NTM4NzdjNWRlNmRiN2MzMGUxZDE0NDdkN2IxMDNhNWVlN2ZiMWE3NmNhYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTdlM2RhYTBhMmJkZjRkODkwNzA2NTcwMmUyZWU5NjkyY2QxZmZkNzA0NWZjODU4OGU4NTA3ZDg3ZDkyNmExOCJ9"
+        },
+        {
+          "resource": "repo://src/sixel.rs#L45-L45",
+          "version": "repo-lines-v1:sha256:6540d145992cc568b423799d04c0ed716be3d3275dd271f5a4c23fb8c0ab4907:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU0MGQxNDU5OTJjYzU2OGI0MjM3OTlkMDRjMGVkNzE2YmUzZDMyNzVkZDI3MWY1YTRjMjNmYjhjMGFiNDkwNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU0MGQxNDU5OTJjYzU2OGI0MjM3OTlkMDRjMGVkNzE2YmUzZDMyNzVkZDI3MWY1YTRjMjNmYjhjMGFiNDkwNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTBkMmM3NTk1YWIxOGE5MGQzZGE5ZGNhNGNiZTdiNzE0NDgxMTVhNTBlYmJkODQ2NmY1YmMxMjZkMGYzNzI3MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGNlYWIyYWY2YmE5ODhjMWE4YmE4Mjk2MTg3NjE4OTk3MjFkMjNmNjAzZmQ3MjczY2FkZmYwZGI0M2Y2NjIzMyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_84db0e31170d46ac83d906a1f5d87cee",
+      "statement": "The main loop wraps each frame in sync_begin, draw, observe_frame, frame_begin, per-placement draw_png sized by square_fit, frame_end and frame_flush.",
+      "evidence": [
+        {
+          "resource": "repo://src/gfx.rs#L145-L216",
+          "version": "repo-lines-v1:sha256:1c4e0754fd0af84820976f0bef03c51ea5d24eaf3e6ac958d577ad13c08b6019:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4ODNmMDgyOWE0MGE3MGQ2MjMyOWY4Y2M5MDViYThmZTcwNTM4MTkyOTdhMjg4ZjU5NjUzYTNkNjZlOWVjZWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJjZGRlYTBjZDI5M2IzZjM0YTFlNDc2NzkxMGM0ZTc1ZWM0YzczYTE0YjczZTQ4YmI4YjI1ZjkwY2ZkZGNiNzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE4NjJjYzQ4YWIwMDFhNzE0ODA1ZmNlNjY0YTY5Y2VmMzI3Y2VlNTU3YmQ5N2Q3ZjFiNGViYjMyMjRmNmJmNzgifQ"
+        },
+        {
+          "resource": "repo://src/main.rs#L132-L173",
+          "version": "repo-lines-v1:sha256:55fa4e2aa303486262b1ff85435599fca6be95b24a029aa72f7b01c377960d06:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3ZTM0MDkyNDE0MDc1NDY2NmZjZGJhMmZlMTg2ZDk3MmM2NDQ4ZGZjYjVhNjRmNzlkZDU2M2IxNzgwMmNjMzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiNDc0ZGNlNDA0Y2QzNzZmNjFiNGIzZjA1YmJjMTQ3Njg0MTJhNWJjNGI0MDFmNDdhYWI3YWI0MjY1NDAyMjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ2ODU0NzkzYzI2MzI1Mjg3ODY4NDRlNWU1ZTBmYmFmODNkYmI4ZWU4ZGNiZWU5NjM1MmM5YmNkYzg4YWNiNDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5YjgxMjIyZWEyMWRmYjVkZDgzNWI0NDI2NTZhNmMwZGMyNDFjY2QyMTE3MGI0ZGFiYWI3ZWUxMTE1YTM3ZmYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

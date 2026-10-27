@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:56e1227e3114ababbecfc1f7845e9c438ce5be980a294bc672e3a44e0c92ffb7",
+  "claims": [
+    {
+      "id": "claim_b48707755565493d9eef6f7b98d40201",
+      "statement": "WhatsApp store tests verify stable chat ids above Telegram ranges, status id consistency, 24-hour status pruning, @lid/phone merging, insert deduplication and reload, updates and dialog ordering.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/store.rs#L630-L746",
+          "version": "repo-lines-v1:sha256:79f246fe39f64152a1145398997c05ecef5a2affa27efc123ae5ce8d148ef175:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjMGU1OWJkN2RjZWUyMzU5YzcyZGFhYmExZTQzMTg3MjQ2ZjljZmM3MjE3MTc2YjJlNTZmNDYwOTQ5NzZlYmI3IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI0OWVjM2IzZmM5Y2VkZjA4MjA0YmNjNGFlMGE1ZjEzMGM4ZDgxM2I4MTU0NGVkNDRlYWFiY2EwODgxMzk4NjM2IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_3b0b13eee65f4cc0a48d390c6937543a",
+      "statement": "WhatsApp backend tests cover protobuf-to-stored-message mapping for text, replies and photos, exclusion of reactions as rows, and that the SQLite storage opens next to libsql.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/mod.rs#L460-L532",
+          "version": "repo-lines-v1:sha256:8473e42b6ea54676cdb906d3e2c2b5ab6348e759675cbe927b2e2a7999283ea6:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI1Y2Y1ZmMyM2YyYTZkMjNjM2VhNTFlNzJmNWU4OTZjNzU1NWZiYWEwNWNkNWIxZWExODJiZjk2MThhOGU4MWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmOWUxMmJlNDNhM2E2NDA1NmE0NGE5MjM0ZjQ2YTBhYzgzZmVkMzQxZmE2MWYzYThlOTJjYTUwNGI4NTBlYTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e9699b5378c94b66badd06bb43717b68",
+      "statement": "Telegram backend tests cover ChatId/PeerId round trips, access-hash propagation and phone number normalisation.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L1584-L1649",
+          "version": "repo-lines-v1:sha256:256f7c1f912f4e2b5a233ab693ececba4d42905d4398debfdc4ef728cadd1010:eyJzZWxlY3RlZExpbmVDb3VudCI6NjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI1Y2Y1ZmMyM2YyYTZkMjNjM2VhNTFlNzJmNWU4OTZjNzU1NWZiYWEwNWNkNWIxZWExODJiZjk2MThhOGU4MWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNlMDdjZjIxYWY4MDczYTNjZjJlMDhjMWYwZjZlZTNkYzJiZWJiYWYwYzY3Y2I1ZmY5MGIxMGMyZDljOWUyYjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_06f4da06df994598a64812908e619d00",
+      "statement": "The GUI settings save/load test redirects gui.conf by setting XDG_CONFIG_HOME to a temp directory and checks legacy theme values.",
+      "evidence": [
+        {
+          "resource": "repo://src/gui/settings.rs#L336-L356",
+          "version": "repo-lines-v1:sha256:645fb8eeb555b18f25eb05b3b95872dce161ab524e1a4593fb69fcaf40a9ea20:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyYjVlZGY1OTQ5Y2ZlYTY3ODIyY2Y2OTExMzIzNjNkNjhkNmYxZTE2OWY1ZTBkNGY3YzE0ZTVmYTFlNmQ0ZTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc0OWQ4ZjIwYzUyNmYzODEwNjJkYWQ3MmMzYzQ5NTRhYzY2MjA4YmMzY2I2YjZmZTIwMzIzYzM0ZmViNjE4MjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_02510ead94f349f3a5fe30455d6b1582",
+      "statement": "The i18n completeness test reads source files from CARGO_MANIFEST_DIR/src at test time.",
+      "evidence": [
+        {
+          "resource": "repo://src/i18n.rs#L201-L227",
+          "version": "repo-lines-v1:sha256:813d46b1863ad690723c2f09f052f422a97fda521b89480e024b5b78f8a5bd25:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyYjVlZGY1OTQ5Y2ZlYTY3ODIyY2Y2OTExMzIzNjNkNjhkNmYxZTE2OWY1ZTBkNGY3YzE0ZTVmYTFlNmQ0ZTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxZjM2MDNjNDUzY2E2N2I4OGQ1OWM4ZDcyNzcwMzNjNmZkYmYwMDYwNWI1Yzk3MTJjOTY1MDFiNjQ1NDBlYmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2c58cfdf3be342de9ebe9a6a83cda7be",
+      "statement": "The TUI view module has unit tests for compose growth, URL detection and wrapping, timezone formatting and reply/meta lines.",
+      "evidence": [
+        {
+          "resource": "repo://src/view.rs#L1553-L1660",
+          "version": "repo-lines-v1:sha256:9354a3b9e1ba26f37da26cb552274eda2fd5950e65c23ad31aded76658d7f94c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTA4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI5MmI1ZWRmNTk0OWNmZWE2NzgyMmNmNjkxMTMyMzYzZDY4ZDZmMWUxNjlmNWUwZDRmN2MxNGU1ZmExZTZkNGU1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3OWZjOGM5Y2VkZmE2Y2U4M2U1YWE1ZDg3NjBlMzQ5NmM0MDMwMWJhYWQ0ODQzZDllNjJiOWM1ZjQ2Y2NmZjIyIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmNzUwNmViNDY2Yzc4MzExZTgyMjA1OTQxMTIzZGE2YmViM2IyNWJjM2RmY2Q4YWExZjFiM2E0M2QxNmM2ODk2IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJjMjQxYjliNGVhNzQyM2E4NTA5YzlhZDY4N2YzZmEzM2Q1NTk1YTc0NWIxN2RlZjkwNGNjYzBlZDc5M2ZjMWVmIn0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

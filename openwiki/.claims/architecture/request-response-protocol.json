@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:793f632fd63e21272b6a3154e9f663975f584d8f7cdc46edc2ceae34d7f9e71e",
+  "claims": [
+    {
+      "id": "claim_e5df8c3d7759474682b5a9de260ab489",
+      "statement": "model.rs contains only backend-neutral types; each backend converts its objects into them and receives them back inside Requests.",
+      "evidence": [
+        {
+          "resource": "repo://src/model.rs#L1-L4",
+          "version": "repo-lines-v1:sha256:92811e30e236a57ccdaa58d1b2bfee6c4aee06ffb201c846f9af3682847137b7:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTAwOTY2MzJlMGZmMDBhNjUxYWJkZDA1ODY5MzJjNTMwMjM1NzhmMTZjYzdmMGY2ZTJmNmZmMWJlMjFmMWYyMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTRiYjFmODY0NWNkZDIxNjAwNjQ0MTllYWI5ZWY5ZTk0OTE5YTQyYmY0ZGY0YWZhYWYwMjBkYjQ5ZGM0NzZhOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDAyYmRhMzNhMGY1ODcwZjY5NzFhNDQ1NGJjODZhYmEwMGJhNmYzZTllMDE1ZTM5NTQwNTlhMzk3MTJhNmI0ZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_072ed45cfda547d2bfdd5c1b7f193e92",
+      "statement": "ChatId is the Telegram Bot-API dialog id for Telegram chats, other backends must pick ids outside Telegram ranges, and it is persisted so it must be stable across runs.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L34-L44",
+          "version": "repo-lines-v1:sha256:a048d99d72ef91695d37c2769433f251a06f18d1335a66d90139d53602eb123c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1MTFkMWJiN2ZlNjJhZDIzNzBkOWI0ZTU1ZDU2YzliYzdmYjdlZTQzNGJkNGNjMWE4NGEzMjY3NjdmYjM0ZWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmZGNiMDU1ZTg5MzAzNTA1NTZkZjk2MThkZWRhNjZhMzJkMzBlNmI1NjY0MjY2ZWFjZTJjODcyYTVjN2JmY2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYjFhNDk0OWM3MmQwYzFlNTliOGRjNmQ0NDM4OTg0MDlhMGQxMjQzMmE3NWI0MzRkZjQzZWYwZWUzZDk1YzEifQ"
+        },
+        {
+          "resource": "repo://src/model.rs#L15-L20",
+          "version": "repo-lines-v1:sha256:e5291b3ff1a788b5759ce69801f85faeec37bbdef37a882c9621070b49e8540a:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTlmZDM4OTNiYjQxNDhlMWZlODFkYjNjYzcwMDE4MTEwYzY5OWRhZmVlYTFlZmQ1YmNmODIyM2M5ZDM4NWFmZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMThhMDU0ZDE3ZGIxM2NlYWEwYzY5MWFlYmY2M2Q0YzEwYzI1YTJlMDY1ZGI1NjEzMTgyYzBkMjc0ZGExMzVhMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzVmZGFlODc2ZDdkN2MzMWRiMWFlYmM1NmI5NmFkNzk4Mjg3ZGJjMDkyY2JjYjYzMGRjYWMzMDcxOWI0ZmQ2MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjBhY2ZiMTNhYTM5YzMwNzgwZjJhMmE0NGI0Y2E1Y2ZjY2ZmNTI0YmU4ZmM4OTc3YTljOTIwOWNhZjA3YmIwZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_8f22528b065b44f193b1b521f9384488",
+      "statement": "WhatsApp chat ids are 2^41 plus an FNV-1a hash of the JID modulo 2^50, placing them above Telegram user ids.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/store.rs#L26-L35",
+          "version": "repo-lines-v1:sha256:484f94b74872e4f601d12a9c88a7bcc48a9d917b5e27058d34d2f33e943be221:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlZjNiNzZhODE3NjgyNTc1NmMxZTE1NTFjOWRhM2RmNGFlNGJjMjk0MzMwYjE2Njk3N2EwNWMxYWIwOGQ0NTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY3YTIxMGM2MjViMjY3ZjEzZmZkNzY0MTU0Zjk3YjNiMWYwMzBjNTczNWNlMzZlMGMxNTZiNzAzMDZiZTIyNjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNlZWIzOTgzZmI5NmFmOGE0ZjNhZWJlZjEzODNkNGExNjBlYjk3NjJiOGNkNDBiNDRkYzlmMWRiN2YwNDJlOGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_24d49ad2b396401b860809ac517288bd",
+      "statement": "MediaRef type-erases the backend media object behind Any together with a cache key, original extension and sticker emoji; only the originating backend can downcast and use it.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L54-L66",
+          "version": "repo-lines-v1:sha256:b6d9ec72dd8e4aedfd91b9bc71b652263cdbc9d9d93c677d91945c65e8c56f3a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJjNjIxYjU5MGNkMzI2NzcyZTk1YzFlMTM5ZDE5ZmQxNDZmYWM0ZmZkOTM3YWIwNjYxNDI1OGRhNmU2OTRkNzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ4OGM5NGFmOWVmYTdmY2U3OGNjMmIyZmIwYzU2YWU1ZTg4ZTc0YjdmYmRiNjE1NzVmYTRlMmY1MDJmN2YxNDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUzODJlOGJhY2M5MzdiN2M2ZmZlM2Y5ZDdiYjIyNjBiOWJiZTRjNmNhZTQzMjQ2M2E4NDMxMmQyMDFiZDcxZmUifQ"
+        },
+        {
+          "resource": "repo://src/model.rs#L43-L80",
+          "version": "repo-lines-v1:sha256:039df2e2a1bfe895304609ec0733936bcf5f57bb31cc5965a405a5f10b1616f3:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwNzA3YzRlYjRhZTZkODkxODc4YWQ2NWZlNTgzZTg0ZjIwNmQwNzljYWFmZmRhMTM2MjhlODU0YTNiNjFkYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkZTM2YmViZmQ1OTM5MmNlZTllMTQwMWUwZDQ5NDAyZWE4Y2YzMjZkZmI1ZjUwOTA1MmUzZGY0YTNmNzE1YjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU0MWUwNmE5NTg4ZTdmYWQxOTFiYjc1N2U3MDNhMDY2MjNmMTExZTc2NTRjYzE4YTFmYzhjMjIxYWVjMmQ1NTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5cfd96db18aa4105986844848e785326",
+      "statement": "Worker results carry Result<_, String> so errors travel on the response channel, and live server events are delivered on the same channel as Response::Live.",
+      "evidence": [
+        {
+          "resource": "repo://src/send.rs#L173-L249",
+          "version": "repo-lines-v1:sha256:821608b8c9e2561d287e53e381285368a61260297726756835f5bdbe64042a11:eyJzZWxlY3RlZExpbmVDb3VudCI6NzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwMGVkMmU4MTgzNzlmYzZjYWRiN2MxNWMyZGY3NGIyYTNkM2I0ZjU3MWEyMWQxZmQwZTBmMGQ1ODU1MzQxZDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY3NmE1NDRjYzAyM2VkNDA1ZTNiOThiOGEzNTQwOTBmYWQxNmU5ZTE4ZDVlZTlmN2JhNmMzZTcwMDUzMDA5ZDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d1db5c84c30645b9ae763f9488ca1b26",
+      "statement": "SendKind::File sends PNG/JPEG files as photos and other files as documents, while SendKind::Photo temp files are deleted by the Telegram backend after a successful upload.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/worker.rs#L34-L59",
+          "version": "repo-lines-v1:sha256:2f3b6407c4dd0cde70cebec35787e816793b2f71ef80ec545f13964c4dc4b5b1:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4ODU3ZDBlZjI1ZDFmOGE5ODUzYjlmZGVhODkyZDE3ODY4OWFiMjQyZTIwMzVlZWVmMjA2YWFkMjdkYTAwNjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA3NmY4ZTBmYzE3OTc5NTQ5OTEwZjUyNmUzN2JlOWU5NmU0N2VkNjM3MGE1MzZiNTE3OGEwZjIyZTY2Y2Q0NTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk3M2M1NzIyZDkxMmIwMGZmZTEyZDhiMjQ4OGMyZDVlMDc4MTdlODg2YTRjNzZjMGI5Y2EwMzA2M2YzMWE2YzIifQ"
+        },
+        {
+          "resource": "repo://src/model.rs#L306-L311",
+          "version": "repo-lines-v1:sha256:89d9f5f9cde2b4fca834c87de0bf4d94b8be7bcae2477818291dcc0d416f3fcb:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2UyOWQ5MDkwMmFhYTE1NzVjY2UzMTE2NDdhYzk2MWZhZTM1MDgzOTM4ZWYxYzQ1Yjk0ZTdlYTc5MDAzN2QzNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTMzOGQ1YzE5ZGMwZDQ5YjU2OTc4ODczMDhjNGUzYzk5ZDkzNWY0MWUyOTRkYzI1NzgxZDY3NzYxOWVlOWVmYiJ9"
+        },
+        {
+          "resource": "repo://src/send.rs#L29-L42",
+          "version": "repo-lines-v1:sha256:3d75419a415ff6122306c82c006ea7a14eb965878c6da5f6cfc67e06238fa35e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBmZmQyNTgwYWI0YzFmZjBlYjM1MmFhMTUzZGI0ZjdkY2Q5ODBkYjExZDFmZWM4Y2QzZjAzM2JkNzEwNjMzZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE2ZDU5NDVmNDFkMjYxMjk5Y2UzMzk3ZGRhMmNkM2Q5Y2M5MTdjYTgxNWZjNWQwMGQ2MmM0OTg1NGJkNTJiMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5ODhmOTFlNjkxZmRlYTE0NTAzMWZiMTA4N2Q5ODE2NmI3YjdiN2I0MjIxZWZlZWNkZTM0MjU0ODBmYjIzYjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a19d5d3ed8484d6c987723ac05eb9366",
+      "statement": "Both backend dispatchers spawn one task per request, limit preview conversions to 2 concurrent jobs and translations to 3.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/worker.rs#L95-L121",
+          "version": "repo-lines-v1:sha256:a3acbc6568c67045c8deefb940b4a7b92960f383fd79081cdc36cf2bfe464ec6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2ZWQ5NWE1ZGQ3MjYzMWMzN2E4YWIwYjE1YWY2NmZlNjg3MzYyOTg2ZDBiZGU5ZTkzOWJhMTIzMDY3OTMzNGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjNjQ3OWNjMjMwNDQwZmQ0MWU4MjI0MjE4Njc5Njk4NTU5ZDI4OTNiZDY3YjQzODBhZmFiODExYjM4YTU1YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhMzhiMjI2MTgzNjdlNWQ1OGY3ZjA5OGU0YzBiNDllNDBiNmRiZTk2OWRmNjIyZDcxZWM1MWFjYWRjNDA1OTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiNGEyM2YwZWJhMDRiMTZlMGI1ZjI1MzU2NzVlMjEwNDFkYjg5MmEzNjI0OTA4NmZmOGViOWViNzA1YTI2YWQifQ"
+        },
+        {
+          "resource": "repo://src/backend/wa/worker.rs#L437-L449",
+          "version": "repo-lines-v1:sha256:4ee02d263bc093be3579da96d1ded46f415112f2802d1578d80427db7a1e1254:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkZjNhNzliOGZkZTE4ZDhhMDk1YjdkNmNiMTNhNTgyYTc5ZjBiZTFiNjM0ODBkMmMwNjg5YmVhNjIwNTU4NGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiOGU1OGVjYmQzMWJjM2I5NTk1ODAzYThjYWZiZWZlM2QyNDNhNDA2ODlkNDA0ZmVkMjAzZjIwYjA0YzgzN2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkMjE1OWIwYmRmMzkzMjVjMTczZjhlNTRjZjVlNTc4MmFiMjE3OTc5NDhlMmRjZGExZDQ1NzRmNzYxOGJkMzYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bb2d7b8ba178434b9bc4c3671b6aa91a",
+      "statement": "The WhatsApp dispatcher serves history, search, shared items and info from its local archive and returns an 'unsupported' error for link resolution and invite joins.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/worker.rs#L18-L21",
+          "version": "repo-lines-v1:sha256:592a5530133d0e1feb3952820544d0dc8829ad37fee9c72d103cf38832fdc3d0:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGJmZDVmYjViZTYyMGI1N2M2ZTllODBiZWM5OWMzOGQwMDljODJiZmNjOTc4MWEyYzcwNWFlZGNlOTNlZmI5NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTQ4OGVkM2ZkNWY0YWQ0YjExMjEzMGY0NjU5MDBmM2Q5NmFiMDY5M2VmNDMxNjJlY2Q5MDg5NGFkMWFhODM3MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmYwMWRmODYzOTkwZDJhOTQ5ZjI1NjhlYTQ3YTFhN2E5ZGFkM2M3NTYxYjQyY2YyMTkxYWE1M2RhZGJjMDBkMCJ9"
+        },
+        {
+          "resource": "repo://src/backend/wa/worker.rs#L463-L543",
+          "version": "repo-lines-v1:sha256:501279dd964d31ad7c97409569ca4fd2686fd4d3f04efa2268719d7a96637859:eyJzZWxlY3RlZExpbmVDb3VudCI6ODEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjMmMxYjY3OWM0ZmJhOGUwMTMxZjU4MGUwZmMyOWVhNjk5NDM0MDRiZmRjYjY2NmM1YjlkM2FlZTZjNmFjYzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjNjQ3OWNjMjMwNDQwZmQ0MWU4MjI0MjE4Njc5Njk4NTU5ZDI4OTNiZDY3YjQzODBhZmFiODExYjM4YTU1YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdjYjUxYmFjYWY3NDk5MzY4YzFkMmRiYmNkZTk3MTEyMmIwZWM3ZjExZWM4YTRhNDE5MDFmYzAwZWIwZGU3Y2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYwNmY2ODJlMTJmMDlhYWQwMDhlODlmODA1MjhmNTRhNGQ3YzY0Y2NmNDJiOTI1NjYzODk1NTgwNTBiYWUzOTUifQ"
+        },
+        {
+          "resource": "repo://src/backend/wa/worker.rs#L587-L589",
+          "version": "repo-lines-v1:sha256:61c8e8ee96600c1071973e121ad9c85e70feeeb0bf4e0fc3d6b041dce6bfe40c:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmUxZTAyMzA5MjU3NDIxYTA4MzkxZTllMDU4ZTJmMmQxY2I2ZmEwZWE4NTg4M2JhYzVlODM2ZTJjZWFhYjc4OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGM2NDc5Y2MyMzA0NDBmZDQxZTgyMjQyMTg2Nzk2OTg1NTlkMjg5M2JkNjdiNDM4MGFmYWI4MTFiMzhhNTVhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2VkYjQ4ZTQzODU1ZDIwNjQ4NmE0NTI4MDAzMWI0NTNjYWIzNTcxZWI1OGIzNTNjNGU1Y2Q0ODY3YWE5NTY3MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTc5MmZhNWYzMDkyOGMxNDBmZWJkODZiMTU1ZDI2NDM1MzVkMDVlZWEyOGUzNGU4ZWE5ZGZkMmQzYjg1ZWNiYyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_48934a8b0b574b7eaca89c9f114ac2a1",
+      "statement": "The Telegram dispatcher ignores Request::Star because Telegram has no starred messages; stars stay local.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/worker.rs#L276-L277",
+          "version": "repo-lines-v1:sha256:41c2fb17085c1d515c682234eabd82e7b13b34e980bf96203e7edb3bb3e73606:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWNjNzZiNWYxY2E5YjdkNjZjNzkyOTFjOTZiZWNiNTFmNWNjNThmODI0MWM3YmM1ODM1NWQ3YWFlNWI4NzE3ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTdlZDczNTQ3NjJmMDQzNmM1YjBmZGQwZjg3MzJmZTU5MTBiNzkzZDZiNTNmODRkNzYzYjA4ODhjNWU0N2NhMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmJmM2NiNjMxYmE2NDA0NzY0NDZmNTA1NzhiNmI2NjZmZTM3ZGNjNTUxNTQ3YWVmNWU2MWIxYzEyZTIwNWYwNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDFmNmUyZTk5MTAxMzc4NzIzM2ZlYWEwNTUzNDA0ZmQ5NGY0MDgxNGVlMTBkNTc0NDhmMWM3MmIyYzQ3ZmQ2NiJ9"
+        },
+        {
+          "resource": "repo://src/send.rs#L157-L159",
+          "version": "repo-lines-v1:sha256:10890b4cd01341c747cf64320c3fb07ea5638106539a29b8ec8a3ef318413923:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmNmNjAwMThlMWQxNDA5YWExYzVhZjgyZTc5M2YzN2IzZmYxOGZkZTI3MTgzMTFhZDNiNTU2NWZkMTI1ZmU0YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODA2NTc0YzYzMTZmMzYyYTMxNTM4YjZlODhkYzIwNDE2NzRmOWQxNDYzODcxMDgwMDJjYzJkM2MzNTdkMTVlYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTFkYWE5MDJhZDMxZGY2ZmJjYTcyZjMxZGM1MWU4YzM5ZDU2NTU1NDVhNGY0ZmE5NzA4OWNkY2UxYzA1ZDM5YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWEzMDRmYjIzMGU2YTlmMmM0NWFkYmZhYWI4MmYxOWQwODVkNGNhZGI1ZGE0Mjc1YzAxNTExYmMxNjdmNTA0ZSJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

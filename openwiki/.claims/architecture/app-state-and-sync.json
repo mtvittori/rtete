@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:e50c3b39ad624ab784b687cfd3719748b6195a1518e837d1fb86b6ec847c178f",
+  "claims": [
+    {
+      "id": "claim_1a6fb89052b94f8893b0064c6f50590b",
+      "statement": "History per chat is bounded: 60 rows on first load, 60 per older page, and a hard RING_CAP of 500 rows enforced by dropping from the front on push and refusing rows on prepend.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L12-L19",
+          "version": "repo-lines-v1:sha256:ca733cf579ca4cb3fcf0ee5a216f035381fdb882da111a3c25daa50a05deff6a:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTQ0MDc1Yjc2YTBmMjUyYTlhMTM1YzZhNDUxZTU4ZmFlZmZiNjljNTg0M2IyMjE1MmE1ZmZmNDk0ODcyMzg3NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjYxZmE1YTUxMWYzNTJkYjYwZWEwMzViNjU2ODA1ZDM0NDU1MGQ5ODk5MjE4ZWExZmUzZTc1MWM5NTY2OTU2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjc1OTNjNTFiMTE3NjExMGRjMTU4NGZkYjA3MzQ4ZjEwMzFmYmY5MzVmNmU2NGMyNjE0NzFhYjUxY2QyZmI0MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzczMjE1NGI0MTljOTI0NDMyOTQ4YWY1MDVjOTFhOTQ2MjFhNDM5YjQzYzY5YTYwZWEzNTNhYzBkNGM1NTdhYiJ9"
+        },
+        {
+          "resource": "repo://src/app.rs#L346-L360",
+          "version": "repo-lines-v1:sha256:3044bb2d07f37ba7dda8cab6a86688a93501e7cd791626c2069db89bd15b6d9c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlMjVmMmM2ZGUwNGI5MGY0NzU5NWMwNDBmOTBiMjkxNjYzN2U5NjhlOGI0OTJkYzJkNjczZDI5Yjc4NjhkODciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkM2ZhYjdkMTA1ZmQ5NGVkZTFkNjFmOWExZTJlMzgwYjFmZWU4NWJjMGI2MWEyYzEzMzNmNWVlMzM5ZDJmZjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEyMjEwZDU1NzFhNzRjYmVjNDBjYjE0ZGI0MDVhZmZiNGIxMTFiMWVjOTJjNTE2ODJkYzYyNzgwMTI3NTJiYWEifQ"
+        },
+        {
+          "resource": "repo://src/app.rs#L390-L403",
+          "version": "repo-lines-v1:sha256:62720dbed2f68bd44426cdff69f26a64d2c0ad17e42b5c53a03a860fdec91b7e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2NjY4ZjdjOTdiMGFhYzM1ZDI4MDgyYmQ2NTE2YmE2ZDcyZjA2ZjM4MjBkNWI2Y2E0NjM4MjcxNjEzYjZlZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJmNzkxNzJmMjhhZmYzOTJhZWY1M2EzY2QzMmMxMWFiOTEyMjY4NjE5MjMwZmI1YWNlNTVmZTliY2Q1OTVkYjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzNTM1YWQwMzM1MDE3YTQ3MDc5YTI0YWUwZWI1ODUwYTYwYThjMDVmZDEwZDAwZGM5ODU3MTEyZTQ3ZWMzMjIifQ"
+        },
+        {
+          "resource": "repo://src/backend/tg/worker.rs#L122-L131",
+          "version": "repo-lines-v1:sha256:e67d4adda3c41401d075b550a113bdcb82def1399431183dc18371b85ecb41bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjMmMxYjY3OWM0ZmJhOGUwMTMxZjU4MGUwZmMyOWVhNjk5NDM0MDRiZmRjYjY2NmM1YjlkM2FlZTZjNmFjYzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjNjQ3OWNjMjMwNDQwZmQ0MWU4MjI0MjE4Njc5Njk4NTU5ZDI4OTNiZDY3YjQzODBhZmFiODExYjM4YTU1YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM2NzMxMTAwNDMyNDU0ZDkwY2YyMWYyZGI0M2Y2ODM5NTk1MTY1MDRmNTFjMTI0ZTE1NDVlZmE0YTQ1ZmY0ZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJmMWRlOGU4YzRlZGNkYWJmNzkwNWVmNmI2YTNjODY4MDdjOGU3YWU0NDM4ODhiYzA2YjFiNmQxNTdmY2Y3Y2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2492f793278c44bca2510b27ce1bf090",
+      "statement": "Appending rows de-duplicates by message id because a sent message arrives both as the send confirmation and as a live update.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L342-L360",
+          "version": "repo-lines-v1:sha256:56652684e7bd2ce89d125624d18b76661fd1a8fb44169a13fb65db0912780908:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlMzU3NDJiYzM4NTk2N2QzMWMwN2I3Y2FkZWIxOTRlOTViYjgwMGRkODMyNDQwYzI4NDgwMjY1ZDk0OWJhMzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhlNWVmYWMwNjNhZDNlZThmMzdhNTFkMzMyOGE2MGU1YTRiYjc1ZTc4N2EzOGY2ZGEyMDhjZTZkMjM4YWZmYWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEyMjEwZDU1NzFhNzRjYmVjNDBjYjE0ZGI0MDVhZmZiNGIxMTFiMWVjOTJjNTE2ODJkYzYyNzgwMTI3NTJiYWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_24bdfdc2b21243e6bb1f9d591c272a6e",
+      "statement": "bump_chat moves a chat to the first position below the pinned block, never moves pinned chats, and keeps the cursor on the previously selected chat.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L362-L385",
+          "version": "repo-lines-v1:sha256:b526d4b328529c38a70c18abfd5435eaf42c77babbb6d9bfc8fe09c5038f0003:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4ZWM0MmI3MzQ3NjJiYTAwYmY4MjZkMWMxNmU2MzQ3ZWE2YjhkZTYzOWY1MzUxMGQ4ZDg3NDNlZmUxN2NiYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU3ZWExZGU5YjY1MzFlYTc4YWI3ZmQ0MzU2YTIyZDhhNmI5NzU0YTNkODVmZTJkYWUyMGU2ODZjM2VjOGYxZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_392413b8f4db4a89abc1f4cd140aa198",
+      "statement": "A shared exponential backoff of 1,2,4… seconds capped at 60 s guards retries of failed preview conversions, sticker-set downloads and quoted-message lookups.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L29-L40",
+          "version": "repo-lines-v1:sha256:cf547e817de13f4c0ed6083d0dd1ae4234ef8fefd45a1e8a9bbb1e83878fae5f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhZTRhNzkyOGMxY2ZjYWRhZTg3YzJiYzc3ZDcwMzAzMTMxZjZkYzIxZmExNjNjY2IwNzY2YmM1MjkyZjNiYmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImViOWM2MDFiM2RmZTA4NTY2ZWYyMzU5ODQ3YjdhNzcwZThmMzk2OGY0MWJkNTU0ZjI1ZWI5NmE1MzUyMDRhZTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzMDUxMzg3MzJiZmRmM2EzYTQ4YjI1MmU1ZTk3N2NlNDk1MjFjMGE3ZjZmZmU0NjIxMzQ5MWVjMzllMGRkMzUifQ"
+        },
+        {
+          "resource": "repo://src/app.rs#L476-L528",
+          "version": "repo-lines-v1:sha256:039e0a4b284e25a60744fd198e463a2d816c39fb1eaaaf8ddffcc6343a374595:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhMTQ2MzAzZTliYjE0NTkyNWZiZTk0YTY0OGI3MjZjMWI4ZTQ3YmNkOWJkN2Y3NjEyMzhjNDNhZDU1OGRlZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY3M2NmZTQ5ZDU5NzNlOTNiN2VlZjgzYTUzOGIzNjg1MDJlN2RhNWZjYjg1MDM2YTIxOThkZDFkY2RmN2M2NWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a20f0351730a450982433ed5e9eca836",
+      "statement": "Quoted-reply lookups request at most 100 missing ids per chat, one request in flight per chat, and back off after errors.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L577-L608",
+          "version": "repo-lines-v1:sha256:4e19809757995a9ae9df0ef4384cd034ffffface98103ddfc6de0d47ad0af05f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJjM2MxNGVlMGRjMTAxZjJkNzQ4NzcxMTliM2IzOGMzZGM1YjRiYTRkMTJiOTU4NzYxYTQxNjRhYTFlZTlkODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVhZmI5ODFkNDQ3NmIyZjEwN2E4OWFlZmFiZGQ1NTM5MzVmZDBmMGM3MWI0NWEzZThlNTU4NDFiNTJjM2I3MmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc3OWVkYjc3ZDE3MWZlMmRmMTdiZmViNDM3NTI3NzI4NmE5MDM5ODgwNDQ4NmVmYmZkZTlmYTY0ZDJjOTg3ZWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e674b87f75b94b23b27a058e8ae31bf9",
+      "statement": "Mark-as-read for the open chat is throttled to at most once every 2 seconds during message bursts.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L530-L543",
+          "version": "repo-lines-v1:sha256:f22d5ea7beac07335726b2d17303332706cb5bf117d63cef7cbd8ed71211b82a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYmY0MmM3MTUxZjY0YjFlODU4MTFjOTljMGQ0NjZlMmQ2Mzk1YTc3ZGIxYTk1YjMzMGQ1ZWY4YzRlYTFhY2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM4MzhhMjQ5ZWNiODAwNDYxNTViOThmM2RiYzgxY2VhYmFhNzAxNzQ2MDA3ZjEyY2ZiNDg3ZWNhMGM5MmVjODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjMmQ5ZTU3MzM1OWRmNTI2ZWQzZjM4N2VlMzU1ZjA2ODczNjk0MWFiMzVmZTFhOTk5ZmE0MDY2MTFlYmZiNjgifQ"
+        },
+        {
+          "resource": "repo://src/sync.rs#L85-L93",
+          "version": "repo-lines-v1:sha256:708531923a02ec569e36645657647b1479fdd98c0fd0195785d8fe70efa20c5f:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmY5N2QxNmM5OWUxNmU0OWQ5NGQ1MDc5MTcyN2JiODEwNjQ5ZjNhMzVhYTJiMDE3MDUyOTU3NTRjNjJiNjk1NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGM2NDc5Y2MyMzA0NDBmZDQxZTgyMjQyMTg2Nzk2OTg1NTlkMjg5M2JkNjdiNDM4MGFmYWI4MTFiMzhhNTVhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTM3YzVkZGNiM2JlYzI1OWVlMmIxM2MyNzA3MjgwMTU1MjRmMzFjY2MyYTljYjVkMGZhODJmZGE0ZjY2NjcyMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTkzYmFkNjVhNjE4ZTE5MTc1YWJjNzI5ZTAzM2MxZGE0ODQ3Mzg1MzU4MWUwZTE1NGYyYTRhMzc2YzA2Y2Q3YiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_f9140e7959924be3b7bcb79ca90c0e60",
+      "statement": "A live deletion without a chat id removes rows from every loaded history except channels and supergroups, whose per-channel message ids collide with private-chat ids.",
+      "evidence": [
+        {
+          "resource": "repo://src/model.rs#L26-L33",
+          "version": "repo-lines-v1:sha256:b9c3ec067e04848dd3304b90ad1b006d310305bbd1899c78fbdbb46243daf7ca:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWZmMTU3ODUzN2E4NWM4YWQ0OTk3MmFhNDY4ZGU2M2FmYTliMjE5NDlmZTQzMzQyYTQ0NWE4YWQ5YzM0ZWMzZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWQ5M2M0OGYwYWRkYmVkNzhjMTIyZjQwOWQyMDdkZGY5NTY4ODA0MjgyMzk1MDQzZmI5MDQwZDFjZjAwM2M0OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzAwYzAyY2MxZTQzOTMxNGI5YTQ2YzAzZGJiNTZhMjkwYmYxNTI3NGNmOGZlOTA2ODQwOGQxMmI0YWM5NTJkZiJ9"
+        },
+        {
+          "resource": "repo://src/sync.rs#L112-L132",
+          "version": "repo-lines-v1:sha256:c6aaae31489d5e37f64886903ea19d3637e372103bc0e2ac251e2b8a2ca41326:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlYTY2YWQxNGJlNGIwM2E3MDEzNTZhMzg2NmU2MmQxNTg0M2ZjZTY5NjhmOWJkZDRlZmQzYTY4NjRjODQ5ZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI4MWI2MTAwNWY1ZDNhZjc3MWI1OWEzMTZjMzUwNWRmZDlhMzc4MmU1YmFiNTJkODY4OTc3M2NiYmUxZGYwYzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRhM2E4MTYwZTIzZDBlYTEyM2M2MzAyNzQwMzk3YjgxY2I0NmJhMTkwMDU2ODQ4M2M4ZGIwOTNlN2UxMTIzMDIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_de815e3f6984473e8becfc24bb3c538d",
+      "statement": "A failed history load sets a status error instead of displaying an empty chat; a successful load of the open chat zeroes unread, clears a manual unread mark, sends MarkRead and queues previews.",
+      "evidence": [
+        {
+          "resource": "repo://src/sync.rs#L168-L209",
+          "version": "repo-lines-v1:sha256:a1ca9b84bfc9cc2729a236f4f0e4bff1c7ff6a2067923cba8475a481fb31e153:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiYmY2OTc3ZTM2NGJlMWU5ZWNjY2QwNDdkMmE3Mjk5ZGY3NTMxODQ0YzJiZmU2NzY5MThlOGZlOThjYTM5OWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ3MDljMGVjNWI5ODM1YmVlODkyY2M4MDZhNjA3ZGUwNmM4Y2VlNGIzYjJjZjkwNzhiMjM5MWFiMWFlODYzNDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhkNWQ1Y2E5NzVkYzRkMjIwMWY4NGJhZGUxMjZmYjU1YWFjN2Y3ODczNmIwNWJlYTFkNDhmY2JlNWU4OWIwZmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f4efb473d6e549ee8a601ce18d8dc535",
+      "statement": "A failed automatic translation disables auto-translate for that chat to stop repeated errors.",
+      "evidence": [
+        {
+          "resource": "repo://src/sync.rs#L441-L460",
+          "version": "repo-lines-v1:sha256:8d9a0d99bdb4aba378ba72837f6532d909a8dc8a759f3a7597121633b6973c83:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmNDJiNmE5YWI0ZWI0NzQzOTc4YWI5YWVjNDZjZjM3NDNiMzg5OGE4MWQyODE2NDA1MjUwMzc2OTRmNzgxMzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNjczYWJkNDU3YTk3ZWVhMTdhNjAwNjJlYjBmYWVhNmJkZjA5NDg2OGNjNmI4ZjhjMGViZGEyZjYxZWQ0MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEzZmJiZTIwNDVmNDU1ODYxNjViMzhmZjcwNTNiMDZiNWUxZDhiMDBhNDcyZDEwZWVmMjlkNzQ3OTY3ZmY3YmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI3NWY2NzcyMzBjMGNlZDA5ZWQ2Mjk5NDZjOWZlNmZmNjE2M2NlZjBlOTdiYmUzYjBlODBlZmQ0OGI4Mjg2NTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b66da6aadadc4e44aae9401b8ecc8734",
+      "statement": "Both the TUI and the GUI apply backend output through the same sync::handle_response / handle_live functions.",
+      "evidence": [
+        {
+          "resource": "repo://src/gui/main.rs#L18-L18",
+          "version": "repo-lines-v1:sha256:6f8f7940e5d71e8eb15f85052a8f5c051ae4518266687fe396f9a9058391a384:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmY4Zjc5NDBlNWQ3MWU4ZWIxNWY4NTA1MmE4ZjVjMDUxYWU0NTE4MjY2Njg3ZmUzOTZmOWE5MDU4MzkxYTM4NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmY4Zjc5NDBlNWQ3MWU4ZWIxNWY4NTA1MmE4ZjVjMDUxYWU0NTE4MjY2Njg3ZmUzOTZmOWE5MDU4MzkxYTM4NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2E2MTQyZDg4YzhkOGY0NGRmMGFiODcyNmNmOTg0NmI4YzMxODFhMmI1NDM1NzkyODVmNjVjNGJmZDAxODU4MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGUzZWZjZjc2YzJiNjcyODVmNmVkNzRiMmQzZWNiNGEyMWRhODBlYzkxYzYxZGIxMzgyNDAzNzY3ZTk5ZGZkYiJ9"
+        },
+        {
+          "resource": "repo://src/main.rs#L175-L187",
+          "version": "repo-lines-v1:sha256:09097ac680171c779a5e22bd408908e5ffcb537228a5a1a023a2218752f454c1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFmZDNmZWFiYWFlZjllNDQyNDYyYzhiYWIyMmIxMTAzMjZhZDUxYjc3Y2E1ZDZlYmNmMDUxMzI2YWJmMDI5MGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUzMGFlMmFkMjg1YWZkYTA1MDk1ODg0NGE2NDViNzQ0MDNlZDUxZTBmNzUzZDRhMDdjODI1NDlkNTkzNzRmODEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5YjNlZDU4MWY5ODVlNTk5Zjk1ZTNlMmU2YTEzZDA1MTVjNzQzMzg1MmEzYjQ2NTFjODI1YTExNGIxOWJmZjEifQ"
+        },
+        {
+          "resource": "repo://src/sync.rs#L1-L3",
+          "version": "repo-lines-v1:sha256:b31ed564139f931b1a374292dc81dcfcd8322a87d1f209a77a10e5d07a98f785:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGJhOTVlZmMxZjhkZjhlNTM1YTIxMjAwN2U4N2JiZTA5NzY5NmNkM2U1ZDE3ZmY1MzM3NzQyODFjZDVjZTdkYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWIwMDVkMWZlNmNhZjE2ZDJhZjc0MDA4MjgxNWExZDIzMmEyOTY2OTEyZjk5OGI5NGFjNTg2NDk5MmJkYzdmZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTk5NDIwZTM0NjFlODY4ZTBkYmNkMWU1NzIxMmYyMmRmNWQzYmM3ZTQzNGFlODkyZjc5NDE3NDkxYjU4MWMwOCJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:5f127e5bd2c94a19ccb0313e08dc1ce4c2e239cfe64d9006930403c5d0d712c1",
+  "claims": [
+    {
+      "id": "claim_792e85258e8b4a0ca7d01bd9afeb848d",
+      "statement": "The TUI starts the backend (including interactive sign-in or WhatsApp pairing) before entering raw mode and the alternate screen.",
+      "evidence": [
+        {
+          "resource": "repo://src/main.rs#L70-L127",
+          "version": "repo-lines-v1:sha256:4d6285d90b18d6c6c118b00c32a8e84e6b4addaab342a038330d8175d8d0bea7:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExZDA2ZTA0OGNkMjcyNzM4ZDgzN2IwYzBlYzZhYWIwYjAzMTQ1N2U0NzVmZDQ5YWJiY2JhZmM1ZjczYzAyMGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI5MzQwYjM1MjYxNTg1ZmI1ZGQ4YmRjODExYjYzZTZmYmIyNTQwYjIyYWJkNWQ2MjI1MDA4Mjg1YmE1NTQwN2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ3MGQzNzZmMGI4YmRiMjdmZDIwYjUwNTgyNDBlNGRhMzhhMTQ1MjJhYTA5OWI2NGIyZmNkYjljNDlhNzY3MzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OWNlOTYzOWJlYWIxNDk1NzQzYmYzMGNiYjExODRkMDRhMDJiNzBlZGQyZjE5Y2RmNGFmMDk5ZDg0NDBkOGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dde97593b1bf420aaa575eaa8021f4d3",
+      "statement": "The TUI main loop redraws, refreshes the preview queue only when image placements change, issues older/quoted/translation requests, places images, then selects between terminal events and backend responses.",
+      "evidence": [
+        {
+          "resource": "repo://src/main.rs#L132-L188",
+          "version": "repo-lines-v1:sha256:4cad10abbe88d904d9ef7b394835c757915eb9fa5c0772ff33f2285dc09c8837:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3ZTM0MDkyNDE0MDc1NDY2NmZjZGJhMmZlMTg2ZDk3MmM2NDQ4ZGZjYjVhNjRmNzlkZDU2M2IxNzgwMmNjMzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ2ODU0NzkzYzI2MzI1Mjg3ODY4NDRlNWU1ZTBmYmFmODNkYmI4ZWU4ZGNiZWU5NjM1MmM5YmNkYzg4YWNiNDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMxZDgxZmJkZTIwMTBlMDE5ZjhiODU3ZTYzMTcwMzA4YjIyMDYyODczNmE3M2I2ZjI1OTU0NWNiMTUxMDU1NWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_de84c8dfe03d449ba4271abab0140589",
+      "statement": "Ctrl combinations never modify compose text; Ctrl-C copies the selected message or quits when nothing is selected.",
+      "evidence": [
+        {
+          "resource": "repo://src/events.rs#L50-L102",
+          "version": "repo-lines-v1:sha256:18e335bda1b4f3ff95757fa569cdba1ab105a350400a19c76fe8b4b73423d02e:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2NDUwYTVmM2MzZDBkNGVmODk4ZWE5NzI4YzAzZTcyOWRhNDFjOTk0YjExYjVjZDM3Y2ZhOTZkZjFiZTViNjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI4MTA0N2U0N2FlMWI4ZmE4N2I5YjYyMzUzZGY1ZGU4ZDY3ODY1ZTRjNzFmYzMzMTc3OGI1NWEyYmE4NWY1OWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ0ZGU3MTViNWM2ODUzY2RhNGZiMTczMzE3ODEzMTMzYmJhYmJjNGIwYzk5ZjFkNmUzNzY0ZTMwZTlhYmZmMWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_58ba4a6f09404dee8a92b6a140c55386",
+      "statement": "Super or Alt-only plus c/v act as copy/paste, while AltGr (Ctrl+Alt) is left for typing.",
+      "evidence": [
+        {
+          "resource": "repo://src/events.rs#L28-L49",
+          "version": "repo-lines-v1:sha256:14de693f1fac4be8961df2b5129e58c442cd7f057a69e3dc0385932efe445c03:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiNTdjMDE2Njg4NTc4YWY3YTI3ODhlYTBjMzM3NWQ3OWI0ODRmNmI1Y2Q0MzBlNDY1OTJkOGNhMzBmYWNiZmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE5MGE1NTcwYTQ5NDMwMDcxZTA4NDE3ODI3ZjVlOGRlZDg5Zjg3NmY1NzMxNjQ0YzExMTlmOWUxZjE0ZjI4MzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVjZGEyMzgwN2U0MThjZGVkM2FkNzUwZGU2YTFmNmMxMmYxZmMwZTM1NTcxMTA3YmNhNmU2MWMxMjkwYzJiNzgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_28f6fbc9efce47408d167ecd18e4f629",
+      "statement": "Esc is layered: it closes search, sticker panel, reactions, pending attachment, edit, reply, armed deletion and selection in that order before closing the chat.",
+      "evidence": [
+        {
+          "resource": "repo://src/events.rs#L130-L172",
+          "version": "repo-lines-v1:sha256:9fd990e8ad083543dc63f21e94f77bed12aa5922c5ae5620bfd89a9d3e107af7:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlMzgzNmVlZGY0MzQ5MTczMzRjMmVkZTk5ZjY3ZWRhMjQxYWIyODU2ZDdhNTU2MWZmY2M1YWM0NjBjNmVhZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjNjQ3OWNjMjMwNDQwZmQ0MWU4MjI0MjE4Njc5Njk4NTU5ZDI4OTNiZDY3YjQzODBhZmFiODExYjM4YTU1YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1MzZhMmVjNWU3MjExY2UxZDk5NDY0ZTM2M2I2ZjM0YTNmYTRhY2Q1ZDZlZjI4NDhkNWMwNWVhMTFkZTFkMWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzMmMxZjY2MDBjNjYyNTgwY2QxOWMzNTQzNWE2ZTdhYjFiNDZmOTFhZTI5ZmYzNTExNjM4OTNiODBkOTIxMDcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dbdbc26afad64c8e98f0ba84e4f72bbe",
+      "statement": "Opening a chat from the list sends Request::Hist and resets edit, reply, deletion, selection, attachments and search state.",
+      "evidence": [
+        {
+          "resource": "repo://src/events.rs#L702-L724",
+          "version": "repo-lines-v1:sha256:e60acf5024e32cdb898f8ffd458ede9e6f7db9946ab04357510fe3a37e5c45f7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxZjhhMTA1MjM2Zjg3MTYwYWJjN2UyZGQxZDlkNTgxMDdiOWRiMmJmOTIzNjBiNTlmMTcwNmM1NGUwYjM1MjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0NzM1ZjFmNjRlYzE5ZWMzM2ZmMjVlZTNiZDI3NGIxMzM0Mjc0MTYxNWJjODUzYmNiMmY4ZTU5MmQ4Y2EwOWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiNjQ3YTU3MzI1Zjk1OWQ4NTE0ZGQ0ZjE1NTY5MDMxYjA1OGI5M2RiMjE1MWJkZjUyNjQwYmY3ZDJhNGNiODYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c12e726326bd4d648a891fcd4d053904",
+      "statement": "Bracketed paste keeps newlines in the compose box (capped to the remaining limit) and converts them to spaces in search.",
+      "evidence": [
+        {
+          "resource": "repo://src/events.rs#L242-L252",
+          "version": "repo-lines-v1:sha256:8269b36ac524d4ed39cbaee7ef7cfc6e2f338a0e946788786a674df1fc18611a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5ZWNkOTNlOGJiZGE0Y2M1NDlhYWVmNDEwMTY4YjEwYzZhYTViN2VhZWMzYjA4M2U0NjcyYjU1NzZkMDdjMTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBjNTY2NDAzMTNkZjc0OTVkODk4ZmM1MTk1NGRhODU1MDdhNTE0ZjBlMmRiN2QwMDA3OWU4ZDkzZTNhYzhlMWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjNTE3NTQxOTBkM2U1MzMzMGU4ODQ2NjU5ZjdkYmY1NGM1OTZhMzAzY2ZhZWY0NTNlYmUyMjljZWRiNzViMzQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f085a051a3d441a9b5ca8695b2c323f4",
+      "statement": "The mouse wheel scrolls the contact list when the pointer is over the left column, otherwise the message selection.",
+      "evidence": [
+        {
+          "resource": "repo://src/events.rs#L258-L285",
+          "version": "repo-lines-v1:sha256:539cc8e46be5e0436c51b25ff73f541155e1d751486e2ff1338a6df6f60f5fb3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiOWJjN2Y2ZGRhODVhYTA3YWFlODg2OGY2MzBlOTlmMDBhYmM1ZmIzNjVhYzk4MjVjYWM1NjViMjYzZjk2ZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5ZjkzMDgzYzE5NzEyMWI5ODI3MDBiYThhZmFiZDE3MjJjZjFkM2U3NDA0NTA5ZTgwZWZhMjcyNDdmNjJmMDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlMTU0M2FhZTg0ZmMxMTdlM2YyY2Y3ZWU3MzI4Y2M3YzdlMGY5ZDkzYzYxYzk3NzgyNmQ5MzE0NmQzOTRjOWIifQ"
+        },
+        {
+          "resource": "repo://src/view.rs#L93-L103",
+          "version": "repo-lines-v1:sha256:5cfdad905fc9871a8fcbe5c161154807da37233103fbc48a2c5f5a2cd8cdef77:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyYWNjMmRlMmQ2MDA2M2JhNTUxZDg1YTA0ZDdmMzY4MzNmNjc5Y2M3NDU4NGRiNDgxZDlkZDJlZTMxZWVkMjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJiYWU1MDY1ZWY3MDU1NjgwYWZkYTViNDcxOGZjYzczMGQyMzU3ODRlNzQyODQ4YTY2NzhmZDkzNDE5ODlkOTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0cd514b7b68e47d8aef59e34798e1fad",
+      "statement": "The TUI palette uses only terminal default and ANSI colours so it follows the terminal theme.",
+      "evidence": [
+        {
+          "resource": "repo://src/styles.rs#L1-L18",
+          "version": "repo-lines-v1:sha256:01265ec1a41c5fa1b67aac145e700015651a83018b0890bdcd212398101b9ef0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUzMzA4ZjY0MTg5N2FiNzgwNjgxYmIyZmRmNGQ3MmRmZTZiODRiMmY1YWYwY2IwYmNiZmM0NzI5MGQ0NWRlZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA0ZDdhYTY1ZjYxYjRmNWY5NTA5YThmODJkMTE0ODM2MDU2OWQxMmI5ZDcwZjA0NmQ2YTUwNmNmZjliYWU4ODAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0a57ccb8a93a427a93b0d0393a34aefa",
+      "statement": "Because release builds use panic=abort, the terminal is restored by both a Drop guard and a panic hook, guarded by an atomic flag so restore runs once.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L54-L59",
+          "version": "repo-lines-v1:sha256:f0b80355cab19f5acd244190e373d51cb32a85c6ff903819cf10992738dcfd8e:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTYxYjk5MGFkOGY0Mjg0YzM1NGNkOGY5YjZiMWIwZDAxNTY1MDJhYmIwOGFiMjlhYjUwODI0OTRkN2EwNzYwYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzUwMTVhOTA3ZDgzNzZiYzNjYzEwM2ZiMmIwZDM4NDVhMTc1MDA4M2E3YmMzMDZkZjQ2ZmQwYjY5YjNmNzhiYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWIwZDgwMWM3MDdjNDBjNDMzN2FkNDRkNDc5ZTBmY2UxODViZjRlMjgxMjdiZDM1ZTQ5MDY5NGU0YmY4OGMwOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://src/term.rs#L9-L50",
+          "version": "repo-lines-v1:sha256:0f8c1ac65a2da8fafb6a5b1a0aea0f66423b223141d09320fbe67e7e34570bb5:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1MGFhOGQyMjdjNjYwOTI0YmQzZWZkYWJjYTA1MDA3MDI4OGY4MDUyMmI4YjY5NTcyZDUxZTY5YmYzMWJjZTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgwMTI1MDJhMDU1YzZiOTU1YzkxNDFhNjViOTliMjAyNjQxOWZlOWFhOGNiZTNjMmYwNDMyNjc3M2RiY2JiNTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f890369e614a409689d021707b32d9a7",
+      "statement": "RONDINE_SCALE (0.5–4) scales image band heights in the TUI.",
+      "evidence": [
+        {
+          "resource": "repo://src/view.rs#L36-L57",
+          "version": "repo-lines-v1:sha256:54db97d00a45a09ecddfe0d25145772d10b919643408f675785f8254ab0611f4:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjhhNzE0ZmE3YjBiYjg0MjEzZmM1NDgyOGJmMTkxMzFlOGM1OWM4MjhlYTBmMmIzNWRiMWMwOWE5ODIzZDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcxNmI2NGE2N2U0ODQxOTY2Zjk4NjlmZWE2YzgzZWNhZDlmMjY1ZjI0OWNjZWYxMjRjOThjNTQwYzkzZWJkMTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlMzI0MTcwYWI4YWZlY2I2YzkzYzRjMjVhZTQyOGI2ODhjZTI0MzQxNzUyNjliOWQxMzA5ZWZjNDlmNzRkNmMifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

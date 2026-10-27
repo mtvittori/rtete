@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:baff369bf05d35f6e032ef2ce44caf9cb5c7ee82a8621d16c09847df2a603a61",
+  "claims": [
+    {
+      "id": "claim_494d74849654496f9d9d9120a6ba6453",
+      "statement": "convert_to_png returns an existing cached PNG immediately, otherwise fetches the original and converts it in spawn_blocking, deleting the partial PNG if conversion fails.",
+      "evidence": [
+        {
+          "resource": "repo://src/loader.rs#L81-L113",
+          "version": "repo-lines-v1:sha256:19f42ba488a39b57a1c11f388940cb93237caaa6450b3e558d88191086a5cff2:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjOGQ2MGMzMmU1MGYwNTQ4ZDY5NDJmNjVlNTU3ZDU1NTBlMWU1NTg2NDQ5NjZmNmU4MzIwYzFlODJmOTE1NTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA1MDYxYmJhNzdmMDQ2Y2ZiZDQ2Y2I2NTFkOGE4ZTkzMDVkYTgxNDI2ZDdkOGNiY2EzMzhlMmJmMWJkNGY4MGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_960f6a70f6694ba398cd6a9d68f99018",
+      "statement": "Input format is detected from magic bytes; APNGs are copied unchanged, static PNGs up to 1000 px are copied, and other images are decoded with the long side capped at 1000 px and re-encoded as PNG.",
+      "evidence": [
+        {
+          "resource": "repo://src/loader.rs#L126-L212",
+          "version": "repo-lines-v1:sha256:0800d41af0e44e71036ea8f94616a3a210d69e0a3daeae544135968af3c1e1b7:eyJzZWxlY3RlZExpbmVDb3VudCI6ODcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5MDc2NjJkOTEyMmJmZGI3N2U4YWRkOWE4ODFmNmQ3MGZiMjc1OGFmMzE4ZjM4YzhhYzEwZmFiZDFlODcwYTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwODZhMzk5NzNjODUzNGU0OWI5NjIyM2EzYTU1ZWFkYzY5ZTQ4Yzc1ZjEzNjVlNTFlOGE4ZDBjN2U4N2MwYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4YTJlODYwNWQxMTZkNTIwYmU1NDMwMDI5NjNhMzVlZDgwZWUyNzdkNDdlMTc5YzQyNWUyOWU0MTFiODk3YTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cc102b0a7b1241489b318bb2fd3ef6e2",
+      "statement": "GIFs up to 700 px are re-encoded as APNG with at most 80 frames using a two-pass streaming encoder that keeps one frame in memory at a time; larger GIFs keep only the first frame.",
+      "evidence": [
+        {
+          "resource": "repo://src/loader.rs#L182-L191",
+          "version": "repo-lines-v1:sha256:be0f6343a6ce202611fe6afb3b8383daa1819d40b383bf971efe9d014527c053:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3NzU1MTFlNTY0MjlmNTRhMTI2MDg5MWZkODgxZjY3OTY2MjVjN2NiZjg1YzZiNjkwMGFjYTkyZmJjOWVjNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4OWY0MjY0NDQ5MzFhYmI4NmZjZWZiZTNjZGZjOWE1YjM3MDY2YjdjNWU1NmE3ZmYwM2ViYWJjNzE0N2E1MDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNlNDQ1ZGNhNWIzYmI1OTQ1MDdkMjJiOWY5NWZhYjBhNTBkMTBmODEwN2I5ZjUyNDFhY2M2Yzk1ZjQ2NzNkMDAifQ"
+        },
+        {
+          "resource": "repo://src/loader.rs#L229-L308",
+          "version": "repo-lines-v1:sha256:f75fadc0d6060cd02e377288191a2b156fc967acee1c84f1c37164a7ae6afd06:eyJzZWxlY3RlZExpbmVDb3VudCI6ODAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFmNTJmZjdmMDQyYTFjNGMwNzYyODA3OWU4YjY3YWQ0MDJjZjg2MWIwM2RiM2NiNWM3ZmVmZDM4ZTE0ODJkZTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1ZjZmNDY2ZTU5Y2ZjMzA3MDNjNDVmNzJhZjY1ZGU1NGFjMzYzZDM1NGNjMWEzMzMwMzUwYWNkNDUyNDM0YzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a8b1225e9eff4f97bcb6b9524ffea607",
+      "statement": "Originals are cached as assets/<key>.<ext> and conversions as assets/<key>.png under the data directory.",
+      "evidence": [
+        {
+          "resource": "repo://src/loader.rs#L34-L42",
+          "version": "repo-lines-v1:sha256:01fa4450f9865ec49427c21ba219e7d3cf62d7dd00182ea0d9ce414e3f094d81:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWM5MTgwNDlkZTBkNGI1YTdlYThiYjYxYjJkY2YxYzZmN2JiMTFmZWEyZTZkNDhmYzQyMzQ5MjFlMjViYWJiMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmU3NTg1OWVkNTcwYTA1ZGY3ZjI0YWE3N2U2ZGYxNDNkMTBhNWQwMjJlODExYjNjYjk1MzU4ZWVjZmU3MTM0ZSJ9"
+        },
+        {
+          "resource": "repo://src/paths.rs#L78-L90",
+          "version": "repo-lines-v1:sha256:0685f0c594eb0a7f7fd005bed35794b8635900c9cd80ef4725b3a18e3b12fe71:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1MzA1MzNiNGEzMjcyZDlkNTNjMmVlOTAyZTQzZGU0ZmVjZGI1YzE3OTM5OWMwM2M0OGFmOWUxYjA0ZjQ0NWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwZDY2NTdiZjBlY2Y4NTVlOTYyMDdiMzA0ZWY4MzdhZGM5MWZkMmYxMmZiZTRiZGI0NDM1MjA0ZWVjZDFkMzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMzZDhiMmYxYThiZTQxNTNjODNjYWU3MjdjNjZmM2YwYTQ5ZDRkNWNkMTU2MmUyZmNmZTc3ZjQ5NGNhOTQxZDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d65e411dc4a34a68a99b7c2676e2702d",
+      "statement": "Cache pruning deletes the oldest regular files in assets/ beyond a byte cap and a file cap of max(200, bytes/64 KiB); the default is 32 MiB and the GUI uses its configured cache size.",
+      "evidence": [
+        {
+          "resource": "repo://src/gui/net.rs#L161-L182",
+          "version": "repo-lines-v1:sha256:ce0cfb688c3192d854044622d1a1d0bcc243085b65df478af7a5a7084852c173:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1NTdlMjhkNTZhODZhZDkyOTQwNzAxMmNmZWE1OTA3NzYwMGNiOGJlNWJmYTdlYmRhNTAzYTUzNDQ4ZWFkZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAxZjRhOGE4MTUwYjQ0MTA2NzRlNTI0YzdjMzIxNDhmZTE5OWJmMTI1ZDVmMjY0MWEyMjY3YmEyMGU2YTVkNTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0NzczM2ViNTYwYzllZjhkMTU2MGY1YzA3YzM1NTUxY2JkM2UwM2MwOTRlM2Q2MDQ2OTEzMzJiMTU3MGQ3OTQifQ"
+        },
+        {
+          "resource": "repo://src/gui/settings.rs#L113-L113",
+          "version": "repo-lines-v1:sha256:a7ad1031cc5f17a3f9633de7f26ce447f1f0f77b971db05ee29f48f2535297b7:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTdhZDEwMzFjYzVmMTdhM2Y5NjMzZGU3ZjI2Y2U0NDdmMWYwZjc3Yjk3MWRiMDVlZTI5ZjQ4ZjI1MzUyOTdiNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTdhZDEwMzFjYzVmMTdhM2Y5NjMzZGU3ZjI2Y2U0NDdmMWYwZjc3Yjk3MWRiMDVlZTI5ZjQ4ZjI1MzUyOTdiNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzUwOWU3ODJhMTQ2MDJlNWRiOTY5ZTk2Y2RhM2M3ZjNiOWE4MmNhZjY2MzYwMTFiODJlNTYwNThkNjg4MTcyNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGYwNDM0ODlhZjEyMGQwZmU4MzRjOWUzOGRjZjRjNDhjMTUyNGY5Yzk5MTFiMGVmYTc1OTMyMDMzMDk4MTk4OSJ9"
+        },
+        {
+          "resource": "repo://src/loader.rs#L44-L79",
+          "version": "repo-lines-v1:sha256:f6bd826af68de1684184ab2d9c49484d17c702c5b1d9a651df40aeeb6b593c6c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5MzMwYjdjZGEzYzIzZmMzNmUyZmY5MWFhMWRlYjcyZjUwZDI5MjBiMzdlYWIyOGU0NGJmOTc4MjQyOTQ3YWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg4ZTg5NGY4NmRkZjI4MTg2ZTdiOTAyN2QzYTYwYTRlMTRkNWE2MzNiOWJkZWI0NmUzMTg0NWY3ZmY1NjQ3NGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmOGYzNzg1NzcwYzE5NDg4ZDk3YWRmYjNmMWRlY2IxMDQ4MzU5NGEyNDQzMTI3M2FjNDNiNjJiMTAyMzgwN2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_28ff6605fa8d4c739f970c12bd836dc4",
+      "statement": "Telegram avatars are downloaded to a .part file and renamed so incomplete downloads never appear cached.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L111-L137",
+          "version": "repo-lines-v1:sha256:73e108a9195cd8e917a2471bd8b5aea91c5fc67bb98481803d1f7226c531efd1:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2MjBlM2Q2NmFkZjc5N2I0MmFhYmJlNjY5ZWJiZDEwNjUzZWZjZDFjNzIxMjM2YmY2OThmZGRlY2Y1M2Y4YzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg1Mzk2OTU0MWIzZjZmMWFlOTFjNzExYjA4Zjc0ZjU4ZTI3ZjIwZjJkZmZhMjUxMjJlMDBlYWZhOGMyMzY4NmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNhZTQwMGQwOWE1YmUzYWY1YmYyMGE3NWEzMDc5Njc2NjIzZmQ4NzQyNTA2YTIyY2QxYTA1MWY4MDViMmQ3OTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f639025397e149a7addb9ba77c7e262b",
+      "statement": "Animated stickers are never auto-converted, and photo and video-thumbnail previews follow MediaPrefs.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L60-L88",
+          "version": "repo-lines-v1:sha256:173e0b960f1e6041dcba5099acd50770657edcba089921e4b7d044197aa5c10a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5NjRjY2Q5ODUyNTQxNjNiZDgwM2RlM2Y5MGJjMDVlMTA2YjVhOTk0MWZkMjQwMmExZWEzMDI0MThmODkxMTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmMTU4NzE2Mjg4NTRjNTI1MjRkMjAxOTQxNmY0ZWU1ODQwOTgyZGZmMDg1Mzk4ZGQ3ZTg3YWJlNmU0OTNiNDIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1de513d2da3b4b29a0438652475cbe2d",
+      "statement": "Telegram MediaRef extensions are derived from the media type and MIME (jpg for photos; gif, png, webp, jpg or bin for documents).",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L68-L81",
+          "version": "repo-lines-v1:sha256:db735a47900121a3948c3b66b4e9a064aea593af5256945f5d588744cca6d401:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgxYTQ0YmU0ZTIwNDA3M2RmODRiNDhkNWZhMTExY2VhMjc0NzUzOGM1YmJmYWVjNDlhYWQ1M2M2NWQ5ZDc0YTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM0NmFiMGQ0YzQ5ZGY3ZTI0N2E3YTc4ZmQ2YmEyZWZhMmUyNzJkZTk1ZTk0MDdmOTRhMWU5ZDg4MzExNTk2NTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0YWVjY2UyNWE1N2NjODc3NzY0ZDRiNTVmOGVkYTQxZTE5NzcyOGY4YjY2Njc3NzZkNGVlNmRlOWMzZGFmNDIifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

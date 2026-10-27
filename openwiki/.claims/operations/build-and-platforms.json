@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:ab8cbeacb123ebe15a4c0244f8fd64d6e5674f3d425d782cd4aac758526e0411",
+  "claims": [
+    {
+      "id": "claim_3d5b22a831ab4f2c94eb593ef370d1bb",
+      "statement": "The gui feature enables iced and rfd and is required by the rondine-gui binary; the whatsapp feature enables whatsapp-rust, its SQLite storage without bundled SQLite, serde and qrcode.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L20-L52",
+          "version": "repo-lines-v1:sha256:57380edfdfeeace85952e44718ec283c98954605bed10061ab6a26e9a28a412c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiZGVmNDFkNWM0M2I1YjczMmYzMjIxYzljODU1MDlkMzY3NTcxODA2ZmJhZTczNjRhMjI0NzNjMGNiMzM0ZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxMGI4MTBiZGY5OTczMmQzNWYxOGU1YmYzYjUyMTkzZWNjOGFhNmNmNmEzYTQxYjc5YzJiMjdlMDQxZmU4MmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5MmU3Njc4NWEwYmMwY2ZmZWUyZGJhM2Q5ZWI3ZGU3MjUwNGNjYTI0OTBiZDk3MzlkNmE4MjY0M2E4OWJiMGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjNGYzOTllZTY3YmYwNmFmMDMxMDg4MzNiNTAzMjlkYzVhOTFjNWRhNWE1NjNlMDM4OGM1YzkzNTBmYmVkYzgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_df0ab7e0e53e4091b9e05540a69aea44",
+      "statement": "arboard is a dependency only on non-Linux targets; Linux uses wl-clipboard command-line tools.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L33-L35",
+          "version": "repo-lines-v1:sha256:86c866c728d0560c593a77f9ef0eaaa288087b1ea2d042e74a30362307c0c547:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzNjNTU3ZWQwZjY4OGUyZjdlZWMwMWRkZDQxNzk1MGI4NTJhZTgzNTczMGVmM2E3YTk3MTQ1ZDA3MjYwODI5YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2RhZWI4ZmM3YzI3ZmE5MDhjNmE3YTlmYjMxNmE0YmZiNTNhM2RlN2NjMWY0NWM0NWNmNWFkZDY2N2Q1ZDM3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2U4ZmI2Y2U0MGFmYjdkYTY2N2RkZDM4NWVlMjRlNDgwZjczZjZjN2VkYzIyZjk5NDQ3YWY1ZWNhZmNhZjI1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmZlODZlYjZkZmFhODY5NzJmMTUyNmE2ZmVkMzM2NGU1ZGI2NzU5YTgyOWFjMjhkY2I4NzUzYWUwNDk5MjBhNiJ9"
+        },
+        {
+          "resource": "repo://src/clipboard.rs#L84-L113",
+          "version": "repo-lines-v1:sha256:6d922bc000db92b99e743597821598e52e4a66d286ce0d9efb1d133aca65f7ad:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2NjczOTgyOTJjMmUzYTYyNDVkNTI3NzY5ZDc4MTA5OTRkNzhlMWYxZTAyN2ZmZmQxNDU2Nzc5ZWM0YzExODQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkNDE3OTFiY2U3ODg3YTA0MTg1YmQwMGZhMDM5MzJiNWNjMDczNDViMjhhOGM1ODcyYTFmMTM2ZDkxMTM3NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwNTlmYTRkMmUzYmZlMzA3MjZmYjU5NGZjNDZhNDExNjk3NjdlOTUyMzQxMTcwYjc1MWI0ZWJjODUyMjZjNmMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8d7b69e29f7f44edb692d87746483deb",
+      "statement": "The release profile uses opt-level 2, LTO, one codegen unit, stripping and panic=abort.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L54-L59",
+          "version": "repo-lines-v1:sha256:f0b80355cab19f5acd244190e373d51cb32a85c6ff903819cf10992738dcfd8e:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTYxYjk5MGFkOGY0Mjg0YzM1NGNkOGY5YjZiMWIwZDAxNTY1MDJhYmIwOGFiMjlhYjUwODI0OTRkN2EwNzYwYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzUwMTVhOTA3ZDgzNzZiYzNjYzEwM2ZiMmIwZDM4NDVhMTc1MDA4M2E3YmMzMDZkZjQ2ZmQwYjY5YjNmNzhiYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWIwZDgwMWM3MDdjNDBjNDMzN2FkNDRkNDc5ZTBmY2UxODViZjRlMjgxMjdiZDM1ZTQ5MDY5NGU0YmY4OGMwOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_6555679be27249b6a84c236471c765fc",
+      "statement": "build.rs only acts on Windows with the whatsapp feature, compiling an empty C file into sqlite3.lib in OUT_DIR and adding it to the link search path.",
+      "evidence": [
+        {
+          "resource": "repo://build.rs#L1-L22",
+          "version": "repo-lines-v1:sha256:c3c08cb0d930085983a8367643055695f34429552a83cf6543f036c3d0c518cd:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ZmQyMzZlNDU0YTY1MDBhYmY1NzM3MzNiZDhmMzdjNDU0MjRhMGI5Nzc3YzIxY2VhZDUwMDk5N2JkYTA2NzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2ad25c8571e645019d69ab20f5c7d6f4",
+      "statement": "The GUI single-instance mechanism is Unix-only; on Windows hand_off always returns false.",
+      "evidence": [
+        {
+          "resource": "repo://src/gui/net.rs#L106-L159",
+          "version": "repo-lines-v1:sha256:cf36184640cb23a393f5368d107de6c850f2ae620921299fffc6fd9de37f5be4:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkMjM0MTE5ODExOWM4NmNlYjgzOWRhOGIyMjEzZWM2YjAxMzEwY2QxYjhlNjhjMDhiNzY0MDYyZjFmZGUzYTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmOTdmNzE2N2EyZjE0MjdhZWMwNDRkZjlkMmJiN2NlYTUzZjBkMjhkNTEyYmEzYWJmN2MyNzgwOTg3MTQ0NmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY5NDNjYWNhYjNhYmRjMzhlMTY2Y2I2NDJhODU0MzQ1NTZjMmFiMzg1ZGIzZGVhYmY1MTFhMDQ1Y2JiNzhlYTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5c7c6e1db3244b6781fee52a7dfe7a0b",
+      "statement": "Runtime RONDINE_* variables include PLAYER, SCALE, CELL_W, CELL_H, FORCE_KITTY, FORCE_SIXEL, B64 and WA_PHONE, each also accepted with the RTETE_ prefix.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/wa/mod.rs#L389-L394",
+          "version": "repo-lines-v1:sha256:0a99b57df8315bcd54cee5946731defff5a1eed4643d54b2e5f4c811ca639d4c:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQyODAwY2I1NzQ3ODllZWUyOGU5OTk1MTE5ZDE0Y2JmNDE3MzdiZjhkNThmYWY1ZGE0MmUyOGVkNDA1OTE4MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTgwNzY5ZThhNjI3Zjg1YmQyYzNkNTUxOTcyMTNiNDFkYTE1ODM1OTQxZDlmNjVmMTk4YTY0M2VlZDVmMmQwNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjc5NjAzMzcyNmIxY2IxZjNkODJkNTkwNzIzYWQ5YmQzODQ0NTliZGYxNTBjNmNlNDBmMzk0YTNmMWQwYzYyNyJ9"
+        },
+        {
+          "resource": "repo://src/gfx.rs#L131-L143",
+          "version": "repo-lines-v1:sha256:93ace6ba5036032d8da9a1ad589f449664491966c03259349a9a2b432d8f584c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0YWEzOTg4Y2E3YmZkYzUwOGIwYTIyZmQ5MzM3ZmE4OTQzYWNlNTE1ZTJiODQ2NGU2YWYzMWY2OWQ0YzBhNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyMDkxMGQxYTdmOWNjYTBiMGQ2MWRkY2E1NzRjZDM5YTE4NzA3NGFiMTcwOTg3Mzk0MWM2MzA1NTM4NjM2YTUifQ"
+        },
+        {
+          "resource": "repo://src/gfx.rs#L71-L84",
+          "version": "repo-lines-v1:sha256:92340ee4129edc78aa2d560e88758760cb14484136dc4c42fc7b039033376bfc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2YzM4NTIzZTA2ZGE0ZmY0MDU2MjExNDA4ZWZmOTE2OWU0NjdhMzI5NWRmYTRiNTgxMTZhZmViMGUzYzA0MDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkyOTc4Y2I4MTY4N2JlNWE0NzA5NjFlM2JmMWRmMDVmYmU1NzI0MTkyMmI0ZjQ1ZDljMjU4YjJmMzRhNmFhOWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ2ZDUwYjE1ZTVlYmI0Y2M5ZWVjZTNmYzg3ODJiYmU4NGQzYzk3ZTBlNTIxMzZhYzFjMGRjYzAzY2MzNjZlNGYifQ"
+        },
+        {
+          "resource": "repo://src/kitty.rs#L80-L86",
+          "version": "repo-lines-v1:sha256:4e4b3112d986f253e8539a99c7cd0ab39118833b2c3361bc7dd2c533d1b0ddd0:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWM0ZjY1NWFiNjZlMmM2YWIwNjdiYzEzMzMwNDUxYTU5MDAxM2E2NjRmMDg5N2I1MWNiZjhiYjliNDBhMTFhMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjg0NWExMzg0M2UxOGJkZmNkNzczYzZkMDcyZTk0Nzg5MWY0NWE5ZjViODAzNmU1YjFkOGFmMzhlMzcyNjUwYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2FjMzU4M2Y1ZjQ1MjQwNDgzY2E3YTdmNjQ3NmYzYWY3N2QyNjY0MDY1ZmExZTY2NGI0NWRiNTNhOWJkYmI2NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGY5NTIyYWFiOWM4ODI1MGEzMDBlYzg0NDA5MGE5ZjQ3ZTRlNzM3NTM3YzgyNTkyZjUzNjAxMzBmMWEyNjc2ZSJ9"
+        },
+        {
+          "resource": "repo://src/lib.rs#L23-L29",
+          "version": "repo-lines-v1:sha256:1603a86a5ac616e1169a5cea6134caf738f45a740845c4e9869af3f717655b0b:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzY0ZWRlYTg0NDRkOGJiODVhZGU2OTYzMTBkMDE4YTg3YjRlZmE1NmJiNDdiYmViZWQ0Yzg1ODU1NWJhY2QyMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTZmYjQyNzM2Y2MxNDg4Y2E1NTEzYTAzNTJlMTBlNTU0MDI3ZTUzNTViYzEwMzUxYWYyOTg4ODVkZjFlZTBlNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjIsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDE5NzU1Mzc4MjAzODNjMjJjZDFlNDBkOWM2OTNjMTYwYjEzMzc5Zjk2NTRiOTA5YTA3YTNiNGFiZWZlZTUyYSJ9"
+        },
+        {
+          "resource": "repo://src/view.rs#L36-L46",
+          "version": "repo-lines-v1:sha256:664386745ca51cf502e17e167b3799be3af2ac25f47fbba3550e51971322feb8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjhhNzE0ZmE3YjBiYjg0MjEzZmM1NDgyOGJmMTkxMzFlOGM1OWM4MjhlYTBmMmIzNWRiMWMwOWE5ODIzZDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcxNmI2NGE2N2U0ODQxOTY2Zjk4NjlmZWE2YzgzZWNhZDlmMjY1ZjI0OWNjZWYxMjRjOThjNTQwYzkzZWJkMTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxMzcyOGU1NjMyYjQwYjI2MDMwNWFlMGJhOGMwZjQ1NDFmYTY1YjJjNjAxZDc4MTM4NGE0ZjM2ZjE4YTk1NmEifQ"
+        },
+        {
+          "resource": "repo://src/worker.rs#L120-L121",
+          "version": "repo-lines-v1:sha256:3f1b8016207d18bdb2fe9b52ae200ac39dea0c208186bdb7bbe2909e441a8e3d:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDA5MmUzYmU4MmMxOGZiNjBiMThiMzRhZDY0OTlkMDE2ODg1NzMxNTllMWRiMzMzOWE2NGRmOGY1MGU0MWQwZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGZjM2VjNjVlZDBjMTg1ZjgwZjViNWJlYWRmOWY3MDg4YzkwOTExZGNjMjY2NzU5Zjk1MjE3NDZhNmFiMTVmNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODc3YTJjY2NjNWMwOTMxZTRiZmFkMWVhYjU3Y2EzM2I5YzQyMGVhOWI4Njk0MDdiNzVkYjgyOTAyY2ZkYjgyYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzFjZGQ4YzU4YTc4NGY1M2YyZWEyZmQzZDUxYzI3N2NkMWU3MDFmM2Y2MjBjZjc2ZGRhNDVlYzdkNzhiYzQ5NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_01523d817cc74dc5b215f2ca5a7e83dc",
+      "statement": "The only GitHub workflow is a daily OpenWiki update that opens a pull request on branch openwiki/update even after partial failure; no workflow builds or tests the Rust code.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/openwiki-update.yml#L1-L88",
+          "version": "repo-lines-v1:sha256:c31005f16763845e6dcd826d671cf11890a4c8e12498fd2b59428be80e3b585a:eyJzZWxlY3RlZExpbmVDb3VudCI6ODgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2MDI3ODdhZjZkY2MwODM0ZGUxMjFjYmIxY2I5NWY5NDU5YjcyMWVhYjAzNDlmMTA1MDFiOTk2YzFjNzdmZmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2NzE4ZjA2N2I1ZTVjMWYwOTkxYTZlNzQ3MjZmZTJhMjNkMjY0MzQ1ZTA4ZTRlYWQwNGZhZjczYzI3ZWQ0NDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}
