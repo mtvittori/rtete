@@ -19,6 +19,10 @@ pub type MsgId = i32;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ChatId(pub i64);
 
+/// Gli stati di WhatsApp: la chat `status@broadcast`, che la GUI mostra a
+/// parte e non nella lista (l'id è quello del backend per quel JID).
+pub const WA_STATUS: ChatId = ChatId(8_512_980_454_828);
+
 impl ChatId {
     /// Gli id dei messaggi valgono solo dentro questa chat (canali e
     /// supergruppi Telegram): una cancellazione senza chat non la tocca.

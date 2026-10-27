@@ -158,7 +158,7 @@ pub(crate) fn media_ref(jid: &str, m: &StoredMsg) -> Option<MediaRef> {
 
 /// Una riga dell'archivio come la vede l'app.
 pub fn row_of(store: &mut Store, jid: &str, m: &StoredMsg) -> HistoryRow {
-    let group = store.chat(jid).is_some_and(|c| c.group);
+    let group = jid == self::store::STATUS_JID || store.chat(jid).is_some_and(|c| c.group);
     let from = if m.me {
         String::new()
     } else if group {

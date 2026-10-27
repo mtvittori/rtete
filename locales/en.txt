@@ -1683,3 +1683,9 @@ Show "typing" while I type
 
 Su Telegram e WhatsApp. Su WhatsApp, senza online non arrivano nemmeno l'online e «sta scrivendo» degli altri (è il server a deciderlo).
 On Telegram and WhatsApp. On WhatsApp, without online you also stop receiving other people's online and typing status (the server decides that).
+
+Stati
+Status
+
+gli stati dei contatti, per 24 ore
+your contacts' status updates, for 24 hours

@@ -1813,7 +1813,8 @@ impl Gui {
     /// Notifica di un messaggio nuovo: non per le chat silenziate né per
     /// quella aperta mentre la finestra è a fuoco.
     fn notify(&self, peer: ChatId, from: String) {
-        if !self.settings.notify || (self.focused && !self.background && self.app.open == Some(peer)) {
+        // gli stati non suonano, come nell'app
+        if !self.settings.notify || peer == model::WA_STATUS || (self.focused && !self.background && self.app.open == Some(peer)) {
             return;
         }
         let Some(d) = self.app.contacts.iter().find(|d| model::same_peer(d.peer_id, peer)) else {

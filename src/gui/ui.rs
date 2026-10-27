@@ -120,7 +120,7 @@ fn env_rail(g: &Gui) -> Element<'_, Msg> {
     let unread = |app: &App| {
         app.contacts
             .iter()
-            .filter(|d| (d.unread > 0 || d.unread_mark) && !d.muted && !d.archived)
+            .filter(|d| (d.unread > 0 || d.unread_mark) && !d.muted && !d.archived && d.peer_id != model::WA_STATUS)
             .count()
     };
     let other = g.parked.as_ref().map_or(0, |p| unread(&p.app));
@@ -495,7 +495,25 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         entries.extend(k.app.contacts.iter().map(|d| (g.other_env(), &k.app, d)));
         entries.sort_by_key(|(_, _, d)| (!d.pinned, std::cmp::Reverse(d.last.as_ref().map_or(0, |l| l.date))));
     }
+    // gli stati di WhatsApp non sono una chat: hanno la loro voce in cima
+    let status = entries.iter().position(|e| e.2.peer_id == model::WA_STATUS).map(|i| entries.remove(i));
     let mut list = Column::new();
+    if let (false, false, true, Some((env, _, d))) = (compact, g.show_archived, needle.is_empty(), status) {
+        let mut line = row![text("◎").size(20).color(p.accent).width(46).align_x(Center), text(tr("Stati")).width(Fill)]
+            .spacing(10)
+            .align_y(Center);
+        if d.unread > 0 {
+            line = line.push(text(d.unread.min(999).to_string()).size(12).color(p.accent));
+        }
+        let open_it = Msg::Open(d.peer_id);
+        list = list.push(
+            button(line)
+                .on_press(if env == g.env { open_it } else { Msg::InEnv(env, Box::new(open_it)) })
+                .padding([9, 10])
+                .width(Fill)
+                .style(style::chat_item(env == g.env && open == Some(model::WA_STATUS))),
+        );
+    }
     if !compact && !g.show_archived && needle.is_empty() {
         let archived: Vec<&model::DialogInfo> = entries.iter().map(|e| e.2).filter(|d| d.archived).collect();
         // su WhatsApp la voce c'è sempre, come nell'app
@@ -865,7 +883,11 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
     if panel_h > 0.5 {
         body = body.push(container(stickers(app, g.env == Env::WhatsApp)).height(panel_h).clip(true));
     }
-    body = body.push(banners(app)).push(composer(app, true));
+    body = body.push(banners(app));
+    // gli stati si guardano soltanto
+    if chat.peer_id != model::WA_STATUS {
+        body = body.push(composer(app, true));
+    }
     if !app.status.is_empty() {
         body = body.push(
             container(text(app.status.as_str()).size(12).color(style::p().muted)).padding([4, 16]),
@@ -887,6 +909,7 @@ fn subtitle<'a>(g: &Gui, chat: &model::DialogInfo) -> Element<'a, Msg> {
     let now = jiff::Timestamp::now().as_second();
     let members = g.app.peer_info.get(&chat.peer_id).and_then(|i| i.members);
     let line = match chat.seen {
+        _ if chat.peer_id == model::WA_STATUS => tr("gli stati dei contatti, per 24 ore").to_string(),
         _ if chat.broadcast => match members {
             Some(n) => trf!("canale · {} iscritti", n),
             None => tr("canale").to_string(),
