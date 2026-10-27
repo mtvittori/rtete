@@ -148,7 +148,7 @@ fn media_ext(m: &StoredMsg) -> &'static str {
     }
 }
 
-fn media_ref(jid: &str, m: &StoredMsg) -> Option<MediaRef> {
+pub(crate) fn media_ref(jid: &str, m: &StoredMsg) -> Option<MediaRef> {
     let bytes = base64::engine::general_purpose::STANDARD.decode(m.media.as_deref()?).ok()?;
     let msg = wa::Message::decode_from_slice(&bytes).ok()?;
     let key = format!("{:x}", md5::compute(format!("wa:{jid}:{}", m.wa)));
@@ -390,14 +390,16 @@ pub async fn start(
     req_rx: mpsc::UnboundedReceiver<Request>,
     res_tx: mpsc::UnboundedSender<Response>,
 ) -> Result<(Vec<DialogInfo>, String), Box<dyn std::error::Error>> {
-    start_with(req_rx, res_tx, terminal_sink()).await
+    start_with(req_rx, res_tx, terminal_sink(), crate::env_var("WA_PHONE")).await
 }
 
-/// Come `start`, con QR e avvisi dell'abbinamento mandati a `pair`.
+/// Come `start`, con QR e avvisi dell'abbinamento mandati a `pair`;
+/// con `phone` l'abbinamento usa il codice di 8 caratteri invece del QR.
 pub async fn start_with(
     req_rx: mpsc::UnboundedReceiver<Request>,
     res_tx: mpsc::UnboundedSender<Response>,
     pair: PairSink,
+    phone: Option<String>,
 ) -> Result<(Vec<DialogInfo>, String), Box<dyn std::error::Error>> {
     let dir = crate::paths::data_dir().join("whatsapp");
     crate::paths::ensure_private_dir(&dir)?;
@@ -421,8 +423,8 @@ pub async fn start_with(
                 async move { shared.handle(&event, &client) }
             }
         });
-    // abbinamento col codice invece del QR: il numero va nell'ambiente
-    if let Some(phone) = crate::env_var("WA_PHONE") {
+    // abbinamento col codice invece del QR
+    if let Some(phone) = phone.filter(|p| p.chars().any(|c| c.is_ascii_digit())) {
         let phone: String = phone.chars().filter(|c| c.is_ascii_digit()).collect();
         builder = builder
             .with_pair_code(whatsapp_rust::wacore::pair_code::PairCodeOptions {

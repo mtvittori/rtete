@@ -117,8 +117,10 @@ pub enum Msg {
     Lang(Option<i18n::Lang>),
     /// passa a Telegram o a WhatsApp
     SwitchEnv(Env),
-    /// collega WhatsApp (mostra il QR)
-    LinkWhatsApp,
+    /// collega WhatsApp: col QR (false) o col numero di telefono (true)
+    LinkWhatsApp(bool),
+    /// il numero per l'abbinamento col codice
+    WaPhone(String),
     /// riprova a collegare l'ambiente in vista
     Retry,
     /// i campi dell'accesso a Telegram e l'invio
@@ -261,6 +263,8 @@ pub struct Gui {
     /// i campi dell'accesso (API ID e hash, oppure il dato chiesto)
     pub login_a: String,
     pub login_b: String,
+    /// il numero per collegare WhatsApp col codice invece del QR
+    pub wa_phone: String,
     pub filter: String,
     pub tz: jiff::tz::TimeZone,
     /// la vista è in fondo alla cronologia: i nuovi messaggi la seguono
@@ -329,7 +333,7 @@ fn main() -> iced::Result {
     // WhatsApp già collegato: si connette insieme a Telegram
     #[cfg(feature = "whatsapp")]
     if rondine::backend::wa::has_session() {
-        net::start_whatsapp();
+        net::start_whatsapp(None);
     }
     iced::application(boot, Gui::update, ui::view)
         .title("Rondine")
@@ -382,6 +386,7 @@ fn boot() -> Gui {
         wa_since: None,
         login_a: String::new(),
         login_b: String::new(),
+        wa_phone: String::new(),
         settings: settings.clone(),
         show_settings: false,
         tg_handler: String::new(),
@@ -595,13 +600,20 @@ impl Gui {
                 }
                 Task::none()
             }
-            Msg::LinkWhatsApp => {
+            Msg::LinkWhatsApp(by_phone) => {
                 #[cfg(feature = "whatsapp")]
                 {
+                    let phone = by_phone.then(|| self.wa_phone.clone());
                     self.phase = Phase::Connecting(0, tr("mi collego a WhatsApp…").into());
                     self.wa_since = Some(std::time::Instant::now());
-                    net::start_whatsapp();
+                    net::start_whatsapp(phone);
                 }
+                #[cfg(not(feature = "whatsapp"))]
+                let _ = by_phone;
+                Task::none()
+            }
+            Msg::WaPhone(s) => {
+                self.wa_phone = s.chars().filter(|c| c.is_ascii_digit() || *c == '+' || *c == ' ').take(20).collect();
                 Task::none()
             }
             Msg::Retry => {
@@ -609,7 +621,7 @@ impl Gui {
                 match self.env {
                     Env::Telegram => net::start_telegram(),
                     #[cfg(feature = "whatsapp")]
-                    Env::WhatsApp => net::start_whatsapp(),
+                    Env::WhatsApp => net::start_whatsapp(None),
                     #[cfg(not(feature = "whatsapp"))]
                     Env::WhatsApp => {}
                 }
@@ -805,9 +817,11 @@ impl Gui {
                         let _ = req.send(Request::Sets);
                     }
                 }
-                // come Telegram: la prima volta si apre sui preferiti
+                // come Telegram: la prima volta si apre sui preferiti;
+                // WhatsApp non ha set né preferiti, solo i recenti
                 if self.app.show_sticker && self.app.open_set.is_none() {
-                    return self.handle(Msg::OpenSet(model::FAVED_SET));
+                    let first = if self.env == Env::WhatsApp { model::RECENT_SET } else { model::FAVED_SET };
+                    return self.handle(Msg::OpenSet(first));
                 }
                 Task::none()
             }
@@ -1571,6 +1585,14 @@ impl Gui {
                 }
                 let first_page = matches!(&r, rondine::send::Response::Hist { .. });
                 let profile = matches!(&r, rondine::send::Response::Profile(Ok(_)));
+                // WhatsApp scollegato da qui: si torna alla pagina per collegarlo
+                if self.env == Env::WhatsApp && matches!(&r, rondine::send::Response::SessionEnded(Ok(_))) {
+                    self.app = new_app(&self.settings);
+                    self.link = None;
+                    self.phase = Phase::Linking;
+                    self.show_settings = false;
+                    return Task::none();
+                }
                 handle_response(&mut self.app, r, &req);
                 if profile {
                     if let Some(p) = &self.app.profile {

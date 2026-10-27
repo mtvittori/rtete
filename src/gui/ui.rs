@@ -54,7 +54,7 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
     let content: Element<'_, Msg> = match &g.phase {
         Phase::Connecting(step, s) => loading(g, *step, s),
         Phase::Failed(e) => failed(g, e),
-        Phase::Linking => wa_linking(),
+        Phase::Linking => wa_linking(g),
         Phase::Login(l) => tg_login(g, l),
         Phase::Pairing { qr, code } => wa_pairing(qr.as_ref(), code.as_deref()),
         Phase::Ready => iced::widget::responsive(move |size| {
@@ -226,9 +226,9 @@ fn tg_login<'a>(g: &'a Gui, l: &'a crate::net::Login) -> Element<'a, Msg> {
 }
 
 /// WhatsApp da collegare: come si fa e cosa sapere, poi il QR.
-fn wa_linking<'a>() -> Element<'a, Msg> {
+fn wa_linking(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
-    let step = |n: &'static str, t: &'static str| -> Element<'a, Msg> {
+    let step = |n: &'static str, t: &'static str| -> Element<'_, Msg> {
         row![
             container(text(n).size(13).font(BOLD).color(iced::Color::WHITE)).center(24).style(style::avatar(WHATSAPP_GREEN)),
             text(t).size(14),
@@ -260,7 +260,24 @@ fn wa_linking<'a>() -> Element<'a, Msg> {
         )
         .max_width(480),
         space().height(4),
-        button(text(tr("Mostra il QR"))).on_press(Msg::LinkWhatsApp).padding([10, 22]).style(style::send_round),
+        button(text(tr("Mostra il QR"))).on_press(Msg::LinkWhatsApp(false)).padding([10, 22]).style(style::send_round),
+        space().height(8),
+        // oppure il codice di 8 caratteri, se il QR non si può inquadrare
+        text(tr("Oppure collega col numero di telefono:")).size(13).color(p.muted),
+        row![
+            text_input("+39 333 1234567", &g.wa_phone)
+                .on_input(Msg::WaPhone)
+                .on_submit(Msg::LinkWhatsApp(true))
+                .style(style::input)
+                .padding(9)
+                .width(220),
+            button(text(tr("Ricevi il codice")))
+                .on_press_maybe((g.wa_phone.chars().filter(|c| c.is_ascii_digit()).count() >= 8).then_some(Msg::LinkWhatsApp(true)))
+                .padding([9, 14])
+                .style(style::flat(true)),
+        ]
+        .spacing(8)
+        .align_y(Center),
     ])
 }
 
@@ -272,12 +289,20 @@ fn wa_pairing<'a>(qr: Option<&'a iced::widget::qr_code::Data>, code: Option<&'a 
             .padding(14)
             .style(style::fill(iced::Color::WHITE))
             .into(),
-        (None, Some(c)) => text(c).size(36).font(BOLD).into(),
+        (None, Some(c)) => text(c).size(40).font(BOLD).into(),
         (None, None) => text(tr("aspetto il QR…")).color(p.muted).into(),
     };
+    let (title, how) = if code.is_some() && qr.is_none() {
+        (
+            tr("Scrivi il codice sul telefono"),
+            tr("WhatsApp → Dispositivi collegati → Collega un dispositivo → Collega con il numero di telefono"),
+        )
+    } else {
+        (tr("Inquadra il QR col telefono"), tr("WhatsApp → Impostazioni → Dispositivi collegati → Collega un dispositivo"))
+    };
     centered(column![
-        text(tr("Inquadra il QR col telefono")).size(22).font(BOLD),
-        text(tr("WhatsApp → Impostazioni → Dispositivi collegati → Collega un dispositivo")).size(13).color(p.muted),
+        text(title).size(22).font(BOLD),
+        text(how).size(13).color(p.muted),
         space().height(6),
         what,
         text(tr("Il QR si rinnova da solo ogni poco: se scade, aspetta il nuovo.")).size(12).color(p.muted),
@@ -800,9 +825,9 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
     // il pannello sale e scende: resta nel layout finché l'animazione corre
     let panel_h = g.panel.interpolate(0.0, 300.0, g.now);
     if panel_h > 0.5 {
-        body = body.push(container(stickers(app)).height(panel_h).clip(true));
+        body = body.push(container(stickers(app, g.env == Env::WhatsApp)).height(panel_h).clip(true));
     }
-    body = body.push(banners(app)).push(composer(app, g.env == Env::Telegram));
+    body = body.push(banners(app)).push(composer(app, true));
     if !app.status.is_empty() {
         body = body.push(
             container(text(app.status.as_str()).size(12).color(style::p().muted)).padding([4, 16]),
@@ -1282,10 +1307,7 @@ fn actions<'a>(g: &Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     }
     let starred = g.app.open.is_some_and(|peer| g.app.is_starred(peer, r.id));
     bar = bar.push(act(if starred { tr("☆ Non importante") } else { tr("⭐ Importante") }, Msg::Star(r.id)));
-    // WhatsApp: l'inoltro fra chat non c'è ancora
-    if g.env == Env::Telegram {
-        bar = bar.push(act(tr("↪ Inoltra"), Msg::Forward(r.id)));
-    }
+    bar = bar.push(act(tr("↪ Inoltra"), Msg::Forward(r.id)));
     bar = bar.push(act(tr("⧉ Copia"), Msg::Copy(r.id)));
     if r.outgoing {
         bar = bar.push(
@@ -1448,7 +1470,8 @@ fn composer(app: &App, stickers: bool) -> Element<'_, Msg> {
     .into()
 }
 
-fn stickers(app: &App) -> Element<'_, Msg> {
+/// `wa`: WhatsApp, che non ha set né preferiti: solo gli sticker recenti.
+fn stickers(app: &App, wa: bool) -> Element<'_, Msg> {
     // schede in alto come Telegram: preferiti, recenti, tutti i set
     let here = app.open_set.filter(|_| app.set_level);
     let tab = |label: &'static str, on: bool, m: Msg| {
@@ -1463,14 +1486,16 @@ fn stickers(app: &App) -> Element<'_, Msg> {
             .map(|s| s.title.as_str())
             .unwrap_or(""),
     };
-    let head = row![
-        tab(tr("⭐ Preferiti"), here == Some(model::FAVED_SET), Msg::OpenSet(model::FAVED_SET)),
-        tab(tr("🕘 Recenti"), here == Some(model::RECENT_SET), Msg::OpenSet(model::RECENT_SET)),
-        tab(tr("☰ Set"), here.is_none(), Msg::SetsBack),
-        text(title).font(BOLD).wrapping(text::Wrapping::None),
-    ]
-    .spacing(6)
-    .align_y(Center);
+    let mut head = Row::new().spacing(6).align_y(Center);
+    if !wa {
+        head = head.push(tab(tr("⭐ Preferiti"), here == Some(model::FAVED_SET), Msg::OpenSet(model::FAVED_SET)));
+    }
+    head = head.push(tab(tr("🕘 Recenti"), here == Some(model::RECENT_SET), Msg::OpenSet(model::RECENT_SET)));
+    if !wa {
+        head = head
+            .push(tab(tr("☰ Set"), here.is_none(), Msg::SetsBack))
+            .push(text(title).font(BOLD).wrapping(text::Wrapping::None));
+    }
     let inner: Element<'_, Msg> = match here {
         None => match &app.sets {
             None => text(tr("carico i set…")).color(style::p().muted).into(),
@@ -1664,21 +1689,19 @@ fn settings_main(g: &Gui) -> Element<'_, Msg> {
         .style(style::flat(false))
         .into()
     };
-    // account e dispositivi sono quelli di Telegram: con WhatsApp in vista
-    // si gestiscono dal telefono
+    // account e dispositivi dell'ambiente in vista; i link t.me solo Telegram
     let telegram = g.env == Env::Telegram;
-    let mut list = Column::new().spacing(2);
-    if telegram {
-        list = list.push(entry("👤", tr("Il mio account"), tr("nome, username, bio e foto"), SettingsPage::Account));
-    }
-    list = list
+    let account_sub = if telegram { tr("nome, username, bio e foto") } else { tr("nome, info e foto") };
+    let devices_sub = if telegram { tr("sessioni attive dell'account") } else { tr("questo PC collegato a WhatsApp") };
+    let list = Column::new()
+        .spacing(2)
+        .push(entry("👤", tr("Il mio account"), account_sub, SettingsPage::Account))
         .push(entry("🎨", tr("Aspetto"), tr("lingua, tema, dimensione, accelerazione GPU"), SettingsPage::Appearance))
         .push(entry("🔔", tr("Notifiche"), tr("avvisi dei messaggi nuovi"), SettingsPage::Notifications))
         .push(entry("🖼", tr("Immagini e media"), tr("download automatico, miniature, misura delle foto"), SettingsPage::Media))
-        .push(entry("💾", tr("Dati e archiviazione"), tr("cache e spazio su disco"), SettingsPage::Storage));
-    if telegram {
-        list = list.push(entry("💻", tr("Dispositivi"), tr("sessioni attive dell'account"), SettingsPage::Devices));
-    }
+        .push(entry("💾", tr("Dati e archiviazione"), tr("cache e spazio su disco"), SettingsPage::Storage))
+        .push(entry("💻", tr("Dispositivi"), devices_sub, SettingsPage::Devices));
+    let mut list = list;
     list = list.push(entry("🌐", tr("Traduzione"), tr("traduzione dei messaggi con DeepL, Groq e altri"), SettingsPage::Translation));
     if telegram {
         list = list.push(entry("🔗", "Link", tr("t.me e tg:// dentro Rondine"), SettingsPage::Links));
@@ -1724,7 +1747,10 @@ fn settings_account(g: &Gui) -> Element<'_, Msg> {
     .spacing(8)
     .align_x(Center)
     .width(Fill);
-    let mut bio = column![form_field(tr("Bio"), tr("Qualche parola su di te"), &pf.about, Msg::PfAbout)].spacing(2);
+    // WhatsApp ha un nome solo, niente username, e al posto della bio l'«info»
+    let wa = g.env == Env::WhatsApp;
+    let about_label = if wa { tr("Info") } else { tr("Bio") };
+    let mut bio = column![form_field(about_label, tr("Qualche parola su di te"), &pf.about, Msg::PfAbout)].spacing(2);
     bio = bio.push(
         text(trf!("{}/70 · la vedono tutti nel tuo profilo", pf.about.chars().count()))
             .size(11)
@@ -1741,13 +1767,14 @@ fn settings_account(g: &Gui) -> Element<'_, Msg> {
         .color(p.muted),
     );
     let phone = if saved.phone.is_empty() { tr("nascosto").to_string() } else { saved.phone.clone() };
+    let mut names = row![container(form_field(tr("Nome"), tr("Nome (obbligatorio)"), &pf.first, Msg::PfFirst)).width(Fill)].spacing(12);
+    if !wa {
+        names = names.push(container(form_field(tr("Cognome"), tr("Cognome"), &pf.last, Msg::PfLast)).width(Fill));
+    }
+    let user: Element<'_, Msg> = if wa { space().height(0).into() } else { user.into() };
     column![
         photo,
-        row![
-            container(form_field(tr("Nome"), tr("Nome (obbligatorio)"), &pf.first, Msg::PfFirst)).width(Fill),
-            container(form_field(tr("Cognome"), tr("Cognome"), &pf.last, Msg::PfLast)).width(Fill),
-        ]
-        .spacing(12),
+        names,
         user,
         bio,
         info_field(text(phone).into(), tr("telefono · si cambia dall'app ufficiale")),
@@ -1993,7 +2020,17 @@ fn settings_devices(g: &Gui) -> Element<'_, Msg> {
             .style(style::pill(p.sidebar)),
         );
     }
-    if list.iter().filter(|s| !s.current).count() > 0 {
+    if g.env == Env::WhatsApp {
+        // gli altri dispositivi li mostra solo il telefono; da qui si scollega questo PC
+        col = col
+            .push(text(tr("Gli altri dispositivi collegati si vedono e si scollegano dal telefono.")).size(12).color(p.muted))
+            .push(
+                button(text(tr("Scollega questo PC")))
+                    .on_press(Msg::AskEndSession(Some(0)))
+                    .padding([8, 16])
+                    .style(style::danger),
+            );
+    } else if list.iter().filter(|s| !s.current).count() > 0 {
         col = col.push(
             button(text(tr("Chiudi tutte le altre sessioni")))
                 .on_press(Msg::AskEndSession(None))
@@ -2473,6 +2510,12 @@ fn confirm_dialog(g: &Gui, what: Confirm) -> Element<'_, Msg> {
     let broadcast = chat.is_some_and(|c| c.broadcast);
     let me = chat.and_then(|c| g.app.peer_info.get(&c.peer_id)).is_some_and(|i| i.me);
     let (title, body, yes, harmful) = match what {
+        Confirm::EndSession(_) if g.env == Env::WhatsApp => (
+            tr("Scollegare WhatsApp da questo PC?").to_string(),
+            tr("Le chat salvate qui vengono cancellate; per usarlo di nuovo servirà un nuovo QR."),
+            tr("Scollega"),
+            true,
+        ),
         Confirm::EndSession(Some(_)) => (
             tr("Chiudere questa sessione?").to_string(),
             tr("Il dispositivo viene disconnesso e per usarlo dovrà accedere di nuovo."),

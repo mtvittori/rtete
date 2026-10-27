@@ -8,7 +8,7 @@ use whatsapp_rust::prelude::*;
 use whatsapp_rust::send::RevokeType;
 
 use super::store::{chat_id_of, StoredMsg};
-use super::{download_to, fetch_raw, now_secs, row_of, stored_from, upload_message, Wa};
+use super::{download_to, fetch_raw, media_ref, now_secs, row_of, stored_from, upload_message, Wa, WaMedia};
 use crate::app::{MAX_HISTORY, OLDER_PAGE, SHARED_PAGE};
 use crate::i18n::tr;
 use crate::model::{ChatAction, ChatRef, HistoryRow, PeerInfo, SearchHit, SharedItem, SharedTab};
@@ -83,6 +83,77 @@ impl Wa {
         Ok(())
     }
 
+    /// Gli sticker recenti (senza doppioni) da rimandare.
+    fn recent_stickers(&self) -> Vec<crate::model::MediaRef> {
+        let mut seen = std::collections::HashSet::new();
+        let list = self.store().recent_stickers(48);
+        list.iter()
+            .filter_map(|(jid, m)| media_ref(jid, m))
+            .filter(|r| {
+                let sha = r.get::<WaMedia>().and_then(|w| {
+                    w.msg.get_base_message().sticker_message.as_option().and_then(|s| s.file_sha256.clone())
+                });
+                sha.is_none_or(|s| seen.insert(s))
+            })
+            .take(48)
+            .collect()
+    }
+
+    /// Inoltra un messaggio dell'archivio a un'altra chat (segnato come inoltrato).
+    async fn forward(&self, from: ChatRef, id: i32, to: ChatRef) -> Result<(), String> {
+        let from_jid = self.jid(from)?;
+        let to_jid = self.jid(to)?;
+        let m = self.store().by_id(&from_jid, id).ok_or_else(|| tr("messaggio sconosciuto").to_string())?;
+        let ctx = wa::ContextInfo { is_forwarded: Some(true), forwarding_score: Some(1), ..Default::default() };
+        let media = media_ref(&from_jid, &m).and_then(|r| r.get::<WaMedia>().map(|w| w.msg.get_base_message().clone()));
+        let msg = match media {
+            Some(mut msg) => {
+                msg.set_context_info(ctx);
+                msg
+            }
+            None if !m.text.is_empty() => wa::Message::text_with_context(m.text.clone(), ctx),
+            None => return Err(tr("questo messaggio non si può inoltrare").into()),
+        };
+        let dest: Jid = to_jid.parse().map_err(|e| format!("{e:?}"))?;
+        let sent = self.client.send_message(dest, msg.clone()).await.map_err(|e| e.to_string())?;
+        self.keep_sent(&to_jid, &msg, &sent.message_id).map(drop)
+    }
+
+    /// Nome (nome e cognome insieme: WhatsApp ne ha uno solo) e info.
+    async fn save_profile(&self, p: &crate::model::MyProfile) -> Result<(), String> {
+        let name = format!("{} {}", p.first.trim(), p.last.trim()).trim().to_string();
+        let profile = self.client.profile();
+        profile.set_push_name(&name).await.map_err(|e| e.to_string())?;
+        if !p.about.trim().is_empty() {
+            profile.set_status_text(p.about.trim()).await.map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    /// Nuova foto profilo: JPEG quadrato da 640 px, come vuole WhatsApp.
+    async fn profile_photo(&self, path: &std::path::Path) -> Result<(), String> {
+        let path = path.to_path_buf();
+        let jpeg = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
+            let img = image::open(&path).map_err(|e| e.to_string())?;
+            let side = img.width().min(img.height());
+            let square = img.crop_imm((img.width() - side) / 2, (img.height() - side) / 2, side, side);
+            let small = square.resize_exact(640, 640, image::imageops::FilterType::Triangle);
+            let mut out = std::io::Cursor::new(Vec::new());
+            small.to_rgb8().write_to(&mut out, image::ImageFormat::Jpeg).map_err(|e| e.to_string())?;
+            Ok(out.into_inner())
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        self.client.profile().set_profile_picture(jpeg).await.map(drop).map_err(|e| e.to_string())
+    }
+
+    /// Scollega questo PC: via dal telefono, via la sessione e le chat salvate.
+    async fn unlink(&self) -> Result<(), String> {
+        self.client.logout().await;
+        let dir = crate::paths::data_dir().join("whatsapp");
+        std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())
+    }
+
     /// La stella di WhatsApp, sincronizzata con il telefono.
     async fn star(&self, chat: ChatRef, id: i32, on: bool) -> Result<(), String> {
         let jid_s = self.jid(chat)?;
@@ -154,7 +225,19 @@ impl Wa {
                 }
                 self.keep_sent(&jid, &msg, &sent.message_id)
             }
-            SendKind::Sticker(_) => unsupported(),
+            SendKind::Sticker(media) => {
+                // lo sticker già sul CDN di WhatsApp: si rimanda lo stesso file
+                let base = media.get::<WaMedia>().ok_or("sticker non di WhatsApp")?.msg.get_base_message().clone();
+                let mut msg = wa::Message { sticker_message: base.sticker_message.clone(), ..Default::default() };
+                if !msg.sticker_message.is_set() {
+                    return Err(tr("non è uno sticker").into());
+                }
+                if let Some(ctx) = context {
+                    msg.set_context_info(ctx);
+                }
+                let sent = self.client.send_message(to, msg.clone()).await.map_err(|e| e.to_string())?;
+                self.keep_sent(&jid, &msg, &sent.message_id)
+            }
             SendKind::EditText { id, text } => {
                 let target = self.store().by_id(&jid, id).ok_or("messaggio sconosciuto")?;
                 self.client
@@ -425,7 +508,8 @@ pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mps
                     let _ = out.send(Response::Sets(Ok(Vec::new())));
                 }
                 Request::SetDocs { set_id, .. } => {
-                    let _ = out.send(Response::Docs { set_id, docs: Ok(Vec::new()) });
+                    let docs = if set_id == crate::model::RECENT_SET { wa.recent_stickers() } else { Vec::new() };
+                    let _ = out.send(Response::Docs { set_id, docs: Ok(docs) });
                 }
                 Request::Avatar { photo_id, .. } => {
                     let _ = out.send(Response::Avatar { photo_id, path: unsupported() });
@@ -438,8 +522,11 @@ pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mps
                 Request::Link(_) | Request::Join(_) => {
                     let _ = out.send(Response::Link(unsupported()));
                 }
-                Request::Forward { .. } => {
-                    let _ = out.send(Response::Forwarded(unsupported()));
+                Request::Forward { from, id, to, to_name } => {
+                    tokio::spawn(async move {
+                        let res = wa.forward(from, id, to).await.map(|()| to_name);
+                        let _ = out.send(Response::Forwarded(res));
+                    });
                 }
                 Request::Block { peer_ref, peer, blocked } => {
                     tokio::spawn(async move {
@@ -453,14 +540,33 @@ pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mps
                         let _ = out.send(Response::ChatDeleted { peer, res });
                     });
                 }
-                Request::SaveProfile { .. } | Request::ProfilePhoto(_) => {
-                    let _ = out.send(Response::ProfileSaved(unsupported()));
+                Request::SaveProfile { profile, .. } => {
+                    tokio::spawn(async move {
+                        let _ = out.send(Response::ProfileSaved(wa.save_profile(&profile).await));
+                    });
+                }
+                Request::ProfilePhoto(path) => {
+                    tokio::spawn(async move {
+                        let _ = out.send(Response::ProfileSaved(wa.profile_photo(&path).await));
+                    });
                 }
                 Request::Sessions => {
-                    let _ = out.send(Response::Sessions(unsupported()));
+                    // gli altri dispositivi collegati li vede solo il telefono
+                    let me = crate::model::Session {
+                        hash: 0,
+                        current: true,
+                        device: tr("Rondine · questo PC").into(),
+                        app: tr("WhatsApp, dispositivo collegato").into(),
+                        place: String::new(),
+                        ip: String::new(),
+                        active: now_secs(),
+                    };
+                    let _ = out.send(Response::Sessions(Ok(vec![me])));
                 }
                 Request::EndSession(_) => {
-                    let _ = out.send(Response::SessionEnded(unsupported()));
+                    tokio::spawn(async move {
+                        let _ = out.send(Response::SessionEnded(wa.unlink().await.map(|()| None)));
+                    });
                 }
                 Request::ChatAction { peer_ref, peer, action } => {
                     tokio::spawn(async move {

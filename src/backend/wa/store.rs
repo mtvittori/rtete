@@ -219,6 +219,25 @@ impl Store {
         }
     }
 
+    /// Gli sticker ricevuti e inviati, dal più recente, con la loro chat:
+    /// WhatsApp non ha set da sfogliare, questi fanno da «Recenti».
+    pub fn recent_stickers(&self, limit: usize) -> Vec<(String, StoredMsg)> {
+        let mut out: Vec<(String, StoredMsg)> = Vec::new();
+        for jid in self.chats.keys() {
+            let Ok(raw) = std::fs::read_to_string(self.msgs_path(jid)) else { continue };
+            out.extend(
+                raw.lines()
+                    .filter(|l| l.contains("\"sticker\""))
+                    .filter_map(|l| serde_json::from_str::<StoredMsg>(l).ok())
+                    .filter(|m| m.kind == "sticker" && m.media.is_some())
+                    .map(|m| (jid.clone(), m)),
+            );
+        }
+        out.sort_by_key(|(_, m)| std::cmp::Reverse(m.ts));
+        out.truncate(limit * 3);
+        out
+    }
+
     /// Dimentica una chat eliminata: voce, messaggi in RAM e file.
     pub fn forget(&mut self, jid: &str) {
         let _ = std::fs::remove_file(self.msgs_path(jid));

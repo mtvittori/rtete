@@ -173,19 +173,20 @@ pub fn start_telegram() {
     });
 }
 
-/// Collega (o ricollega) WhatsApp: la prima volta arriva il QR.
+/// Collega (o ricollega) WhatsApp: la prima volta arriva il QR, o col
+/// numero `phone` il codice di 8 caratteri.
 #[cfg(feature = "whatsapp")]
-pub fn start_whatsapp() {
+pub fn start_whatsapp(phone: Option<String>) {
     let (Some(rt), Some(tx)) = (RT.get(), SENDER.get().cloned()) else { return };
     rt.spawn(async move {
-        if let Err(e) = run_wa(tx.clone()).await {
+        if let Err(e) = run_wa(tx.clone(), phone).await {
             let _ = tx.send((Env::WhatsApp, NetEvent::Failed(e)));
         }
     });
 }
 
 #[cfg(feature = "whatsapp")]
-async fn run_wa(tx: Tx) -> Result<(), String> {
+async fn run_wa(tx: Tx, phone: Option<String>) -> Result<(), String> {
     use rondine::backend::wa;
     let send = |ev: NetEvent| {
         let _ = tx.send((Env::WhatsApp, ev));
@@ -203,7 +204,7 @@ async fn run_wa(tx: Tx) -> Result<(), String> {
     });
     let (req_tx, req_rx) = mpsc::unbounded_channel::<Request>();
     let (res_tx, mut res_rx) = mpsc::unbounded_channel::<Response>();
-    let (mut contacts, me) = wa::start_with(req_rx, res_tx.clone(), sink).await.map_err(|e| e.to_string())?;
+    let (mut contacts, me) = wa::start_with(req_rx, res_tx.clone(), sink, phone).await.map_err(|e| e.to_string())?;
     app::pinned_first(&mut contacts);
     send(NetEvent::Ready { link: Link { req: req_tx, res: res_tx }, contacts, me });
     while let Some(r) = res_rx.recv().await {

@@ -1597,6 +1597,54 @@ Hint: {}
 Avanti
 Next
 
+Rondine · questo PC
+Rondine · this PC
+
+WhatsApp, dispositivo collegato
+WhatsApp, linked device
+
+questo messaggio non si può inoltrare
+this message can't be forwarded
+
+non è uno sticker
+not a sticker
+
+Oppure collega col numero di telefono:
+Or link with your phone number:
+
+Ricevi il codice
+Get the code
+
+Scrivi il codice sul telefono
+Type the code on your phone
+
+WhatsApp → Dispositivi collegati → Collega un dispositivo → Collega con il numero di telefono
+WhatsApp → Linked devices → Link a device → Link with phone number instead
+
+nome, info e foto
+name, about and photo
+
+questo PC collegato a WhatsApp
+this PC linked to WhatsApp
+
+Info
+About
+
+Gli altri dispositivi collegati si vedono e si scollegano dal telefono.
+Other linked devices are shown and unlinked from the phone.
+
+Scollega questo PC
+Unlink this PC
+
+Scollegare WhatsApp da questo PC?
+Unlink WhatsApp from this PC?
+
+Le chat salvate qui vengono cancellate; per usarlo di nuovo servirà un nuovo QR.
+Chats saved here are deleted; you'll need a new QR code to use it again.
+
+Scollega
+Unlink
+
 Controlla la connessione e riprova.
 Check your connection and try again.
 
