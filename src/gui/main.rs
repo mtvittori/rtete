@@ -119,6 +119,8 @@ pub enum Msg {
     SwitchEnv(Env),
     EnvRail(bool),
     Unified(bool),
+    ShowOnline(bool),
+    ShowTyping(bool),
     /// un messaggio per una chat dell'altro ambiente (feed unico)
     InEnv(Env, Box<Msg>),
     /// collega WhatsApp: col QR (false) o col numero di telefono (true)
@@ -273,6 +275,10 @@ pub struct Gui {
     pub tz: jiff::tz::TimeZone,
     /// la vista è in fondo alla cronologia: i nuovi messaggi la seguono
     at_bottom: bool,
+    /// «sta scrivendo» mandato: a chi e quando (si ripete ogni 4 s)
+    typing_sent: Option<(model::ChatRef, std::time::Instant)>,
+    /// l'ultimo tasto nel campo di scrittura
+    last_key: std::time::Instant,
     pub settings: Settings,
     pub show_settings: bool,
     /// chi apre i link tg:// (letto quando si aprono le impostazioni)
@@ -468,6 +474,8 @@ fn boot() -> Gui {
         filter: String::new(),
         tz: jiff::tz::TimeZone::system(),
         at_bottom: true,
+        typing_sent: None,
+        last_key: std::time::Instant::now(),
     }
 }
 
@@ -528,7 +536,7 @@ impl Gui {
         let every = if matches!(self.phase, Phase::Connecting(..)) {
             // la rotella della schermata di avvio
             Some(80)
-        } else if !self.app.typing.is_empty() {
+        } else if !self.app.typing.is_empty() || self.typing_sent.is_some() {
             Some(400)
         } else if self.settings.active_theme() == ThemeChoice::Omarchy {
             Some(2000)
@@ -576,11 +584,9 @@ impl Gui {
             }
             Msg::Focus(on) => {
                 self.focused = on;
-                // WhatsApp: disponibile solo con la finestra davanti, come
-                // WhatsApp Web; via di qui il telefono torna a suonare
-                let wa = if self.env == Env::WhatsApp { self.link.as_ref() } else { self.parked.as_ref().and_then(|p| p.link.as_ref()) };
-                if let Some(l) = wa.filter(|_| cfg!(feature = "whatsapp")) {
-                    let _ = l.req.send(Request::Presence(on));
+                self.send_presence();
+                if !on {
+                    self.stop_typing();
                 }
                 if let (true, Some(p)) = (on, self.app.open) {
                     notify::dismiss(p);
@@ -691,6 +697,7 @@ impl Gui {
             Msg::Compose(s) => {
                 let cap = self.app.compose_cap();
                 self.app.compose = s.chars().take(cap).collect();
+                self.typed();
                 Task::none()
             }
             Msg::Submit => self.submit(),
@@ -941,6 +948,10 @@ impl Gui {
             }
             Msg::Tick => {
                 let now = std::time::Instant::now();
+                // fermo da 5 s: non sto più scrivendo
+                if self.typing_sent.is_some() && now.duration_since(self.last_key).as_secs() >= 5 {
+                    self.stop_typing();
+                }
                 self.app.typing.retain(|_, (until, _)| *until > now);
                 let stamp = style::omarchy_stamp();
                 if stamp != self.theme_stamp {
@@ -1258,6 +1269,20 @@ impl Gui {
             Msg::EnvRail(on) => {
                 self.settings.env_rail = on;
                 self.settings.save();
+                Task::none()
+            }
+            Msg::ShowOnline(on) => {
+                self.settings.show_online = on;
+                self.settings.save();
+                self.send_presence();
+                Task::none()
+            }
+            Msg::ShowTyping(on) => {
+                self.settings.show_typing = on;
+                self.settings.save();
+                if !on {
+                    self.stop_typing();
+                }
                 Task::none()
             }
             Msg::Unified(on) => {
@@ -1616,6 +1641,8 @@ impl Gui {
                 }
                 self.app.contacts = contacts;
                 self.app.me = me;
+                // online come la finestra (e come vuole l'impostazione)
+                let _ = link.req.send(Request::Presence(self.focused && self.settings.show_online));
                 self.link = Some(link);
                 self.phase = Phase::Ready;
                 for url in std::mem::take(&mut self.pending_links) {
@@ -1721,6 +1748,11 @@ impl Gui {
         if to == self.env {
             return Task::none();
         }
+        if self.parked.is_none() {
+            return Task::none();
+        }
+        // il «sta scrivendo» va annullato dal servizio a cui è stato mandato
+        self.stop_typing();
         let Some(mut p) = self.parked.take() else {
             return Task::none();
         };
@@ -1838,7 +1870,52 @@ impl Gui {
     }
 
     /// Invio nel campo di scrittura: foto in attesa, modifica o testo nuovo.
+    /// Online sui due servizi: con la finestra davanti, se si vuole farsi
+    /// vedere. (Su WhatsApp, da «non disponibile», non arriva nemmeno
+    /// l'online degli altri.)
+    fn send_presence(&self) {
+        let on = self.focused && self.settings.show_online;
+        for l in self.link.iter().chain(self.parked.as_ref().and_then(|p| p.link.as_ref())) {
+            let _ = l.req.send(Request::Presence(on));
+        }
+    }
+
+    /// Un tasto nel campo: «sta scrivendo» alla chat aperta, ripetuto
+    /// ogni 4 s (Telegram lo fa scadere dopo 6); campo vuoto: smesso.
+    fn typed(&mut self) {
+        self.last_key = std::time::Instant::now();
+        if self.app.compose.trim().is_empty() {
+            self.stop_typing();
+            return;
+        }
+        let Some(peer) = self.app.current_chat().map(|c| c.peer_ref) else { return };
+        if !self.settings.show_typing || self.app.editing.is_some() {
+            return;
+        }
+        let fresh = self
+            .typing_sent
+            .is_some_and(|(p, at)| p.id == peer.id && at.elapsed().as_secs() < 4);
+        if fresh {
+            return;
+        }
+        if self.typing_sent.is_some_and(|(p, _)| p.id != peer.id) {
+            self.stop_typing();
+        }
+        if let Some(req) = self.req() {
+            let _ = req.send(Request::Typing { peer_ref: peer, on: true });
+            self.typing_sent = Some((peer, std::time::Instant::now()));
+        }
+    }
+
+    fn stop_typing(&mut self) {
+        let Some((peer, _)) = self.typing_sent.take() else { return };
+        if let Some(req) = self.req() {
+            let _ = req.send(Request::Typing { peer_ref: peer, on: false });
+        }
+    }
+
     fn submit(&mut self) -> Task<Msg> {
+        self.stop_typing();
         let Some(req) = self.req() else {
             return Task::none();
         };

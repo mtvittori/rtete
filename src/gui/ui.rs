@@ -1735,7 +1735,7 @@ fn settings_main(g: &Gui) -> Element<'_, Msg> {
         .spacing(2)
         .push(entry("👤", tr("Il mio account"), account_sub, SettingsPage::Account))
         .push(entry("🎨", tr("Aspetto"), tr("lingua, tema, dimensione, accelerazione GPU"), SettingsPage::Appearance))
-        .push(entry("🔔", tr("Notifiche"), tr("avvisi dei messaggi nuovi"), SettingsPage::Notifications))
+        .push(entry("🔔", tr("Notifiche"), tr("avvisi dei messaggi nuovi, online e «sta scrivendo»"), SettingsPage::Notifications))
         .push(entry("🖼", tr("Immagini e media"), tr("download automatico, miniature, misura delle foto"), SettingsPage::Media))
         .push(entry("💾", tr("Dati e archiviazione"), tr("cache e spazio su disco"), SettingsPage::Storage))
         .push(entry("💻", tr("Dispositivi"), devices_sub, SettingsPage::Devices));
@@ -1946,6 +1946,16 @@ fn settings_notifications(g: &Gui) -> Element<'_, Msg> {
             .label(tr("Mostra il testo del messaggio"))
             .on_toggle(Msg::NotifyText),
         text(tr("Una chat letta da un altro dispositivo toglie da sola la sua notifica."))
+            .size(12)
+            .color(style::p().muted),
+        section(tr("PRIVACY")),
+        iced::widget::toggler(s.show_online)
+            .label(tr("Fammi vedere online quando Rondine è in primo piano"))
+            .on_toggle(Msg::ShowOnline),
+        iced::widget::toggler(s.show_typing)
+            .label(tr("Fai vedere «sta scrivendo» mentre scrivo"))
+            .on_toggle(Msg::ShowTyping),
+        text(tr("Su Telegram e WhatsApp. Su WhatsApp, senza online non arrivano nemmeno l'online e «sta scrivendo» degli altri (è il server a deciderlo)."))
             .size(12)
             .color(style::p().muted),
     ]

@@ -87,6 +87,10 @@ pub struct Settings {
     /// feed unico: le chat dei due ambienti in una lista sola, con uno
     /// stile e un tema soli (i suoi)
     pub unified: bool,
+    /// gli altri mi vedono online quando Rondine è davanti
+    pub show_online: bool,
+    /// gli altri vedono «sta scrivendo» mentre scrivo
+    pub show_typing: bool,
     pub style_mix: UiStyle,
     pub theme_mix: ThemeChoice,
 }
@@ -128,6 +132,8 @@ impl Default for Settings {
             lang: LangChoice(None),
             env_rail: true,
             unified: false,
+            show_online: true,
+            show_typing: true,
             style_mix: UiStyle::Telegram,
             theme_mix: ThemeChoice::Omarchy,
         }
@@ -218,6 +224,8 @@ impl Settings {
                 }
                 ("barra_ambienti", v) => s.env_rail = v != "false",
                 ("feed_unico", v) => s.unified = v == "true",
+                ("mostra_online", v) => s.show_online = v != "false",
+                ("mostra_scrivo", v) => s.show_typing = v != "false",
                 ("stile_feed", v) => s.style_mix = if v == "whatsapp" { UiStyle::WhatsApp } else { UiStyle::Telegram },
                 ("tema_feed", v) => s.theme_mix = ThemeChoice::from_code(v).unwrap_or(s.theme_mix),
                 ("lingua", v) => s.lang = LangChoice(Lang::from_code(v)),
@@ -265,7 +273,8 @@ impl Settings {
                 "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n\
                  foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n\
                  stile = {style}\ntema_whatsapp = {}\npreferite = {}\nbarra_ambienti = {}\n\
-                 feed_unico = {}\nstile_feed = {}\ntema_feed = {}\n",
+                 feed_unico = {}\nstile_feed = {}\ntema_feed = {}\n\
+                 mostra_online = {}\nmostra_scrivo = {}\n",
                 self.scale,
                 self.links_in_app,
                 self.gpu,
@@ -283,6 +292,8 @@ impl Settings {
                 self.unified,
                 if self.style_mix == UiStyle::WhatsApp { "whatsapp" } else { "telegram" },
                 self.theme_mix.code(),
+                self.show_online,
+                self.show_typing,
             ),
         );
     }
