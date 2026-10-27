@@ -6,7 +6,6 @@
 //! contiene le chiavi API) e la leggono sia la GUI sia la TUI.
 
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -118,11 +117,10 @@ impl Config {
             self.target.as_deref().unwrap_or("auto"),
             auto.join(","),
         );
-        let mut f = std::fs::OpenOptions::new()
+        let mut f = crate::paths::private_file()
             .write(true)
             .create(true)
             .truncate(true)
-            .mode(0o600)
             .open(path())?;
         f.write_all(body.as_bytes())
     }

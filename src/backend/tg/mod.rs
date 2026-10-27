@@ -8,7 +8,6 @@ pub mod live;
 pub mod worker;
 
 use std::io::Write;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -28,7 +27,7 @@ use crate::model::{
     caption, ChatAction, ChatId, ChatRef, DialogInfo, HistoryRow, LastMsg, LinkHit, MediaRef, MyProfile, PeerInfo,
     ReactionItem, RowKind, SearchHit, Seen, Session, SharedItem, SharedTab, StickerSetInfo, FAVED_SET,
 };
-use crate::paths::{avatar_path, config_dir, data_dir, ensure_private_dir, DB_FILE};
+use crate::paths::{avatar_path, config_dir, data_dir, ensure_private_dir, private_file, DB_FILE};
 
 // ---------------- tipi neutri <-> grammers ------------------------------
 
@@ -299,11 +298,10 @@ pub fn save_credentials(creds: &Credentials) -> std::io::Result<()> {
     let cred_path = config_dir().join(CONFIG_FILE);
     // il file contiene l'api_hash: nasce 0600 dall'open, senza la finestra
     // "scritto con la umask, poi chmod" in cui era leggibile da altri
-    let mut file = std::fs::OpenOptions::new()
+    let mut file = private_file()
         .write(true)
         .create(true)
         .truncate(true)
-        .mode(0o600)
         .open(&cred_path)?;
     file.write_all(format!("{} {}\n", creds.api_id, creds.api_hash).as_bytes())
 }
@@ -390,15 +388,13 @@ pub async fn connect(
     // standard restano protetti perché la cartella è 0700.
     let db_path = data_dir().join(DB_FILE);
     if !db_path.exists() {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&db_path)?;
+        private_file().write(true).create_new(true).open(&db_path)?;
     }
     let session = Arc::new(SqliteSession::open(&db_path).await?);
     // se esisteva già con permessi larghi (install vecchie): ripara
+    #[cfg(unix)]
     if let Ok(mut perms) = std::fs::metadata(&db_path).map(|m| m.permissions()) {
+        use std::os::unix::fs::PermissionsExt;
         perms.set_mode(0o600);
         let _ = std::fs::set_permissions(&db_path, perms);
     }

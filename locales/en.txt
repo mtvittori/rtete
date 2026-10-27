@@ -272,6 +272,9 @@ clipboard: {} characters pasted
 appunti vuoti (serve wl-clipboard)
 clipboard empty (wl-clipboard needed)
 
+appunti vuoti
+clipboard empty
+
 non è un file: {}
 not a file: {}
 

@@ -379,6 +379,7 @@ fn main() -> iced::Result {
         .window(iced::window::Settings {
             size: iced::Size::new(1100.0, 760.0),
             // la classe che Hyprland vede (regole finestra, scorciatoie)
+            #[cfg(target_os = "linux")]
             platform_specific: iced::window::settings::PlatformSpecific {
                 application_id: app_id.into(),
                 ..Default::default()
@@ -936,13 +937,7 @@ impl Gui {
             Msg::Link(url) => {
                 match links::parse_link(&url).filter(|_| self.settings.links_in_app) {
                     Some(link) => self.follow(link),
-                    None => {
-                        let _ = std::process::Command::new("xdg-open")
-                            .arg(&url)
-                            .stdout(std::process::Stdio::null())
-                            .stderr(std::process::Stdio::null())
-                            .spawn();
-                    }
+                    None => links::open_external(&url),
                 }
                 Task::none()
             }
