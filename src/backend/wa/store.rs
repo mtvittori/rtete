@@ -301,19 +301,25 @@ impl Store {
     /// Il nome da mostrare per un JID: nome della chat, nome del contatto,
     /// altrimenti il numero.
     pub fn display_name(&self, jid: &str) -> String {
-        if let Some(c) = self.chats.get(jid).filter(|c| !c.name.is_empty()) {
+        let chat = self.chats.get(jid);
+        if let Some(c) = chat.filter(|c| c.group && !c.name.is_empty()) {
             return c.name.clone();
         }
+        // per le persone: rubrica, poi il nome che si sono dati, poi quello
+        // della chat; WhatsApp a volte lo manda col numero mascherato
+        // («+39 •••• 61») e quello non vale niente
         let pn = self.alias.get(jid).map(String::as_str);
         let lid = self.alias.iter().find(|(_, p)| *p == jid).map(|(l, _)| l.as_str());
-        for j in [Some(jid), pn, lid].into_iter().flatten() {
-            if let Some(n) = self.contacts.get(j) {
+        let ids = [Some(jid), pn, lid];
+        for map in [&self.contacts, &self.names] {
+            if let Some(n) = ids.iter().flatten().find_map(|j| map.get(*j)) {
                 return n.clone();
             }
         }
-        if let Some(n) = self.names.get(jid).or_else(|| self.alias.get(jid).and_then(|p| self.names.get(p))) {
-            return n.clone();
+        if let Some(c) = chat.filter(|c| !c.name.is_empty() && !c.name.contains('•')) {
+            return c.name.clone();
         }
+        let jid = pn.unwrap_or(jid);
         let user = jid.split(['@', ':']).next().unwrap_or(jid);
         if jid.ends_with("@s.whatsapp.net") && user.chars().all(|c| c.is_ascii_digit()) {
             format!("+{user}")
@@ -637,7 +643,10 @@ mod tests {
         assert_eq!(texts, ["vecchio", "nuovo"]);
         assert_eq!(s.chat(pn).unwrap().unread, 2);
 
-        // il nome della rubrica vale anche col JID anonimo
+        // il nome della rubrica vale anche col JID anonimo, e vince su
+        // quello mascherato della chat
+        assert_eq!(s.display_name(pn), "+393331234567");
+        s.chat_mut(pn).unwrap().name = "+39 •••••••• 67".into();
         assert_eq!(s.display_name(pn), "+393331234567");
         assert!(s.set_contact(lid, "Mauro"));
         assert_eq!(s.display_name(pn), "Mauro");
