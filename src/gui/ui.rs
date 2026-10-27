@@ -490,7 +490,8 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
     let mut list = Column::new();
     if !compact && !g.show_archived && needle.is_empty() {
         let archived: Vec<&model::DialogInfo> = app.contacts.iter().filter(|d| d.archived).collect();
-        if !archived.is_empty() {
+        // su WhatsApp la voce c'è sempre, come nell'app
+        if !archived.is_empty() || g.env == Env::WhatsApp {
             let unread = archived.iter().filter(|d| d.unread > 0 && !d.muted).count();
             let mut line = row![text("📦").size(18).width(46).align_x(Center), text(tr("Archiviate")).width(Fill)]
                 .spacing(10)

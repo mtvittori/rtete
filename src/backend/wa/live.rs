@@ -78,9 +78,10 @@ impl Shared {
                     ChatAction::Ttl(_) => {}
                 }
             }
-            self.save(&store);
         }
         self.live(Live::ChatChanged { chat: chat_id_of(&jid), action });
+        // a raffica dopo una sincronizzazione completa: un salvataggio solo
+        self.refresh_soon();
     }
 
     /// Salva e manda la lista delle chat fra poco: le rubriche e le foto
@@ -125,25 +126,26 @@ impl Shared {
         });
     }
 
-    /// La rubrica arriva con la sincronizzazione dello stato all'abbinamento:
-    /// chi aveva abbinato prima che Rondine la leggesse la riceve di nuovo,
-    /// per intero, una volta sola.
+    /// Rubrica (critical_unblock_low) e archiviate, fissate, silenziate
+    /// (regular_low) arrivano con la sincronizzazione dello stato
+    /// all'abbinamento: chi aveva abbinato prima che Rondine le leggesse le
+    /// riceve di nuovo, per intero, una volta sola.
     fn sync_contacts(&self, client: &Arc<Client>) {
         use whatsapp_rust::sync_task::MajorSyncTask;
         use whatsapp_rust::wacore::appstate::patch_decode::WAPatchName;
         {
             let mut store = self.store();
-            if store.contacts_synced {
+            if store.state_synced {
                 return;
             }
-            store.contacts_synced = true;
+            store.state_synced = true;
             self.save(&store);
         }
         let client = Arc::clone(client);
         tokio::spawn(async move {
-            client
-                .process_sync_task(MajorSyncTask::AppStateSync { name: WAPatchName::CriticalUnblockLow, full_sync: true })
-                .await;
+            for name in [WAPatchName::CriticalUnblockLow, WAPatchName::RegularLow] {
+                client.process_sync_task(MajorSyncTask::AppStateSync { name, full_sync: true }).await;
+            }
         });
     }
 
@@ -410,6 +412,12 @@ impl Shared {
                     c.unread = n as usize;
                 }
                 c.pinned = conv.pinned.unwrap_or(0) > 0;
+                if let Some(a) = conv.archived {
+                    c.archived = a;
+                }
+                if let Some(u) = conv.marked_as_unread {
+                    c.unread_mark = u;
+                }
                 c.muted_until = match conv.mute_end_time {
                     Some(t) if t == u64::MAX => -1,
                     Some(t) => (t / if t > 1 << 40 { 1000 } else { 1 }) as i64,

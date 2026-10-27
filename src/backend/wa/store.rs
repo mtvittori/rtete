@@ -136,7 +136,7 @@ struct Meta {
     contacts: HashMap<String, String>,
     /// la rubrica è già stata chiesta per intero (una volta sola)
     #[serde(default)]
-    contacts_synced: bool,
+    state_synced: bool,
 }
 
 pub struct Store {
@@ -146,7 +146,7 @@ pub struct Store {
     names: HashMap<String, String>,
     alias: HashMap<String, String>,
     contacts: HashMap<String, String>,
-    pub contacts_synced: bool,
+    pub state_synced: bool,
     /// messaggi in RAM per chat (ordinati per data), le più recenti in coda
     hot: HashMap<String, Vec<StoredMsg>>,
     order: VecDeque<String>,
@@ -167,7 +167,7 @@ impl Store {
             names: meta.names,
             alias: meta.alias,
             contacts: meta.contacts,
-            contacts_synced: meta.contacts_synced,
+            state_synced: meta.state_synced,
             hot: HashMap::new(),
             order: VecDeque::new(),
         };
@@ -192,7 +192,7 @@ impl Store {
             names: self.names.clone(),
             alias: self.alias.clone(),
             contacts: self.contacts.clone(),
-            contacts_synced: self.contacts_synced,
+            state_synced: self.state_synced,
         };
         let body = serde_json::to_vec(&meta).map_err(std::io::Error::other)?;
         write_atomic(&self.dir.join("chats.json"), &body)
