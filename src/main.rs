@@ -10,7 +10,7 @@ mod styles;
 mod term;
 mod view;
 
-use rondine::{app, clipboard, loader, send, tg, worker};
+use rondine::{app, clipboard, loader, model, paths, send, tg};
 
 use std::sync::atomic::Ordering;
 
@@ -24,7 +24,7 @@ use tokio::sync::mpsc;
 use crate::app::App;
 use crate::view::Cmd;
 use crate::events::handle_event;
-use rondine::sync::{handle_response, handle_update};
+use rondine::sync::handle_response;
 use crate::send::{Request, Response};
 use crate::term::{panic_hook, TUI_UP, TermGuard};
 
@@ -39,30 +39,41 @@ async fn render(
     Ok(cmds)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tg::migrate_old_dirs();
-    rondine::i18n::set(rondine::i18n::detect());
+/// Telegram: credenziali e accesso nel terminale (la prima volta), poi il
+/// backend. Restituisce le chat e il mio nome.
+async fn start_telegram(
+    req_rx: mpsc::UnboundedReceiver<Request>,
+    res_tx: mpsc::UnboundedSender<Response>,
+) -> Result<(Vec<model::DialogInfo>, String), Box<dyn std::error::Error>> {
     let creds = match tg::load_credentials() {
         Some(c) => c,
         None => tg::prompt_credentials().await?,
     };
-    // rileva kitty / sixel e la misura delle celle prima che la TUI prenda stdin
-    gfx::startup_detect();
-    loader::prune_cache();
-
     // connect + sign_in: se la rete non è pronta ritenta qualche colpo
     let (_session, client, updates) = tg::connect_and_sign(&creds).await?;
 
     println!("{}", rondine::tr("Carico le conversazioni…"));
-    let mut contacts = tg::load_dialogs(&client).await?;
-    app::pinned_first(&mut contacts);
-    let mut app = App {
-        contacts,
-        me: tg::own_name(&client).await,
-        translate: rondine::translate::Config::load(),
-        ..App::default()
-    };
+    let contacts = tg::load_dialogs(&client).await?;
+    let me = tg::own_name(&client).await;
+    // il backend: dispatcher delle richieste e update live, tutto in
+    // arrivo sul canale delle risposte
+    tg::worker::start(client, updates, req_rx, res_tx).await?;
+    Ok((contacts, me))
+}
+
+/// `--whatsapp`: il backend WhatsApp invece di Telegram (solo nelle build
+/// con la feature `whatsapp`).
+fn want_whatsapp() -> bool {
+    std::env::args().skip(1).any(|a| a == "--whatsapp" || a == "-w")
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    paths::migrate_old_dirs();
+    rondine::i18n::set(rondine::i18n::detect());
+    // rileva kitty / sixel e la misura delle celle prima che la TUI prenda stdin
+    gfx::startup_detect();
+    loader::prune_cache();
 
     // ---------------- canali di servizio -------------------------------
     // Un solo canale di richieste e uno di risposte: prima erano dieci
@@ -71,14 +82,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (req_tx, req_rx) = mpsc::unbounded_channel::<Request>();
     let (res_tx, mut res_rx) = mpsc::unbounded_channel::<Response>();
 
-    worker::run_worker(client.clone(), req_rx, res_tx.clone());
-
-    // stream aggiornamenti live
-    let cfg = grammers_client::sender::UpdatesConfiguration { catch_up: false };
-    let mut update_stream = client
-        .stream_updates(updates, cfg)
-        .await
-        .map_err(|e| e.to_string())?;
+    let (mut contacts, me) = if want_whatsapp() {
+        #[cfg(feature = "whatsapp")]
+        {
+            rondine::backend::wa::start(req_rx, res_tx.clone()).await?
+        }
+        #[cfg(not(feature = "whatsapp"))]
+        {
+            return Err(rondine::tr("questa build non ha WhatsApp: ricompila con --features whatsapp").into());
+        }
+    } else {
+        start_telegram(req_rx, res_tx.clone()).await?
+    };
+    app::pinned_first(&mut contacts);
+    let mut app = App {
+        contacts,
+        me,
+        translate: rondine::translate::Config::load(),
+        ..App::default()
+    };
 
     // ---------------- TUI ----------------------------------------------
     panic_hook();
@@ -158,12 +180,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(Err(_)) => {}
                 None => break,
             },
-            upd = update_stream.next() => match upd {
-                Ok(u) => handle_update(&mut app, &client, u).await,
-                Err(e) => app.status = rondine::trf!("rete: {}", e),
-            },
             done = res_rx.recv() => match done {
-                Some(resp) => handle_response(&mut app, resp, &client, &req_tx).await,
+                Some(resp) => handle_response(&mut app, resp, &req_tx),
                 None => break,
             },
         }

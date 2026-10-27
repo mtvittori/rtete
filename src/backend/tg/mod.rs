@@ -1,4 +1,11 @@
 //! Telegram backend: grammers 0.11 (MTProto client in pure Rust, no TDLib).
+//!
+//! Tutto quello che tocca grammers sta qui sotto: l'accesso, le chiamate di
+//! rete (`worker`) e gli update live (`live`). Fuori escono solo i tipi
+//! neutri di `crate::model`.
+
+pub mod live;
+pub mod worker;
 
 use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -10,72 +17,80 @@ use grammers_client::message::InputMessage;
 use grammers_client::message::InputReactions;
 use grammers_client::sender::SenderPool;
 use grammers_client::session::storages::SqliteSession;
-use grammers_client::session::types::PeerId;
+use grammers_client::session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_client::session::updates::UpdatesLike;
 use grammers_client::tl;
 use grammers_client::{Client, InvocationError, SignInError};
 
 use crate::i18n::tr;
+use crate::links::TgLink;
+use crate::model::{
+    caption, ChatAction, ChatId, ChatRef, DialogInfo, HistoryRow, LastMsg, LinkHit, MediaRef, MyProfile, PeerInfo,
+    ReactionItem, RowKind, SearchHit, Seen, Session, SharedItem, SharedTab, StickerSetInfo, FAVED_SET,
+};
+use crate::paths::{avatar_path, config_dir, data_dir, ensure_private_dir, DB_FILE};
 
-pub type ChatRef = grammers_client::session::types::PeerRef;
+// ---------------- tipi neutri <-> grammers ------------------------------
 
-/// One conversation row in the sidebar.
-#[derive(Clone)]
-pub struct DialogInfo {
-    pub name: String,
-    pub peer_ref: ChatRef,
-    pub peer_id: PeerId,
-    pub is_group: bool,
-    pub unread: usize,
-    /// chat fissata in alto (preferiti): resta sopra le altre.
-    pub pinned: bool,
-    /// ultimo messaggio, per l'anteprima nella lista chat.
-    pub last: Option<LastMsg>,
-    /// i miei messaggi fino a questo id sono stati letti (spunte doppie).
-    pub read_out: i32,
-    /// canale (solo gli amministratori scrivono), non gruppo.
-    pub broadcast: bool,
-    /// silenziata: niente notifiche.
-    pub muted: bool,
-    /// nell'archivio di Telegram (cartella 1)
-    pub archived: bool,
-    /// segnata a mano come «da leggere»
-    pub unread_mark: bool,
-    /// foto profilo o della chat (id per la cache e il download).
-    pub photo_id: Option<i64>,
-    /// ultimo accesso (solo chat private).
-    pub seen: Seen,
+/// `PeerId::self_user()`: un id senza numero, tenuto con lo stesso valore
+/// sentinella di grammers.
+const SELF_USER: i64 = 1 << 40;
+
+pub fn to_chat_id(p: PeerId) -> ChatId {
+    ChatId(p.bot_api_dialog_id().unwrap_or(SELF_USER))
 }
 
-/// Lo stato di un utente come lo mostra Telegram.
-#[derive(Clone, Copy, Default, PartialEq, Debug)]
-pub enum Seen {
-    #[default]
-    Unknown,
-    /// online fino a (secondi Unix)
-    Online(i64),
-    /// ultimo accesso (secondi Unix)
-    Offline(i64),
-    Recently,
-    LastWeek,
-    LastMonth,
+pub fn to_peer_id(c: ChatId) -> PeerId {
+    PeerId::from_bot_api_dialog_id(c.0).unwrap_or_else(PeerId::self_user)
 }
 
-impl Seen {
-    pub fn from_raw(s: &tl::enums::UserStatus) -> Self {
-        match s {
-            tl::enums::UserStatus::Online(o) => Seen::Online(o.expires as i64),
-            tl::enums::UserStatus::Offline(o) => Seen::Offline(o.was_online as i64),
-            tl::enums::UserStatus::Recently(_) => Seen::Recently,
-            tl::enums::UserStatus::LastWeek(_) => Seen::LastWeek,
-            tl::enums::UserStatus::LastMonth(_) => Seen::LastMonth,
-            tl::enums::UserStatus::Empty => Seen::Unknown,
-        }
+pub fn to_chat_ref(r: PeerRef) -> ChatRef {
+    ChatRef { id: to_chat_id(r.id), auth: r.auth.hash() }
+}
+
+pub fn to_peer_ref(r: ChatRef) -> PeerRef {
+    PeerRef { id: to_peer_id(r.id), auth: PeerAuth::from_hash(r.auth) }
+}
+
+/// Il media grammers dentro un `MediaRef` (con chiave di cache, estensione
+/// dell'originale ed emoji dello sticker).
+pub fn to_media_ref(media: Media) -> MediaRef {
+    let key = media_key(&media);
+    let ext = raw_ext(&media);
+    let emoji = sticker_emoji(&media);
+    MediaRef::new(key, ext, emoji, media)
+}
+
+/// Il media grammers di un `MediaRef` creato da questo backend.
+pub fn media_of(m: &MediaRef) -> Result<&Media, String> {
+    m.get::<Media>().ok_or_else(|| "media non Telegram".to_string())
+}
+
+/// Estensione dell'originale in cache (foto, immagini, gif).
+fn raw_ext(media: &Media) -> &'static str {
+    match media {
+        Media::Photo(_) => "jpg",
+        Media::Document(doc) => match doc.mime_type().unwrap_or("") {
+            "image/gif" => "gif",
+            "image/png" | "image/apng" => "png",
+            "image/webp" => "webp",
+            m if m.starts_with("image/jpeg") => "jpg",
+            _ => "bin",
+        },
+        _ => "bin",
     }
+}
 
-    /// online adesso (l'«online» scade da solo dopo `expires`)
-    pub fn online(&self, now: i64) -> bool {
-        matches!(self, Seen::Online(until) if *until > now)
+// ---------------- dalla rete ai tipi neutri ----------------------------
+
+pub fn seen_from_raw(s: &tl::enums::UserStatus) -> Seen {
+    match s {
+        tl::enums::UserStatus::Online(o) => Seen::Online(o.expires as i64),
+        tl::enums::UserStatus::Offline(o) => Seen::Offline(o.was_online as i64),
+        tl::enums::UserStatus::Recently(_) => Seen::Recently,
+        tl::enums::UserStatus::LastWeek(_) => Seen::LastWeek,
+        tl::enums::UserStatus::LastMonth(_) => Seen::LastMonth,
+        tl::enums::UserStatus::Empty => Seen::Unknown,
     }
 }
 
@@ -83,7 +98,7 @@ impl Seen {
 pub fn peer_extras(peer: &grammers_client::peer::Peer) -> (Option<i64>, Seen) {
     use grammers_client::peer::Peer;
     match peer {
-        Peer::User(u) => (u.photo().map(|p| p.photo_id), Seen::from_raw(u.status())),
+        Peer::User(u) => (u.photo().map(|p| p.photo_id), seen_from_raw(u.status())),
         Peer::Group(g) => (g.photo().map(|p| p.photo_id), Seen::Unknown),
         Peer::Channel(c) => (c.photo().map(|p| p.photo_id), Seen::Unknown),
         Peer::Community(c) => (c.photo().map(|p| p.photo_id), Seen::Unknown),
@@ -92,11 +107,6 @@ pub fn peer_extras(peer: &grammers_client::peer::Peer) -> (Option<i64>, Seen) {
 
 pub fn is_broadcast(peer: &grammers_client::peer::Peer) -> bool {
     matches!(peer, grammers_client::peer::Peer::Channel(c) if c.raw.broadcast)
-}
-
-/// Dove sta in cache la foto profilo piccola.
-pub fn avatar_path(photo_id: i64) -> PathBuf {
-    media_dir().join("avatars").join(format!("{photo_id}.jpg"))
 }
 
 /// Scarica la foto profilo piccola (160px) se non è già in cache.
@@ -112,7 +122,7 @@ pub async fn download_avatar(client: &Client, peer: ChatRef, photo_id: i64) -> R
         raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
             tl::types::InputPeerPhotoFileLocation {
                 big: false,
-                peer: peer.into(),
+                peer: to_peer_ref(peer).into(),
                 photo_id,
             },
         ),
@@ -146,96 +156,40 @@ pub fn typing_label(a: &tl::enums::SendMessageAction) -> Option<&'static str> {
     }
 }
 
-/// L'anteprima dell'ultimo messaggio di una chat.
-#[derive(Clone)]
-pub struct LastMsg {
-    pub id: i32,
-    pub text: String,
-    pub outgoing: bool,
-    /// secondi Unix (0 = ignoto)
-    pub date: i64,
-}
-
-impl LastMsg {
-    pub fn from_row(r: &HistoryRow) -> Self {
-        Self {
-            id: r.id,
-            text: r.kind.summary(),
-            outgoing: r.outgoing,
-            date: r.date,
-        }
-    }
-
-    pub fn from_message(m: &grammers_client::message::Message) -> Self {
-        Self {
-            id: m.id(),
-            text: row_kind(m.media(), m.text().to_string()).summary(),
-            outgoing: m.outgoing(),
-            date: m.date().as_second(),
-        }
+pub fn last_from_message(m: &grammers_client::message::Message) -> LastMsg {
+    LastMsg {
+        id: m.id(),
+        text: row_kind(m.media(), m.text().to_string()).summary(),
+        outgoing: m.outgoing(),
+        date: m.date().as_second(),
     }
 }
 
-/// One message rendered in the history pane.
-pub struct HistoryRow {
-    pub id: i32,
-    pub outgoing: bool,
-    /// nome del mittente (vuoto per i messaggi propri: si usa quello dell'utente).
-    pub from: String,
-    pub kind: RowKind,
-    /// reazioni visibili: emoji standard (quelle custom si scartano).
-    pub reactions: Vec<ReactionItem>,
-    /// istante di invio, secondi Unix (0 = ignoto: messaggi locali).
-    pub date: i64,
-    /// id del messaggio a cui questo risponde.
-    pub reply_to: Option<i32>,
-    /// citazione parziale scelta da chi risponde (`quote_text`): se c'è, la
-    /// riga di citazione mostra questa invece dell'inizio del messaggio.
-    pub reply_quote: Option<String>,
-    /// origine di un inoltro: nome dell'autore originale, vuoto se nascosto.
-    pub fwd: Option<String>,
-    pub edited: bool,
-}
-
-impl HistoryRow {
-    /// Riga da un messaggio grammers; `from` è già risolto dal chiamante
-    /// (l'update live preferisce il nome nella lista dialoghi).
-    pub fn from_message(m: &grammers_client::message::Message, from: String) -> Self {
-        Self {
-            id: m.id(),
-            outgoing: m.outgoing(),
-            from,
-            kind: row_kind(m.media(), m.text().to_string()),
-            reactions: collect_reactions(&m.raw),
-            date: m.date().as_second(),
-            reply_to: m.reply_to_message_id(),
-            reply_quote: match &m.raw {
-                tl::enums::Message::Message(tl::types::Message {
-                    reply_to: Some(tl::enums::MessageReplyHeader::Header(h)),
-                    ..
-                }) => h.quote_text.clone().filter(|q| !q.trim().is_empty()),
-                _ => None,
-            },
-            fwd: m.forward_header().map(|h| {
-                let tl::enums::MessageFwdHeader::Header(h) = h;
-                h.from_name.unwrap_or_default()
-            }),
-            edited: m.edit_date().is_some() && !m.edit_hide(),
-        }
+/// Riga da un messaggio grammers; `from` è già risolto dal chiamante
+/// (l'update live preferisce il nome nella lista dialoghi).
+pub fn row_from_message(m: &grammers_client::message::Message, from: String) -> HistoryRow {
+    HistoryRow {
+        id: m.id(),
+        outgoing: m.outgoing(),
+        from,
+        kind: row_kind(m.media(), m.text().to_string()),
+        reactions: collect_reactions(&m.raw),
+        date: m.date().as_second(),
+        reply_to: m.reply_to_message_id(),
+        reply_quote: match &m.raw {
+            tl::enums::Message::Message(tl::types::Message {
+                reply_to: Some(tl::enums::MessageReplyHeader::Header(h)),
+                ..
+            }) => h.quote_text.clone().filter(|q| !q.trim().is_empty()),
+            _ => None,
+        },
+        fwd: m.forward_header().map(|h| {
+            let tl::enums::MessageFwdHeader::Header(h) = h;
+            h.from_name.unwrap_or_default()
+        }),
+        edited: m.edit_date().is_some() && !m.edit_hide(),
     }
 }
-
-/// conteggio di una reazione standard sulla riga.
-#[derive(Clone, Debug)]
-pub struct ReactionItem {
-    pub emoticon: String,
-    pub count: i32,
-    /// seleziona questa reazione al momento.
-    pub mine: bool,
-}
-
-/// gli otto empresi veloci della scelta (tasti 1..8).
-pub const QUICK_REACTIONS: [&str; 8] = ["👍", "❤", "🔥", "😂", "🎉", "😮", "🙏", "👎"];
 
 ///(conteggi) da una pagina delle reazioni (update server o raw del messaggio).
 pub fn reactions_from(container: &tl::enums::MessageReactions) -> Vec<ReactionItem> {
@@ -269,121 +223,6 @@ pub fn collect_reactions(raw: &tl::enums::Message) -> Vec<ReactionItem> {
     }
 }
 
-pub enum RowKind {
-    Text(String),
-    Sticker {
-        media: Media,
-        emoji: String,
-        animated: bool,
-    },
-    /// foto Telegram, allegato immagine o gif: renderizzabili in kitty.
-    Photo {
-        media: Media,
-        caption: String,
-        gif: bool,
-    },
-    /// documento scaricabile (Invio = salva in ~/Downloads).
-    Doc {
-        media: Media,
-        name: String,
-        size: Option<usize>,
-        caption: String,
-    },
-    /// audio riproducibile (messaggio vocale o brano): Ctrl-P lo riproduce.
-    Audio {
-        media: Media,
-        /// nome per i music/documenti; vuoto per i vocali.
-        name: String,
-        seconds: u32,
-        caption: String,
-        /// true: vocale (ogg opus senza nome).
-        voice: bool,
-    },
-    /// video (anche tondo): miniatura in GUI, `note` è l'etichetta per la TUI.
-    Video {
-        media: Media,
-        seconds: u32,
-        caption: String,
-        round: bool,
-        note: String,
-    },
-    /// etichetta informativa: vocale, contatti, sondaggi…
-    Note(String),
-    Service(String),
-}
-
-impl RowKind {
-    /// Una riga sola che descrive il messaggio: anteprime e citazioni.
-    pub fn summary(&self) -> String {
-        match self {
-            RowKind::Text(t) => t.lines().next().unwrap_or("").to_string(),
-            RowKind::Sticker { emoji, .. } => format!("{emoji} sticker"),
-            RowKind::Photo { caption, gif, .. } => {
-                let what = if *gif { "GIF" } else { tr("🖼 foto") };
-                if caption.is_empty() {
-                    what.into()
-                } else {
-                    format!("{what} {caption}")
-                }
-            }
-            RowKind::Doc { name, .. } => format!("📄 {name}"),
-            RowKind::Audio { voice: true, .. } => tr("🎤 messaggio vocale").into(),
-            RowKind::Audio { name, .. } => format!("🎵 {name}"),
-            RowKind::Video { round: true, .. } => tr("📹 videomessaggio").into(),
-            RowKind::Video { caption, .. } if !caption.is_empty() => format!("🎥 {caption}"),
-            RowKind::Video { .. } => "🎥 video".into(),
-            RowKind::Note(s) | RowKind::Service(s) => s.clone(),
-        }
-    }
-}
-
-/// Caption ripulita: righe collassate, tagliata a lunghezza ragionevole.
-fn caption(text: &str) -> String {
-    let one_line = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    const MAX: usize = 48;
-    let mut cut = String::new();
-    for ch in one_line.chars() {
-        if cut.chars().count() >= MAX {
-            cut.push('…');
-            break;
-        }
-        cut.push(ch);
-    }
-    cut
-}
-
-/// Dimensioni umane: 342 kB, 1,2 MB…
-pub fn fmt_size(mut bytes: f64) -> String {
-    const UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
-    let mut unit = 0;
-    while bytes >= 1024.0 && unit + 1 < UNITS.len() {
-        bytes /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{bytes} B")
-    } else {
-        // "1,2 MB" col separatore decimale della lingua: format! usa
-        // sempre il punto, quindi arrotondo alla prima decimale a mano
-        let round10 = (bytes * 10.0).round();
-        let whole = (round10 / 10.0).trunc() as u64;
-        let frac = round10 as i64 % 10;
-        format!("{whole}{}{frac} {}", crate::i18n::decimal_sep(), UNITS[unit])
-    }
-}
-
-/// durata in "m:ss" (o "h:mm:ss")
-pub fn fmt_secs(seconds: u32) -> String {
-    let h = seconds / 3600;
-    let m = (seconds % 3600) / 60;
-    let s = seconds % 60;
-    if h > 0 {
-        format!("{h}:{m:02}:{s:02}")
-    } else {
-        format!("{m}:{s:02}")
-    }
-}
-
 /// Etichetta breve per i media che non renderizziamo (video, vocale…).
 fn media_note(doc: &grammers_client::media::Document, text: &str) -> String {
     let mime = doc.mime_type().unwrap_or("");
@@ -411,148 +250,12 @@ fn media_note(doc: &grammers_client::media::Document, text: &str) -> String {
     format!("{base}{time}{extra}")
 }
 
+// ---------------- accesso ----------------------------------------------
+
 /// Connection credentials for my.telegram.org apps.
 pub struct Credentials {
     pub api_id: i32,
     pub api_hash: String,
-}
-
-fn config_base() -> PathBuf {
-    // specifica XDG: la dir specifica dell'app è base + "/rondine".
-    // Le var XDG contano solo se assolute, altrimenti si riparte da HOME.
-    let base = match std::env::var("XDG_CONFIG_HOME")
-        .ok()
-        .filter(|p| std::path::Path::new(p).is_absolute())
-    {
-        Some(p) if !p.is_empty() => PathBuf::from(p),
-        _ => std::env::var("HOME")
-            .ok()
-            .map(|h| PathBuf::from(h).join(".config"))
-            .unwrap_or_else(|| PathBuf::from(".")),
-    };
-    base
-}
-
-pub fn config_dir() -> PathBuf {
-    config_base().join(APP_DIR)
-}
-
-/// il nome delle cartelle dell'app (config e dati)
-const APP_DIR: &str = "rondine";
-/// le cartelle e la sessione di quando l'app si chiamava RTete
-const OLD_DIR: &str = "rtete";
-const DB_FILE: &str = "rondine.db";
-const OLD_DB_FILE: &str = "rtete.db";
-
-/// Prima del cambio di nome tutto stava in `rtete/`: al primo avvio di
-/// Rondine le cartelle (credenziali, sessione, cache, impostazioni) si
-/// spostano, così non serve rifare l'accesso. Da chiamare prima di tutto.
-pub fn migrate_old_dirs() {
-    for base in [config_base(), data_base()] {
-        let (old, new) = (base.join(OLD_DIR), base.join(APP_DIR));
-        if old.is_dir() && !new.exists() {
-            let _ = std::fs::rename(&old, &new);
-        }
-    }
-    // la sessione sqlite con i suoi file di journal
-    let dir = data_dir();
-    for ext in ["", "-wal", "-shm", "-journal"] {
-        let old = dir.join(format!("{OLD_DB_FILE}{ext}"));
-        let new = dir.join(format!("{DB_FILE}{ext}"));
-        if old.exists() && !new.exists() {
-            let _ = std::fs::rename(&old, &new);
-        }
-    }
-}
-
-fn data_base() -> PathBuf {
-    let base = match std::env::var("XDG_DATA_HOME")
-        .ok()
-        .filter(|p| std::path::Path::new(p).is_absolute())
-    {
-        Some(p) if !p.is_empty() => PathBuf::from(p),
-        _ => std::env::var("HOME")
-            .ok()
-            .map(|h| PathBuf::from(h).join(".local/share"))
-            .unwrap_or_else(|| PathBuf::from(".")),
-    };
-    base
-}
-
-pub fn data_dir() -> PathBuf {
-    data_base().join(APP_DIR)
-}
-
-pub fn media_dir() -> PathBuf {
-    data_dir().join("assets")
-}
-
-/// Cartella temporanea (foto dagli appunti, audio in riproduzione).
-pub fn tmp_dir() -> PathBuf {
-    data_dir().join("tmp")
-}
-
-/// Cartella dei salvataggi: XDG_DOWNLOAD_DIR (shell-quoted in user-dirs.dirs,
-/// tipicamente "$HOME/Scaricati") altrimenti ~/Downloads.
-pub fn downloads_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    if let Ok(v) = std::env::var("XDG_DOWNLOAD_DIR") {
-        let v = v.trim().replace(['"', '\''], "");
-        if !v.is_empty() {
-            let v = v.replace("$HOME", &home);
-            if std::path::Path::new(&v).is_absolute() {
-                return PathBuf::from(v);
-            }
-        }
-    }
-    PathBuf::from(home).join("Downloads")
-}
-
-/// Nome file sanity per i salvataggi: via slash, punti elusivi e vuoto.
-/// None se il nome resta privo di senso (es. era solo ".", " ", "…").
-pub fn sanitize_file_name(name: &str) -> Option<String> {
-    let safe: String = name.chars().filter(|c| !c.is_control()).collect();
-    let safe = safe.replace(['/', '\\'], "_").replace("..", "_");
-    let safe = safe.trim().trim_end_matches('.').trim().to_string();
-    if safe.is_empty() || safe == "." {
-        None
-    } else {
-        Some(safe)
-    }
-}
-
-/// "report.pdf" già presente? prova "report (1).pdf", poi (2)… Non
-/// sovrascrive mai un file esistente; oltre 999 tentativi, usa il tempo
-/// corrente nel nome.
-pub fn unique_save_path(dir: &Path, name: &str) -> PathBuf {
-    if !dir.join(name).exists() {
-        return dir.join(name);
-    }
-    let (stem, ext) = match name.rfind('.') {
-        Some(0) | None => (name.to_string(), String::new()),
-        Some(i) => (name[..i].to_string(), name[i..].to_string()),
-    };
-    for n in 1..1000u32 {
-        let cand = dir.join(format!("{stem} ({n}){ext}"));
-        if !cand.exists() {
-            return cand;
-        }
-    }
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    dir.join(format!("{stem}-{ts}{ext}"))
-}
-
-/// Crea (o ripara) una cartella dati a 0700. Anche su cartelle già esistenti
-/// la chmod va risistemata: le installazioni vecchie l'hanno creata con la
-/// umask corrente (755), e i file dentro restavano leggibili dagli altri.
-pub fn ensure_private_dir(path: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(path)?;
-    let mut perms = std::fs::metadata(path)?.permissions();
-    perms.set_mode(0o700);
-    std::fs::set_permissions(path, perms)
 }
 
 const CONFIG_FILE: &str = "credentials";
@@ -796,6 +499,8 @@ pub async fn sign_in(
     Ok(())
 }
 
+// ---------------- chiamate di rete -------------------------------------
+
 /// List the dialogs (chats) of the account.
 pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, InvocationError> {
     let mut out = Vec::new();
@@ -824,12 +529,12 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
         };
         out.push(DialogInfo {
             name,
-            peer_ref: dialog.peer_ref(),
-            peer_id: dialog.peer_id(),
+            peer_ref: to_chat_ref(dialog.peer_ref()),
+            peer_id: to_chat_id(dialog.peer_id()),
             is_group,
             unread: read_unread,
             pinned,
-            last: dialog.last_message.as_ref().map(LastMsg::from_message),
+            last: dialog.last_message.as_ref().map(last_from_message),
             read_out,
             photo_id,
             seen,
@@ -864,11 +569,11 @@ pub async fn dialog_from_message(
         seen,
         name: peer.name().unwrap_or(tr("senza nome")).to_string(),
         is_group: !matches!(peer, grammers_client::peer::Peer::User(_)),
-        peer_id: m.peer_id(),
-        peer_ref,
+        peer_id: to_chat_id(m.peer_id()),
+        peer_ref: to_chat_ref(peer_ref),
         unread: 0,
         pinned: false,
-        last: Some(LastMsg::from_message(m)),
+        last: Some(last_from_message(m)),
         read_out: 0,
     })
 }
@@ -881,13 +586,13 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
             let emoji = sticker.emoji().to_string();
             let animated = sticker.is_animated();
             RowKind::Sticker {
-                media: media.unwrap(),
+                media: to_media_ref(media.unwrap()),
                 emoji,
                 animated,
             }
         }
         Some(Media::Photo(_)) => RowKind::Photo {
-            media: media.unwrap(),
+            media: to_media_ref(media.unwrap()),
             caption: cap,
             gif: false,
         },
@@ -900,7 +605,7 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
             let size = doc.size();
             if mime == "image/gif" {
                 return RowKind::Photo {
-                    media: media.unwrap(),
+                    media: to_media_ref(media.unwrap()),
                     caption: cap,
                     gif: true,
                 };
@@ -909,7 +614,7 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
                 || mime.starts_with("image/jpeg")
             {
                 return RowKind::Photo {
-                    media: media.unwrap(),
+                    media: to_media_ref(media.unwrap()),
                     caption: cap,
                     gif: false,
                 };
@@ -921,12 +626,12 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
                     caption: cap,
                     round,
                     note: media_note(&doc, &text),
-                    media: media.unwrap(),
+                    media: to_media_ref(media.unwrap()),
                 };
             }
             if mime.starts_with("audio/") {
                 return RowKind::Audio {
-                    media: media.unwrap(),
+                    media: to_media_ref(media.unwrap()),
                     name,
                     seconds: doc.duration().unwrap_or(0.0) as u32,
                     caption: cap,
@@ -934,7 +639,7 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
                 };
             }
             RowKind::Doc {
-                media: media.unwrap(),
+                media: to_media_ref(media.unwrap()),
                 name,
                 size,
                 caption: cap,
@@ -984,10 +689,10 @@ pub async fn load_history(
     limit: usize,
 ) -> Result<Vec<HistoryRow>, InvocationError> {
     let mut rows = Vec::new();
-    let mut iter = client.iter_messages(peer_ref).limit(limit);
+    let mut iter = client.iter_messages(to_peer_ref(peer_ref)).limit(limit);
     while let Some(m) = iter.next().await? {
         let from = sender_name(&m);
-        rows.push(HistoryRow::from_message(&m, from));
+        rows.push(row_from_message(&m, from));
     }
     rows.reverse();
     Ok(rows)
@@ -1002,12 +707,12 @@ pub async fn load_history_before(
 ) -> Result<Vec<HistoryRow>, InvocationError> {
     let mut rows = Vec::new();
     let mut iter = client
-        .iter_messages(peer_ref)
+        .iter_messages(to_peer_ref(peer_ref))
         .offset_id(before)
         .limit(limit);
     while let Some(m) = iter.next().await? {
         let from = sender_name(&m);
-        rows.push(HistoryRow::from_message(&m, from));
+        rows.push(row_from_message(&m, from));
     }
     rows.reverse();
     Ok(rows)
@@ -1019,18 +724,11 @@ pub async fn load_by_id(
     peer_ref: ChatRef,
     ids: &[i32],
 ) -> Result<Vec<Option<HistoryRow>>, InvocationError> {
-    let found = client.get_messages_by_id(peer_ref, ids).await?;
+    let found = client.get_messages_by_id(to_peer_ref(peer_ref), ids).await?;
     Ok(found
         .into_iter()
-        .map(|m| m.map(|m| HistoryRow::from_message(&m, sender_name(&m))))
+        .map(|m| m.map(|m| row_from_message(&m, sender_name(&m))))
         .collect())
-}
-
-/// One installed sticker set.
-pub struct StickerSetInfo {
-    pub set_id: i64,
-    pub title: String,
-    pub short_name: String,
 }
 
 /// All the sticker sets installed on the account.
@@ -1072,11 +770,6 @@ pub fn media_from_doc(doc: tl::enums::Document) -> Option<Media> {
     Media::from_raw(tl::enums::MessageMedia::Document(inner))
 }
 
-/// Documenti di un set richiesti per short_name (on-demand nel pannello).
-/// Id finti per i «set» speciali: preferiti e usati di recente.
-pub const FAVED_SET: i64 = -1;
-pub const RECENT_SET: i64 = -2;
-
 /// Gli sticker preferiti (FAVED_SET) o recenti (RECENT_SET) dell'account.
 pub async fn fetch_special_docs(
     client: &Client,
@@ -1098,6 +791,7 @@ pub async fn fetch_special_docs(
     }
 }
 
+/// Documenti di un set richiesti per short_name (on-demand nel pannello).
 pub async fn fetch_set_docs_by_name(
     client: &Client,
     short_name: &str,
@@ -1126,7 +820,7 @@ pub async fn send_text(
     reply_to: Option<i32>,
 ) -> Result<grammers_client::message::Message, InvocationError> {
     client
-        .send_message(peer_ref, InputMessage::new().text(text).reply_to(reply_to))
+        .send_message(to_peer_ref(peer_ref), InputMessage::new().text(text).reply_to(reply_to))
         .await
 }
 
@@ -1135,15 +829,17 @@ pub async fn send_text(
 pub async fn send_sticker(
     client: &Client,
     peer_ref: ChatRef,
-    media: &Media,
+    media: &MediaRef,
     reply_to: Option<i32>,
-) -> Result<grammers_client::message::Message, InvocationError> {
+) -> Result<grammers_client::message::Message, String> {
+    let media = media_of(media)?;
     client
         .send_message(
-            peer_ref,
+            to_peer_ref(peer_ref),
             InputMessage::new().copy_media(media).reply_to(reply_to),
         )
         .await
+        .map_err(|e| e.to_string())
 }
 
 /// aggiunge o toglie la reazione standard a un messaggio (None = le mie via).
@@ -1153,12 +849,13 @@ pub async fn send_reaction(
     msg_id: i32,
     emoticon: Option<&str>,
 ) -> Result<(), InvocationError> {
+    let peer = to_peer_ref(peer_ref);
     match emoticon {
         Some(e) => client
-            .send_reactions(peer_ref, msg_id, InputReactions::emoticon(e))
+            .send_reactions(peer, msg_id, InputReactions::emoticon(e))
             .await,
         None => client
-            .send_reactions(peer_ref, msg_id, InputReactions::remove())
+            .send_reactions(peer, msg_id, InputReactions::remove())
             .await,
     }
 }
@@ -1181,7 +878,7 @@ pub async fn send_photo(
         msg = msg.text(caption);
     }
     client
-        .send_message(peer_ref, msg)
+        .send_message(to_peer_ref(peer_ref), msg)
         .await
         .map_err(|e| e.to_string())
 }
@@ -1204,16 +901,9 @@ pub async fn send_document(
         msg = msg.text(caption);
     }
     client
-        .send_message(peer_ref, msg)
+        .send_message(to_peer_ref(peer_ref), msg)
         .await
         .map_err(|e| e.to_string())
-}
-
-/// PNG e JPEG partono come foto (compresse da Telegram), il resto come file.
-pub fn is_photo_file(path: &std::path::Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg"))
 }
 
 /// Modifica in place un testo già inviato (restituito id invariato).
@@ -1224,7 +914,7 @@ pub async fn edit_text(
     new_text: &str,
 ) -> Result<(), InvocationError> {
     client
-        .edit_message(peer_ref, message_id, InputMessage::new().text(new_text))
+        .edit_message(to_peer_ref(peer_ref), message_id, InputMessage::new().text(new_text))
         .await
 }
 
@@ -1234,32 +924,15 @@ pub async fn delete_messages(
     peer_ref: ChatRef,
     ids: &[i32],
 ) -> Result<(), InvocationError> {
-    client.delete_messages(peer_ref, ids).await?;
+    client.delete_messages(to_peer_ref(peer_ref), ids).await?;
     Ok(())
-}
-
-/// La scheda di una chat: descrizione, contatti, membri, blocco.
-#[derive(Clone, Debug, Default)]
-pub struct PeerInfo {
-    /// bio dell'utente o descrizione del gruppo/canale
-    pub about: String,
-    pub username: Option<String>,
-    pub phone: Option<String>,
-    /// membri (gruppi e canali)
-    pub members: Option<i32>,
-    /// l'utente è bloccato da me (solo chat private)
-    pub blocked: bool,
-    pub bot: bool,
-    /// la chat con me stesso (Messaggi salvati)
-    pub me: bool,
-    /// messaggi effimeri: secondi dopo cui si cancellano (0 = spenti)
-    pub ttl: i32,
 }
 
 /// Legge la scheda completa: GetFullUser / GetFullChat / GetFullChannel.
 pub async fn peer_info(client: &Client, peer_ref: ChatRef) -> Result<PeerInfo, String> {
     use grammers_client::peer::Peer;
     use grammers_client::session::types::PeerKind;
+    let peer_ref = to_peer_ref(peer_ref);
     let err = |e: InvocationError| e.to_string();
     let mut info = PeerInfo::default();
     match client.resolve_peer(peer_ref).await.map_err(err)? {
@@ -1320,46 +993,16 @@ fn fill_chat_full(info: &mut PeerInfo, full: tl::enums::ChatFull) {
     }
 }
 
-/// Le schede dei contenuti condivisi di una chat.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum SharedTab {
-    Media,
-    Files,
-    Links,
-    Audio,
-    Voice,
-}
-
-impl SharedTab {
-    pub const ALL: [SharedTab; 5] =
-        [SharedTab::Media, SharedTab::Files, SharedTab::Links, SharedTab::Audio, SharedTab::Voice];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            SharedTab::Media => "Media",
-            SharedTab::Files => tr("File"),
-            SharedTab::Links => "Link",
-            SharedTab::Audio => tr("Musica"),
-            SharedTab::Voice => tr("Vocali"),
-        }
+/// Il filtro di ricerca di Telegram per una scheda dei contenuti condivisi.
+fn shared_filter(tab: SharedTab) -> tl::enums::MessagesFilter {
+    use tl::enums::MessagesFilter as F;
+    match tab {
+        SharedTab::Media => F::InputMessagesFilterPhotoVideo,
+        SharedTab::Files => F::InputMessagesFilterDocument,
+        SharedTab::Links => F::InputMessagesFilterUrl,
+        SharedTab::Audio => F::InputMessagesFilterMusic,
+        SharedTab::Voice => F::InputMessagesFilterRoundVoice,
     }
-
-    fn filter(self) -> tl::enums::MessagesFilter {
-        use tl::enums::MessagesFilter as F;
-        match self {
-            SharedTab::Media => F::InputMessagesFilterPhotoVideo,
-            SharedTab::Files => F::InputMessagesFilterDocument,
-            SharedTab::Links => F::InputMessagesFilterUrl,
-            SharedTab::Audio => F::InputMessagesFilterMusic,
-            SharedTab::Voice => F::InputMessagesFilterRoundVoice,
-        }
-    }
-}
-
-/// Un elemento dei contenuti condivisi: la riga e, per i link, gli URL.
-pub struct SharedItem {
-    pub row: HistoryRow,
-    pub links: Vec<String>,
 }
 
 /// Gli URL di un messaggio: quelli scritti nel testo e quelli nascosti
@@ -1414,30 +1057,19 @@ pub async fn shared_media(
     limit: usize,
 ) -> Result<Vec<SharedItem>, InvocationError> {
     let mut out = Vec::new();
-    let mut iter = client.search_messages(peer_ref).filter(tab.filter());
+    let mut iter = client.search_messages(to_peer_ref(peer_ref)).filter(shared_filter(tab));
     while out.len() < limit {
         let Some(m) = iter.next().await? else { break };
         let links = if tab == SharedTab::Links { message_links(&m) } else { Vec::new() };
         let from = sender_name(&m);
-        out.push(SharedItem { row: HistoryRow::from_message(&m, from), links });
+        out.push(SharedItem { row: row_from_message(&m, from), links });
     }
     Ok(out)
 }
 
-/// Un'azione rapida su una chat (menu della lista, scheda della chat).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ChatAction {
-    Archive(bool),
-    Pin(bool),
-    Mute(bool),
-    /// segna come da leggere (true) o toglie il segno
-    MarkUnread(bool),
-    /// messaggi effimeri: secondi (0 = spenti)
-    Ttl(i32),
-}
-
 /// Esegue un'azione rapida sulla chat.
 pub async fn chat_action(client: &Client, peer_ref: ChatRef, action: ChatAction) -> Result<(), InvocationError> {
+    let peer_ref = to_peer_ref(peer_ref);
     let dialog_peer = || tl::enums::InputDialogPeer::Peer(tl::types::InputDialogPeer { peer: peer_ref.into() });
     match action {
         ChatAction::Archive(on) => {
@@ -1492,13 +1124,14 @@ pub async fn chat_action(client: &Client, peer_ref: ChatRef, action: ChatAction)
 
 /// Blocca o sblocca un utente.
 pub async fn set_blocked(client: &Client, peer_ref: ChatRef, blocked: bool) -> Result<(), InvocationError> {
+    let peer = to_peer_ref(peer_ref);
     if blocked {
         client
-            .invoke(&tl::functions::contacts::Block { my_stories_from: false, id: peer_ref.into() })
+            .invoke(&tl::functions::contacts::Block { my_stories_from: false, id: peer.into() })
             .await?;
     } else {
         client
-            .invoke(&tl::functions::contacts::Unblock { my_stories_from: false, id: peer_ref.into() })
+            .invoke(&tl::functions::contacts::Unblock { my_stories_from: false, id: peer.into() })
             .await?;
     }
     Ok(())
@@ -1509,6 +1142,7 @@ pub async fn set_blocked(client: &Client, peer_ref: ChatRef, blocked: bool) -> R
 /// si esce, dai canali/supergruppi si esce e basta.
 pub async fn delete_chat(client: &Client, peer_ref: ChatRef, revoke: bool) -> Result<(), InvocationError> {
     use grammers_client::session::types::PeerKind;
+    let peer_ref = to_peer_ref(peer_ref);
     match peer_ref.id.kind() {
         PeerKind::Channel => {
             client
@@ -1535,7 +1169,7 @@ pub async fn delete_chat(client: &Client, peer_ref: ChatRef, revoke: bool) -> Re
 
 /// Cancella tutta la cronologia; Telegram lo fa a blocchi: `offset` > 0
 /// vuol dire che ne resta.
-async fn clear_history(client: &Client, peer_ref: ChatRef, revoke: bool) -> Result<(), InvocationError> {
+async fn clear_history(client: &Client, peer_ref: PeerRef, revoke: bool) -> Result<(), InvocationError> {
     loop {
         let tl::enums::messages::AffectedHistory::History(done) = client
             .invoke(&tl::functions::messages::DeleteHistory {
@@ -1553,18 +1187,6 @@ async fn clear_history(client: &Client, peer_ref: ChatRef, revoke: bool) -> Resu
     }
 }
 
-/// Il mio profilo, per le impostazioni.
-#[derive(Clone, Debug, Default)]
-pub struct MyProfile {
-    pub first: String,
-    pub last: String,
-    pub username: String,
-    pub phone: String,
-    pub about: String,
-    /// foto profilo piccola già in cache
-    pub photo: Option<PathBuf>,
-}
-
 /// Legge il mio profilo (nome, username, telefono, bio, foto).
 pub async fn my_profile(client: &Client) -> Result<MyProfile, String> {
     let me = client.get_me().await.map_err(|e| e.to_string())?;
@@ -1574,7 +1196,7 @@ pub async fn my_profile(client: &Client) -> Result<MyProfile, String> {
         .map_err(|e| e.to_string())?;
     let tl::enums::UserFull::Full(f) = full.full_user;
     let photo = match (me.photo().map(|p| p.photo_id), me.to_ref().await.ok().flatten()) {
-        (Some(id), Some(r)) => download_avatar(client, r, id).await.ok(),
+        (Some(id), Some(r)) => download_avatar(client, to_chat_ref(r), id).await.ok(),
         _ => None,
     };
     Ok(MyProfile {
@@ -1628,19 +1250,6 @@ pub async fn set_profile_photo(client: &Client, path: &Path) -> Result<(), Strin
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
-}
-
-/// Una sessione attiva dell'account (un dispositivo collegato).
-#[derive(Clone, Debug)]
-pub struct Session {
-    pub hash: i64,
-    pub current: bool,
-    pub device: String,
-    pub app: String,
-    pub place: String,
-    pub ip: String,
-    /// ultima attività, secondi Unix
-    pub active: i64,
 }
 
 /// I dispositivi collegati all'account: prima questo, poi i più recenti.
@@ -1701,14 +1310,6 @@ pub async fn end_session(client: &Client, hash: Option<i64>) -> Result<(), Strin
     })
 }
 
-/// Un colpo da ricerca: id, data, autore e testo potentemente tagsliato.
-pub struct SearchHit {
-    pub outgoing: bool,
-    pub from: String,
-    pub date: String,
-    pub snippet: String,
-}
-
 /// Server-side search inside a peer (text query, no filters).
 pub async fn search_chat(
     client: &Client,
@@ -1720,7 +1321,7 @@ pub async fn search_chat(
     if query.trim().is_empty() {
         return Ok(out);
     }
-    let mut iter = client.search_messages(peer_ref).query(query);
+    let mut iter = client.search_messages(to_peer_ref(peer_ref)).query(query);
     while out.len() < limit {
         match iter.next().await? {
             Some(m) => {
@@ -1751,9 +1352,10 @@ pub async fn search_chat(
 /// Scarica un documento (o una foto full) dentro `dest`.
 pub async fn download_media_to(
     client: &Client,
-    media: &Media,
+    media: &MediaRef,
     dest: PathBuf,
 ) -> Result<(), String> {
+    let media = media_of(media)?;
     std::fs::create_dir_all(
         dest.parent()
             .map(|p| p.to_path_buf())
@@ -1764,6 +1366,43 @@ pub async fn download_media_to(
         .download_media(media, dest.clone())
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Scarica l'originale nella cache (se assente) e ne restituisce il
+/// percorso con l'estensione reale; dei video basta la miniatura.
+pub async fn fetch_raw(client: &Client, media: &MediaRef) -> Result<PathBuf, String> {
+    let key = media.key();
+    let inner = media_of(media)?;
+    // video: basta la miniatura più grande, non il file intero
+    if let Media::Document(doc) = inner {
+        if doc.mime_type().unwrap_or("").starts_with("video/") {
+            let raw_path = crate::loader::cache_raw(key, "jpg");
+            if !raw_path.exists() {
+                let thumb = doc
+                    .thumbs()
+                    .into_iter()
+                    .max_by_key(|t| t.size())
+                    .ok_or("video senza miniatura")?;
+                ensure_private_dir(&crate::paths::media_dir())
+                    .map_err(|e| format!("cache dir: {e}"))?;
+                client
+                    .download_media(&thumb, raw_path.clone())
+                    .await
+                    .map_err(|e| format!("download: {e}"))?;
+            }
+            return Ok(raw_path);
+        }
+    }
+    let raw_path = crate::loader::cache_raw(key, media.ext());
+    if !raw_path.exists() {
+        ensure_private_dir(&crate::paths::media_dir())
+            .map_err(|e| format!("cache dir: {e}"))?;
+        client
+            .download_media(inner, raw_path.clone())
+            .await
+            .map_err(|e| format!("download: {e}"))?;
+    }
+    Ok(raw_path)
 }
 
 /// Stable per-cache file name from media identity (foto e documenti).
@@ -1790,92 +1429,8 @@ pub fn sticker_emoji(media: &Media) -> String {
     }
 }
 
-/// Confronto peer (PeerId value equality).
-pub fn same_peer(a: PeerId, b: PeerId) -> bool {
-    a == b
-}
-
-/// Un link Telegram (`tg://…` o `https://t.me/…`) che si apre dentro Rondine.
-#[derive(Clone, Debug, PartialEq)]
-pub enum TgLink {
-    /// chat pubblica per username, eventualmente su un messaggio
-    Public { name: String, post: Option<i32> },
-    /// canale/supergruppo privato per id (t.me/c/ID/POST)
-    Private { channel: i64, post: Option<i32> },
-    /// invito a una chat privata (t.me/+HASH, joinchat, tg://join)
-    Invite(String),
-}
-
-/// Riconosce i link di Telegram; `None` per tutto il resto (va al browser).
-pub fn parse_link(url: &str) -> Option<TgLink> {
-    let url = url.trim();
-    let query = |q: &str, key: &str| {
-        q.split('&')
-            .filter_map(|kv| kv.split_once('='))
-            .find(|(k, _)| *k == key)
-            .map(|(_, v)| v.to_string())
-    };
-    if let Some(rest) = url.strip_prefix("tg://") {
-        let (what, q) = rest.split_once('?').unwrap_or((rest, ""));
-        return match what.trim_end_matches('/') {
-            "resolve" => Some(TgLink::Public {
-                name: query(q, "domain")?,
-                post: query(q, "post").and_then(|p| p.parse().ok()),
-            }),
-            "join" => Some(TgLink::Invite(query(q, "invite")?)),
-            "privatepost" => Some(TgLink::Private {
-                channel: query(q, "channel")?.parse().ok()?,
-                post: query(q, "post").and_then(|p| p.parse().ok()),
-            }),
-            _ => None,
-        };
-    }
-    let rest = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-        .unwrap_or(url);
-    let path = rest
-        .strip_prefix("t.me/")
-        .or_else(|| rest.strip_prefix("telegram.me/"))
-        .or_else(|| rest.strip_prefix("www.t.me/"))?;
-    let path = path.split(['?', '#']).next().unwrap_or("");
-    let mut parts = path.split('/').filter(|p| !p.is_empty());
-    let first = parts.next()?;
-    let second = parts.next();
-    if let Some(hash) = first.strip_prefix('+') {
-        return Some(TgLink::Invite(hash.to_string()));
-    }
-    match first {
-        "joinchat" => Some(TgLink::Invite(second?.to_string())),
-        "c" => Some(TgLink::Private {
-            channel: second?.parse().ok()?,
-            post: parts.next().and_then(|p| p.parse().ok()),
-        }),
-        "s" => Some(TgLink::Public { name: second?.to_string(), post: None }),
-        // pagine di servizio, non chat
-        "addstickers" | "addemoji" | "share" | "proxy" | "socks" | "login" | "setlanguage"
-        | "addtheme" | "bg" | "invoice" | "boost" => None,
-        name => Some(TgLink::Public {
-            name: name.to_string(),
-            post: second.and_then(|p| p.parse().ok()),
-        }),
-    }
-}
-
-/// Esito della risoluzione di un link.
-pub enum LinkHit {
-    /// chat da aprire (dialogo nuovo se non era fra i tuoi)
-    Chat { dialog: DialogInfo, post: Option<i32> },
-    /// invito a una chat di cui sei già membro
-    Already(PeerId),
-    /// invito da accettare: titolo e membri per la conferma
-    Invite { hash: String, title: String, members: i32 },
-    /// invito accettato: la chat (se l'update la nomina)
-    Joined(Option<PeerId>),
-}
-
-fn chat_peer_id(chat: &tl::enums::Chat) -> Option<PeerId> {
-    match chat {
+fn chat_peer_id(chat: &tl::enums::Chat) -> Option<ChatId> {
+    let pid = match chat {
         tl::enums::Chat::Chat(c) => PeerId::chat(c.id),
         tl::enums::Chat::Forbidden(c) => PeerId::chat(c.id),
         tl::enums::Chat::Channel(c) => PeerId::channel(c.id),
@@ -1883,7 +1438,8 @@ fn chat_peer_id(chat: &tl::enums::Chat) -> Option<PeerId> {
         tl::enums::Chat::Empty(_)
         | tl::enums::Chat::Community(_)
         | tl::enums::Chat::CommunityForbidden(_) => None,
-    }
+    };
+    pid.map(to_chat_id)
 }
 
 /// Chat pubblica per username o anteprima di un invito.
@@ -1911,8 +1467,8 @@ pub async fn resolve_link(client: &Client, link: TgLink) -> Result<LinkHit, Stri
                     seen,
                     name: peer.name().unwrap_or(&name).to_string(),
                     is_group: !matches!(peer, grammers_client::peer::Peer::User(_)),
-                    peer_id: peer.id(),
-                    peer_ref,
+                    peer_id: to_chat_id(peer.id()),
+                    peer_ref: to_chat_ref(peer_ref),
                     unread: 0,
                     pinned: false,
                     last: None,
@@ -1965,24 +1521,28 @@ pub async fn join_invite(client: &Client, hash: String) -> Result<LinkHit, Strin
 mod tests {
     use super::*;
 
-    // ---------- parse_link ----------
+    // ---------- tipi neutri ----------
     #[test]
-    fn parse_link_riconosce_i_formati() {
-        let public = |n: &str, p: Option<i32>| Some(TgLink::Public { name: n.into(), post: p });
-        assert_eq!(parse_link("https://t.me/durov"), public("durov", None));
-        assert_eq!(parse_link("t.me/durov/42"), public("durov", Some(42)));
-        assert_eq!(parse_link("https://t.me/s/canale"), public("canale", None));
-        assert_eq!(parse_link("tg://resolve?domain=durov&post=7"), public("durov", Some(7)));
-        assert_eq!(parse_link("https://t.me/+AbC_1"), Some(TgLink::Invite("AbC_1".into())));
-        assert_eq!(parse_link("https://t.me/joinchat/XyZ"), Some(TgLink::Invite("XyZ".into())));
-        assert_eq!(parse_link("tg://join?invite=XyZ"), Some(TgLink::Invite("XyZ".into())));
-        assert_eq!(
-            parse_link("https://t.me/c/123456/89"),
-            Some(TgLink::Private { channel: 123456, post: Some(89) })
-        );
-        assert_eq!(parse_link("https://t.me/addstickers/set"), None);
-        assert_eq!(parse_link("https://example.com/t.me/x"), None);
-        assert_eq!(parse_link("tg://settings"), None);
+    fn chat_id_andata_e_ritorno() {
+        for pid in [
+            PeerId::user_unchecked(777),
+            PeerId::chat(4242).unwrap(),
+            PeerId::channel(1234567890).unwrap(),
+            PeerId::self_user(),
+        ] {
+            assert_eq!(to_peer_id(to_chat_id(pid)), pid);
+        }
+        // canali: gli stessi numeri dei link privati
+        let ch = to_chat_id(PeerId::channel(1234567890).unwrap());
+        assert_eq!(Some(ch), crate::links::channel_chat(1234567890));
+        assert!(ch.own_msg_ids());
+        assert!(!to_chat_id(PeerId::chat(4242).unwrap()).own_msg_ids());
+    }
+
+    #[test]
+    fn chat_ref_porta_l_access_hash() {
+        let r = PeerRef { id: PeerId::user_unchecked(5), auth: PeerAuth::from_hash(99) };
+        assert_eq!(to_peer_ref(to_chat_ref(r)), r);
     }
 
     // ---------- normalize_phone ----------
@@ -2021,61 +1581,5 @@ mod tests {
     #[test]
     fn phone_garbage_chars_skipped() {
         assert_eq!(normalize_phone(" (339) 123-4567 "), "+393391234567");
-    }
-
-    // ---------- fmt_size / fmt_secs ----------
-    #[test]
-    fn size_unit() {
-        assert_eq!(fmt_size(342.0), "342 B");
-        assert_eq!(fmt_size(1024.0), "1,0 kB");
-        assert_eq!(fmt_size(1024.0 * 1024.0 * 1.2), "1,2 MB");
-        assert_eq!(fmt_size(1024.0 * 1024.0 * 1024.0 * 15.75), "15,8 GB");
-        assert_eq!(fmt_size(0.0), "0 B");
-    }
-
-    #[test]
-    fn secs_clock() {
-        assert_eq!(fmt_secs(0), "0:00");
-        assert_eq!(fmt_secs(91), "1:31");
-        assert_eq!(fmt_secs(3800), "1:03:20");
-    }
-
-    // ---------- caption ----------
-    #[test]
-    fn caption_collapses_and_cuts() {
-        assert_eq!(caption("  a   b\t c "), "a b c");
-        let long = "x".repeat(200);
-        let cut = caption(&long);
-        assert!(cut.ends_with('…'));
-        assert!(cut.chars().count() < 200);
-    }
-
-    // ---------- sanitize_file_name ----------
-    #[test]
-    fn sanitize_bins_paths_and_dots() {
-        assert_eq!(sanitize_file_name("a/b.pdf"), Some("a_b.pdf".into()));
-        assert_eq!(sanitize_file_name("a\\b.txt"), Some("a_b.txt".into()));
-        assert_eq!(sanitize_file_name("..bad"), Some("_bad".into()));
-    }
-
-    #[test]
-    fn sanitize_rejects_empty_or_dot() {
-        assert!(sanitize_file_name("").is_none());
-        assert!(sanitize_file_name("   ").is_none());
-        assert!(sanitize_file_name(".").is_none());
-    }
-
-    // ---------- unique_save_path ----------
-    #[test]
-    fn unique_avoids_collisions() {
-        let dir = std::env::temp_dir().join(format!("rondine-uniq-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("report.pdf"), b"x").unwrap();
-        assert_eq!(
-            unique_save_path(&dir, "report.pdf"),
-            dir.join("report (1).pdf")
-        );
-        assert_eq!(unique_save_path(&dir, "altro.txt"), dir.join("altro.txt"));
-        std::fs::remove_dir_all(&dir).ok();
     }
 }

@@ -17,7 +17,7 @@ pub struct Star {
 }
 
 fn path() -> PathBuf {
-    crate::tg::data_dir().join("starred.json")
+    crate::paths::data_dir().join("starred.json")
 }
 
 pub fn load() -> Vec<Star> {
@@ -52,7 +52,7 @@ pub fn save(list: &[Star]) {
             })
         })
         .collect();
-    if crate::tg::ensure_private_dir(&crate::tg::data_dir()).is_ok() {
+    if crate::paths::ensure_private_dir(&crate::paths::data_dir()).is_ok() {
         let _ = std::fs::write(path(), serde_json::Value::Array(items).to_string());
     }
 }

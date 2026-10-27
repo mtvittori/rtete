@@ -4,12 +4,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use grammers_client::media::Media;
-use grammers_client::session::types::PeerId;
 use tokio::sync::mpsc;
 
+use crate::model::{self, ChatId, MediaRef};
 use crate::send::Request;
-use crate::tg;
 
 /// Messaggi tenuti in RAM per la chat aperta (guardia memoria).
 pub const MAX_HISTORY: usize = 60;
@@ -24,7 +22,7 @@ pub const STICKER_COLS: usize = 4;
 
 /// Dopo `prev` fallimenti, il prossimo tentativo tra 1, 2, 4… fino a 60s:
 /// backoff esponenziale unico per conversioni e richieste di rete.
-pub fn pinned_first(contacts: &mut [tg::DialogInfo]) {
+pub fn pinned_first(contacts: &mut [model::DialogInfo]) {
     contacts.sort_by_key(|d| !d.pinned);
 }
 
@@ -43,7 +41,7 @@ fn bump_backoff<K: Eq + std::hash::Hash>(map: &mut HashMap<K, (Instant, u32)>, k
 
 /// Scala il mio voto dall'emoji indicata (true = il mio voto c'era);
 /// l'item sparisce se il conteggio resta a zero.
-fn retract(row: &mut tg::HistoryRow, mine_on: impl Fn(&tg::ReactionItem) -> bool) -> bool {
+fn retract(row: &mut model::HistoryRow, mine_on: impl Fn(&model::ReactionItem) -> bool) -> bool {
     match row.reactions.iter().position(mine_on) {
         // l'item passa solo se resta a zero (prima il retain toglieva
         // l'intera voce anche se altri hanno messo la stessa reazione)
@@ -79,22 +77,22 @@ impl Default for MediaPrefs {
 
 impl MediaPrefs {
     /// l'anteprima di questa riga parte da sola?
-    pub fn auto(&self, kind: &tg::RowKind) -> bool {
+    pub fn auto(&self, kind: &model::RowKind) -> bool {
         match kind {
-            tg::RowKind::Sticker { animated, .. } => !animated,
-            tg::RowKind::Photo { .. } => self.photos,
-            tg::RowKind::Video { .. } => self.video_thumbs,
+            model::RowKind::Sticker { animated, .. } => !animated,
+            model::RowKind::Photo { .. } => self.photos,
+            model::RowKind::Video { .. } => self.video_thumbs,
             _ => false,
         }
     }
 }
 
 /// il media di cui si fa l'anteprima (sticker, foto, video)
-pub fn preview_media(kind: &tg::RowKind) -> Option<&Media> {
+pub fn preview_media(kind: &model::RowKind) -> Option<&MediaRef> {
     match kind {
-        tg::RowKind::Sticker { media, .. }
-        | tg::RowKind::Photo { media, .. }
-        | tg::RowKind::Video { media, .. } => Some(media),
+        model::RowKind::Sticker { media, .. }
+        | model::RowKind::Photo { media, .. }
+        | model::RowKind::Video { media, .. } => Some(media),
         _ => None,
     }
 }
@@ -116,10 +114,10 @@ pub const AUTO_TRANSLATE_LAST: usize = 20;
 
 #[derive(Default)]
 pub struct App {
-    pub contacts: Vec<tg::DialogInfo>,
+    pub contacts: Vec<model::DialogInfo>,
     pub contact_cursor: usize,
-    pub open: Option<PeerId>,
-    pub histories: HashMap<PeerId, VecDeque<tg::HistoryRow>>,
+    pub open: Option<ChatId>,
+    pub histories: HashMap<ChatId, VecDeque<model::HistoryRow>>,
     pub compose: String,
     pub status: String,
     /// true: pannello sticker visibile.
@@ -131,9 +129,9 @@ pub struct App {
     /// cursore nella griglia del set aperto.
     pub sticker_cursor: usize,
     /// None: lista in caricamento, Some: set installati.
-    pub sets: Option<Vec<tg::StickerSetInfo>>,
+    pub sets: Option<Vec<model::StickerSetInfo>>,
     /// set_id -> sticker del set (scaricati on-demand).
-    pub set_docs: HashMap<i64, Vec<Media>>,
+    pub set_docs: HashMap<i64, Vec<MediaRef>>,
     /// set il cui download è in pausa di backoff: set_id → (riprova da, n).
     pub docs_failed: HashMap<i64, (Instant, u32)>,
     /// id del set aperto.
@@ -163,7 +161,7 @@ pub struct App {
     pub search_q: String,
     pub search_cursor: usize,
     /// None: ricerca ancora da lanciare; Some: risultati già ricevuti.
-    pub search_results: Option<Vec<tg::SearchHit>>,
+    pub search_results: Option<Vec<model::SearchHit>>,
     /// righe (y schermo, id messaggio) dell'ultimo frame: click → selezione.
     pub mouse_map: Vec<(u16, i32)>,
     /// link a schermo: (riga, x inizio, x fine, url) per il click → browser.
@@ -177,49 +175,49 @@ pub struct App {
     pub uploading: Option<String>,
     /// pannello reazioni veloci aperto sul messaggio selezionato.
     pub react_open: bool,
-    /// indice nella lista tg::QUICK_REACTIONS.
+    /// indice nella lista model::QUICK_REACTIONS.
     pub react_idx: usize,
     /// ultimo mark_as_read mandato: soglia anti-tempesta sui burst di
     /// messaggi nuovi nella chat aperta.
     pub read_mark: Option<Instant>,
     /// chat con una richiesta di messaggi più vecchi in volo
-    pub older_busy: HashSet<PeerId>,
+    pub older_busy: HashSet<ChatId>,
     /// chat senza altro da caricare (inizio raggiunto o RING_CAP)
-    pub older_done: HashSet<PeerId>,
+    pub older_done: HashSet<ChatId>,
     /// ↑ è arrivato alla riga più vecchia: il ciclo chiede la pagina prima
     pub want_older: bool,
     /// messaggi citati fuori dalla cronologia caricata, per chat e id:
     /// `None` = eliminato. Solo per la riga di citazione delle risposte.
-    pub quoted: HashMap<PeerId, HashMap<i32, Option<tg::HistoryRow>>>,
+    pub quoted: HashMap<ChatId, HashMap<i32, Option<model::HistoryRow>>>,
     /// foto profilo in cache: photo_id → file
     pub avatars: HashMap<i64, PathBuf>,
     /// foto chieste (in volo o fallite: non si richiedono a ogni giro)
     pub avatar_asked: HashSet<i64>,
     /// chi sta scrivendo, per chat: (fino a quando, «Nome sta scrivendo»)
-    pub typing: HashMap<PeerId, (Instant, String)>,
+    pub typing: HashMap<ChatId, (Instant, String)>,
     /// chat da aprire appena è nella lista (link risolto), col messaggio
-    pub link_open: Option<(PeerId, Option<i32>)>,
+    pub link_open: Option<(ChatId, Option<i32>)>,
     /// invito in attesa di conferma: (hash, titolo, membri)
     pub invite: Option<(String, String, i32)>,
     /// chat con una richiesta `Quoted` in volo
-    pub quoted_busy: HashSet<PeerId>,
+    pub quoted_busy: HashSet<ChatId>,
     /// chat la cui ultima richiesta `Quoted` è fallita: prossimo tentativo
-    pub quoted_failed: HashMap<PeerId, (Instant, u32)>,
+    pub quoted_failed: HashMap<ChatId, (Instant, u32)>,
     /// schede delle chat (bio, membri, bloccato), chieste aprendo le info
-    pub peer_info: HashMap<PeerId, tg::PeerInfo>,
+    pub peer_info: HashMap<ChatId, model::PeerInfo>,
     /// contenuti condivisi per chat e tipo (media, file, link…)
-    pub shared: HashMap<(PeerId, tg::SharedTab), Vec<tg::SharedItem>>,
+    pub shared: HashMap<(ChatId, model::SharedTab), Vec<model::SharedItem>>,
     /// schede condivise già chieste (in corso o arrivate)
-    pub shared_asked: HashSet<(PeerId, tg::SharedTab)>,
+    pub shared_asked: HashSet<(ChatId, model::SharedTab)>,
     pub media_prefs: MediaPrefs,
     /// il mio profilo e i dispositivi collegati (impostazioni)
-    pub profile: Option<tg::MyProfile>,
-    pub sessions: Option<Vec<tg::Session>>,
+    pub profile: Option<model::MyProfile>,
+    pub sessions: Option<Vec<model::Session>>,
     /// servizio di traduzione e chat tradotte da sole
     pub translate: crate::translate::Config,
-    pub translations: HashMap<(PeerId, i32), TrState>,
+    pub translations: HashMap<(ChatId, i32), TrState>,
     /// messaggi da tradurre: (chat, id, automatica)
-    pub tr_queue: Vec<(PeerId, i32, bool)>,
+    pub tr_queue: Vec<(ChatId, i32, bool)>,
     /// esito della traduzione di prova nelle impostazioni
     pub tr_test: Option<Result<String, String>>,
     /// messaggi importanti (stella), salvati sul PC
@@ -228,10 +226,10 @@ pub struct App {
 }
 
 impl App {
-    pub fn current_chat(&self) -> Option<&tg::DialogInfo> {
+    pub fn current_chat(&self) -> Option<&model::DialogInfo> {
         self.open
             .as_ref()
-            .and_then(|pid| self.contacts.iter().find(|c| tg::same_peer(c.peer_id, *pid)))
+            .and_then(|pid| self.contacts.iter().find(|c| model::same_peer(c.peer_id, *pid)))
     }
 
     /// Limite di Telegram in caratteri: 4096 il testo, 1024 la didascalia
@@ -244,7 +242,7 @@ impl App {
         }
     }
 
-    pub fn open_history(&self) -> Option<&VecDeque<tg::HistoryRow>> {
+    pub fn open_history(&self) -> Option<&VecDeque<model::HistoryRow>> {
         let chat = self.current_chat()?;
         self.histories.get(&chat.peer_id)
     }
@@ -253,7 +251,7 @@ impl App {
     /// lo status, esige nessun pannello aperto (ricerca/sticker), una chat
     /// aperta e la sua cronologia caricata; altrimenti imposta la ragione
     /// dello status e ritorna `None`.
-    pub fn chat_ready_ring(&mut self) -> Option<&VecDeque<tg::HistoryRow>> {
+    pub fn chat_ready_ring(&mut self) -> Option<&VecDeque<model::HistoryRow>> {
         self.status.clear();
         if self.show_search || self.show_sticker {
             return None;
@@ -274,10 +272,10 @@ impl App {
     /// La riga scelta da un comando: quella sotto il cursore di selezione
     /// (se soddisfa `pred`), altrimenti l'ultima di `ring` che la soddisfa.
     pub fn picked_row(
-        ring: &VecDeque<tg::HistoryRow>,
+        ring: &VecDeque<model::HistoryRow>,
         cursor: Option<i32>,
-        pred: impl Fn(&tg::HistoryRow) -> bool,
-    ) -> Option<&tg::HistoryRow> {
+        pred: impl Fn(&model::HistoryRow) -> bool,
+    ) -> Option<&model::HistoryRow> {
         cursor
             .and_then(|cid| ring.iter().rev().find(|r| r.id == cid && pred(r)))
             .or_else(|| ring.iter().rev().find(|r| pred(r)))
@@ -309,7 +307,7 @@ impl App {
             if self.avatars.contains_key(&id) || !self.avatar_asked.insert(id) {
                 continue;
             }
-            let path = tg::avatar_path(id);
+            let path = crate::paths::avatar_path(id);
             if path.exists() {
                 self.avatars.insert(id, path);
             } else {
@@ -319,7 +317,7 @@ impl App {
     }
 
     /// «sta scrivendo» della chat, se non è scaduto.
-    pub fn typing_in(&self, peer: PeerId) -> Option<&str> {
+    pub fn typing_in(&self, peer: ChatId) -> Option<&str> {
         self.typing
             .get(&peer)
             .filter(|(until, _)| Instant::now() < *until)
@@ -327,17 +325,17 @@ impl App {
     }
 
     /// Aggiorna l'anteprima della chat nella lista (messaggio nuovo o inviato).
-    pub fn set_last(&mut self, peer_id: PeerId, row: &tg::HistoryRow) {
-        if let Some(d) = self.contacts.iter_mut().find(|d| tg::same_peer(d.peer_id, peer_id)) {
-            d.last = Some(tg::LastMsg::from_row(row));
+    pub fn set_last(&mut self, peer_id: ChatId, row: &model::HistoryRow) {
+        if let Some(d) = self.contacts.iter_mut().find(|d| model::same_peer(d.peer_id, peer_id)) {
+            d.last = Some(model::LastMsg::from_row(row));
         }
     }
 
-    pub fn push_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
+    pub fn push_row(&mut self, peer_id: ChatId, row: model::HistoryRow) {
         self.push_each(peer_id, std::iter::once(row));
     }
 
-    pub fn push_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) {
+    pub fn push_rows(&mut self, peer_id: ChatId, rows: Vec<model::HistoryRow>) {
         self.push_each(peer_id, rows);
     }
 
@@ -345,9 +343,9 @@ impl App {
     /// volta sola: dedup (uno stesso messaggio arriva sia dalla conferma
     /// dell'invio sia dalle notifiche live di Telegram, anche dai nostri
     /// stessi invii) e tetto RING_CAP.
-    fn push_each<I>(&mut self, peer_id: PeerId, rows: I)
+    fn push_each<I>(&mut self, peer_id: ChatId, rows: I)
     where
-        I: IntoIterator<Item = tg::HistoryRow>,
+        I: IntoIterator<Item = model::HistoryRow>,
     {
         let ring = self.histories.entry(peer_id).or_default();
         for row in rows {
@@ -364,10 +362,10 @@ impl App {
     /// Porta la chat in cima alla lista come fa Telegram a ogni messaggio,
     /// ma sotto le chat fissate (preferiti); se è nuova la inserisce
     /// (`fresh`). Il cursore resta sulla stessa chat.
-    pub fn bump_chat(&mut self, peer_id: PeerId, fresh: Option<tg::DialogInfo>) {
+    pub fn bump_chat(&mut self, peer_id: ChatId, fresh: Option<model::DialogInfo>) {
         let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
         let pinned_len = self.contacts.iter().take_while(|c| c.pinned).count();
-        match self.contacts.iter().position(|c| tg::same_peer(c.peer_id, peer_id)) {
+        match self.contacts.iter().position(|c| model::same_peer(c.peer_id, peer_id)) {
             Some(i) if self.contacts[i].pinned => return,
             Some(i) if i == pinned_len => return,
             Some(i) => {
@@ -380,7 +378,7 @@ impl App {
             },
         }
         if let Some(i) =
-            sel.and_then(|s| self.contacts.iter().position(|c| tg::same_peer(c.peer_id, s)))
+            sel.and_then(|s| self.contacts.iter().position(|c| model::same_peer(c.peer_id, s)))
         {
             self.contact_cursor = i;
         }
@@ -389,10 +387,10 @@ impl App {
     /// Messaggi più vecchi caricati con lo scorrimento all'indietro (oldest
     /// first): vanno in testa al ring, senza superare RING_CAP. Ritorna
     /// quante righe sono entrate davvero.
-    pub fn prepend_rows(&mut self, peer_id: PeerId, rows: Vec<tg::HistoryRow>) -> usize {
+    pub fn prepend_rows(&mut self, peer_id: ChatId, rows: Vec<model::HistoryRow>) -> usize {
         let ring = self.histories.entry(peer_id).or_default();
         let room = RING_CAP.saturating_sub(ring.len());
-        let fresh: Vec<tg::HistoryRow> = rows
+        let fresh: Vec<model::HistoryRow> = rows
             .into_iter()
             .filter(|r| !ring.iter().any(|x| x.id == r.id))
             .collect();
@@ -406,7 +404,7 @@ impl App {
 
     /// Sostituisce (o inserisce in coda) una riga stessa-id: usato per gli
     /// edit e per il feedback locali.
-    pub fn replace_row(&mut self, peer_id: PeerId, row: tg::HistoryRow) {
+    pub fn replace_row(&mut self, peer_id: ChatId, row: model::HistoryRow) {
         let ring = self.histories.entry(peer_id).or_default();
         if let Some(old) = ring.iter_mut().find(|r| r.id == row.id) {
             let mut row = row;
@@ -429,7 +427,7 @@ impl App {
 
     /// Sostituisce (o applica) le reazioni di un messaggio: update server
     /// o toggle locale ottimistico.
-    pub fn apply_reactions(&mut self, peer_id: PeerId, msg_id: i32, items: Vec<tg::ReactionItem>) {
+    pub fn apply_reactions(&mut self, peer_id: ChatId, msg_id: i32, items: Vec<model::ReactionItem>) {
         let Some(ring) = self.histories.get_mut(&peer_id) else {
             return;
         };
@@ -467,7 +465,7 @@ impl App {
                 item.count += 1;
                 item.mine = true;
             }
-            None => row.reactions.push(tg::ReactionItem {
+            None => row.reactions.push(model::ReactionItem {
                 emoticon: emoticon.to_string(),
                 count: 1,
                 mine: true,
@@ -480,10 +478,10 @@ impl App {
     pub fn ensure_previews<'a>(
         &mut self,
         req: &mpsc::UnboundedSender<Request>,
-        medias: impl IntoIterator<Item = &'a Media>,
+        medias: impl IntoIterator<Item = &'a MediaRef>,
     ) {
         for media in medias {
-            let key = tg::media_key(media);
+            let key = media.key().to_string();
             if self.previews.contains_key(&key) || self.pending.contains(&key) {
                 continue;
             }
@@ -517,7 +515,7 @@ impl App {
     }
 
     /// idem per i messaggi citati: request_quoted gira a ogni frame
-    pub fn quoted_failed(&mut self, peer: PeerId) {
+    pub fn quoted_failed(&mut self, peer: ChatId) {
         bump_backoff(&mut self.quoted_failed, peer);
     }
 
@@ -610,19 +608,19 @@ impl App {
     }
 
     /// Il testo traducibile di un messaggio (solo i messaggi di testo).
-    fn row_text(&self, peer: PeerId, id: i32) -> Option<String> {
+    fn row_text(&self, peer: ChatId, id: i32) -> Option<String> {
         self.histories
             .get(&peer)?
             .iter()
             .find(|r| r.id == id)
             .and_then(|r| match &r.kind {
-                tg::RowKind::Text(t) if !t.trim().is_empty() => Some(t.clone()),
+                model::RowKind::Text(t) if !t.trim().is_empty() => Some(t.clone()),
                 _ => None,
             })
     }
 
     /// Mostra o nasconde la traduzione di un messaggio (chiesta la prima volta).
-    pub fn toggle_translation(&mut self, peer: PeerId, id: i32) {
+    pub fn toggle_translation(&mut self, peer: ChatId, id: i32) {
         match self.translations.get(&(peer, id)).cloned() {
             Some(TrState::Shown(t)) => {
                 self.translations.insert((peer, id), TrState::Hidden(t));
@@ -637,7 +635,7 @@ impl App {
 
     /// Chat a traduzione automatica: mette in coda i messaggi in arrivo
     /// non ancora tradotti (gli ultimi `last`).
-    pub fn auto_translate(&mut self, peer: PeerId, last: usize) {
+    pub fn auto_translate(&mut self, peer: ChatId, last: usize) {
         if !self.translate.is_auto(peer) || !self.translate.ready() {
             return;
         }
@@ -645,7 +643,7 @@ impl App {
         let ids: Vec<i32> = ring
             .iter()
             .rev()
-            .filter(|r| !r.outgoing && matches!(&r.kind, tg::RowKind::Text(t) if !t.trim().is_empty()))
+            .filter(|r| !r.outgoing && matches!(&r.kind, model::RowKind::Text(t) if !t.trim().is_empty()))
             .take(last)
             .map(|r| r.id)
             .filter(|id| !self.translations.contains_key(&(peer, *id)))
@@ -675,14 +673,14 @@ impl App {
     }
 
     /// Il messaggio ha la stella?
-    pub fn is_starred(&self, peer: PeerId, id: i32) -> bool {
-        let Some(chat) = peer.bot_api_dialog_id() else { return false };
+    pub fn is_starred(&self, peer: ChatId, id: i32) -> bool {
+        let chat = peer.0;
         self.starred.iter().any(|s| s.chat == chat && s.id == id)
     }
 
     /// Mette o toglie la stella a un messaggio caricato; salva la lista.
-    pub fn toggle_star(&mut self, peer: PeerId, id: i32) {
-        let Some(chat) = peer.bot_api_dialog_id() else { return };
+    pub fn toggle_star(&mut self, peer: ChatId, id: i32) {
+        let chat = peer.0;
         if self.is_starred(peer, id) {
             self.starred.retain(|s| !(s.chat == chat && s.id == id));
         } else {
@@ -690,14 +688,14 @@ impl App {
                 return;
             };
             let text = match &row.kind {
-                tg::RowKind::Text(t) => t.clone(),
+                model::RowKind::Text(t) => t.clone(),
                 k => k.summary(),
             };
             let from = if row.outgoing { self.me.clone() } else { row.from.clone() };
             let chat_name = self
                 .contacts
                 .iter()
-                .find(|d| tg::same_peer(d.peer_id, peer))
+                .find(|d| model::same_peer(d.peer_id, peer))
                 .map(|d| d.name.clone())
                 .unwrap_or_default();
             self.starred.push(crate::starred::Star { chat, chat_name, id, date: row.date, from, text });
@@ -706,38 +704,38 @@ impl App {
     }
 
     /// Applica un'azione rapida riuscita (o arrivata da un altro dispositivo).
-    pub fn apply_chat_action(&mut self, peer: PeerId, action: tg::ChatAction) {
-        if let tg::ChatAction::Ttl(t) = action {
+    pub fn apply_chat_action(&mut self, peer: ChatId, action: model::ChatAction) {
+        if let model::ChatAction::Ttl(t) = action {
             if let Some(info) = self.peer_info.get_mut(&peer) {
                 info.ttl = t;
             }
             return;
         }
-        let Some(d) = self.contacts.iter_mut().find(|d| tg::same_peer(d.peer_id, peer)) else {
+        let Some(d) = self.contacts.iter_mut().find(|d| model::same_peer(d.peer_id, peer)) else {
             return;
         };
         match action {
-            tg::ChatAction::Archive(on) => d.archived = on,
-            tg::ChatAction::Pin(on) => d.pinned = on,
-            tg::ChatAction::Mute(on) => d.muted = on,
-            tg::ChatAction::MarkUnread(on) => d.unread_mark = on,
-            tg::ChatAction::Ttl(_) => {}
+            model::ChatAction::Archive(on) => d.archived = on,
+            model::ChatAction::Pin(on) => d.pinned = on,
+            model::ChatAction::Mute(on) => d.muted = on,
+            model::ChatAction::MarkUnread(on) => d.unread_mark = on,
+            model::ChatAction::Ttl(_) => {}
         }
-        if matches!(action, tg::ChatAction::Pin(_)) {
+        if matches!(action, model::ChatAction::Pin(_)) {
             let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
             pinned_first(&mut self.contacts);
-            if let Some(i) = sel.and_then(|s| self.contacts.iter().position(|c| tg::same_peer(c.peer_id, s))) {
+            if let Some(i) = sel.and_then(|s| self.contacts.iter().position(|c| model::same_peer(c.peer_id, s))) {
                 self.contact_cursor = i;
             }
         }
     }
 
     /// Toglie una chat eliminata (o da cui si è usciti) da lista e memoria.
-    pub fn forget_chat(&mut self, peer: PeerId) {
+    pub fn forget_chat(&mut self, peer: ChatId) {
         let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
-        self.contacts.retain(|c| !tg::same_peer(c.peer_id, peer));
+        self.contacts.retain(|c| !model::same_peer(c.peer_id, peer));
         self.contact_cursor = sel
-            .and_then(|s| self.contacts.iter().position(|c| tg::same_peer(c.peer_id, s)))
+            .and_then(|s| self.contacts.iter().position(|c| model::same_peer(c.peer_id, s)))
             .unwrap_or(0);
         self.histories.remove(&peer);
         self.quoted.remove(&peer);
@@ -759,7 +757,7 @@ impl App {
     }
 
     pub fn refresh_preview_queue(&mut self, req: &mpsc::UnboundedSender<Request>) {
-        let mut medias: Vec<Media> = Vec::new();
+        let mut medias: Vec<MediaRef> = Vec::new();
         if let Some(ring) = self.open_history() {
             // tgs/webm non convertibili; foto e video secondo le preferenze
             let prefs = self.media_prefs;
@@ -782,16 +780,12 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use grammers_client::session::types::{PeerAuth, PeerId};
 
-    fn dialog(name: &str, id: i64, pinned: bool) -> tg::DialogInfo {
-        let pid = PeerId::user_unchecked(id);
-        tg::DialogInfo {
+    fn dialog(name: &str, id: i64, pinned: bool) -> model::DialogInfo {
+        let pid = ChatId(id);
+        model::DialogInfo {
             name: name.to_string(),
-            peer_ref: tg::ChatRef {
-                id: pid,
-                auth: PeerAuth::default(),
-            },
+            peer_ref: model::ChatRef { id: pid, auth: 0 },
             peer_id: pid,
             is_group: false,
             unread: 0,
@@ -799,7 +793,7 @@ mod tests {
             last: None,
             read_out: 0,
             photo_id: None,
-            seen: tg::Seen::Unknown,
+            seen: model::Seen::Unknown,
             broadcast: false,
             muted: false,
             archived: false,

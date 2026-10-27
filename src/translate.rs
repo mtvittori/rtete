@@ -10,7 +10,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use grammers_client::session::types::PeerId;
+use crate::model::ChatId;
 
 use crate::i18n::{self, tr};
 
@@ -76,7 +76,7 @@ impl Default for Config {
 }
 
 fn path() -> PathBuf {
-    crate::tg::config_dir().join("translate.conf")
+    crate::paths::config_dir().join("translate.conf")
 }
 
 impl Config {
@@ -103,7 +103,7 @@ impl Config {
 
     /// Salva con permessi 0600: il file contiene le chiavi API.
     pub fn save(&self) -> std::io::Result<()> {
-        crate::tg::ensure_private_dir(&crate::tg::config_dir())?;
+        crate::paths::ensure_private_dir(&crate::paths::config_dir())?;
         let provider = match self.provider {
             Provider::DeepL => "deepl",
             Provider::OpenAi => "openai",
@@ -141,12 +141,12 @@ impl Config {
         self.target.clone().unwrap_or_else(|| i18n::lang().code().to_string())
     }
 
-    pub fn is_auto(&self, peer: PeerId) -> bool {
-        peer.bot_api_dialog_id().is_some_and(|id| self.auto.contains(&id))
+    pub fn is_auto(&self, peer: ChatId) -> bool {
+        self.auto.contains(&peer.0)
     }
 
-    pub fn set_auto(&mut self, peer: PeerId, on: bool) {
-        let Some(id) = peer.bot_api_dialog_id() else { return };
+    pub fn set_auto(&mut self, peer: ChatId, on: bool) {
+        let id = peer.0;
         self.auto.retain(|x| *x != id);
         if on {
             self.auto.push(id);

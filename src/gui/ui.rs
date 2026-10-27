@@ -3,7 +3,7 @@
 
 use std::collections::VecDeque;
 
-use grammers_client::media::Media;
+use rondine::model::MediaRef;
 use iced::font::Weight;
 use iced::widget::text::Span;
 use iced::widget::{
@@ -13,7 +13,7 @@ use iced::widget::{
 use iced::{Alignment, Center, Element, Fill, Font, Length};
 
 use rondine::app::{App, TrState};
-use rondine::tg::{self, HistoryRow, RowKind};
+use rondine::model::{self, HistoryRow, RowKind};
 use rondine::{tr, trf};
 
 use crate::style;
@@ -219,9 +219,9 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
     let wa = style::wa();
     let needle = g.filter.to_lowercase();
     let open = app.open;
-    let favorite = |d: &tg::DialogInfo| d.peer_id.bot_api_dialog_id().is_some_and(|id| g.settings.favorites.contains(&id));
+    let favorite = |d: &model::DialogInfo| g.settings.favorites.contains(&d.peer_id.0);
     // archivio a parte; il filtro scelto vale per la lista principale
-    let visible = |d: &&tg::DialogInfo| {
+    let visible = |d: &&model::DialogInfo| {
         if d.archived != g.show_archived {
             return false;
         }
@@ -238,7 +238,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
     };
     let mut list = Column::new();
     if !compact && !g.show_archived && needle.is_empty() {
-        let archived: Vec<&tg::DialogInfo> = app.contacts.iter().filter(|d| d.archived).collect();
+        let archived: Vec<&model::DialogInfo> = app.contacts.iter().filter(|d| d.archived).collect();
         if !archived.is_empty() {
             let unread = archived.iter().filter(|d| d.unread > 0 && !d.muted).count();
             let mut line = row![text("📦").size(18).width(46).align_x(Center), text(tr("Archiviate")).width(Fill)]
@@ -257,7 +257,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         }
     }
     for d in app.contacts.iter().filter(visible) {
-        let is_open = open.is_some_and(|o| tg::same_peer(o, d.peer_id));
+        let is_open = open.is_some_and(|o| model::same_peer(o, d.peer_id));
         let badge = |n: String| container(text(n).size(if compact { 10 } else { 12 })).padding([1, 7]).style(style::pill(p.accent));
         if compact {
             let mut face = iced::widget::Stack::new().push(avatar(app, d, 46.0));
@@ -422,7 +422,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
 }
 
 /// Il menu di una chat della lista (tasto destro), aperto sotto la voce.
-fn chat_menu<'a>(d: &tg::DialogInfo, favorite: bool) -> Element<'a, Msg> {
+fn chat_menu<'a>(d: &model::DialogInfo, favorite: bool) -> Element<'a, Msg> {
     let p = style::p();
     let pid = d.peer_id;
     let item = |icon: &'static str, label: &'static str, m: Msg| -> Element<'a, Msg> {
@@ -435,10 +435,10 @@ fn chat_menu<'a>(d: &tg::DialogInfo, favorite: bool) -> Element<'a, Msg> {
     };
     let unread = d.unread > 0 || d.unread_mark;
     let mut col = column![
-        item("📦", if d.archived { tr("Togli dall'archivio") } else { tr("Archivia") }, Msg::ChatDo(pid, tg::ChatAction::Archive(!d.archived))),
-        item("📌", if d.pinned { tr("Non fissare") } else { tr("Fissa in alto") }, Msg::ChatDo(pid, tg::ChatAction::Pin(!d.pinned))),
-        item("🔕", if d.muted { tr("Riattiva le notifiche") } else { tr("Silenzia le notifiche") }, Msg::ChatDo(pid, tg::ChatAction::Mute(!d.muted))),
-        item("●", if unread { tr("Segna come letta") } else { tr("Segna come da leggere") }, Msg::ChatDo(pid, tg::ChatAction::MarkUnread(!unread))),
+        item("📦", if d.archived { tr("Togli dall'archivio") } else { tr("Archivia") }, Msg::ChatDo(pid, model::ChatAction::Archive(!d.archived))),
+        item("📌", if d.pinned { tr("Non fissare") } else { tr("Fissa in alto") }, Msg::ChatDo(pid, model::ChatAction::Pin(!d.pinned))),
+        item("🔕", if d.muted { tr("Riattiva le notifiche") } else { tr("Silenzia le notifiche") }, Msg::ChatDo(pid, model::ChatAction::Mute(!d.muted))),
+        item("●", if unread { tr("Segna come letta") } else { tr("Segna come da leggere") }, Msg::ChatDo(pid, model::ChatAction::MarkUnread(!unread))),
         item("⭐", if favorite { tr("Togli dalle preferite") } else { tr("Aggiungi alle preferite") }, Msg::ToggleFavorite(pid)),
     ]
     .spacing(1);
@@ -483,7 +483,7 @@ fn list_time(g: &Gui, secs: i64) -> String {
 }
 
 /// Foto profilo tonda (o iniziale su colore) con il pallino «online».
-fn avatar<'a>(app: &App, d: &tg::DialogInfo, size: f32) -> Element<'a, Msg> {
+fn avatar<'a>(app: &App, d: &model::DialogInfo, size: f32) -> Element<'a, Msg> {
     let photo = d.photo_id.filter(|_| app.media_prefs.avatars);
     let face: Element<'a, Msg> = match photo.and_then(|id| app.avatars.get(&id)) {
         Some(path) => image(image::Handle::from_path(path))
@@ -590,7 +590,7 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
 }
 
 /// sotto il nome della chat: sta scrivendo, online, ultimo accesso
-fn subtitle<'a>(g: &Gui, chat: &tg::DialogInfo) -> Element<'a, Msg> {
+fn subtitle<'a>(g: &Gui, chat: &model::DialogInfo) -> Element<'a, Msg> {
     let p = style::p();
     if let Some(t) = g.app.typing_in(chat.peer_id) {
         return text(format!("{t}{}", dots(g))).size(12).color(p.link).into();
@@ -607,17 +607,17 @@ fn subtitle<'a>(g: &Gui, chat: &tg::DialogInfo) -> Element<'a, Msg> {
             None => tr("gruppo").to_string(),
         },
         s if s.online(now) => return text(tr("online")).size(12).color(p.link).into(),
-        tg::Seen::Online(t) | tg::Seen::Offline(t) => match local(g, t) {
+        model::Seen::Online(t) | model::Seen::Offline(t) => match local(g, t) {
             Some(z) if z.date() == jiff::Zoned::now().date() => {
                 trf!("ultimo accesso alle {}", z.strftime("%H:%M"))
             }
             Some(z) => trf!("ultimo accesso il {} alle {}", z.strftime("%d/%m"), z.strftime("%H:%M")),
             None => tr("chat privata").into(),
         },
-        tg::Seen::Recently => tr("ultimo accesso di recente").into(),
-        tg::Seen::LastWeek => tr("ultimo accesso questa settimana").into(),
-        tg::Seen::LastMonth => tr("ultimo accesso questo mese").into(),
-        tg::Seen::Unknown => tr("chat privata").into(),
+        model::Seen::Recently => tr("ultimo accesso di recente").into(),
+        model::Seen::LastWeek => tr("ultimo accesso questa settimana").into(),
+        model::Seen::LastMonth => tr("ultimo accesso questo mese").into(),
+        model::Seen::Unknown => tr("chat privata").into(),
     };
     text(line).size(12).color(p.muted).into()
 }
@@ -768,7 +768,7 @@ fn message<'a>(
     }
     if !r.reactions.is_empty() {
         let chips = r.reactions.iter().map(|it| {
-            let emoticon = tg::QUICK_REACTIONS
+            let emoticon = model::QUICK_REACTIONS
                 .iter()
                 .find(|q| **q == it.emoticon)
                 .copied();
@@ -862,8 +862,8 @@ fn author<'a>(app: &'a App, r: &'a HistoryRow) -> &'a str {
     }
 }
 
-fn preview<'a>(app: &App, media: &Media, px: f32) -> Option<Element<'a, Msg>> {
-    let path = app.previews.get(&tg::media_key(media))?;
+fn preview<'a>(app: &App, media: &MediaRef, px: f32) -> Option<Element<'a, Msg>> {
+    let path = app.previews.get(media.key())?;
     Some(
         image(image::Handle::from_path(path))
             .width(px)
@@ -878,7 +878,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         RowKind::Video { media, seconds, caption, round, .. } => {
             let p = style::p();
             let px = if *round { 220.0 } else { g.settings.photo_px as f32 };
-            let thumb: Element<'a, Msg> = match app.previews.get(&tg::media_key(media)) {
+            let thumb: Element<'a, Msg> = match app.previews.get(media.key()) {
                 Some(path) => {
                     let img = image(image::Handle::from_path(path)).width(px);
                     if *round {
@@ -906,7 +906,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
                     border: iced::border::rounded(100),
                     ..Default::default()
                 });
-            let dur = container(text(tg::fmt_secs(*seconds)).size(11).color(iced::Color::WHITE))
+            let dur = container(text(model::fmt_secs(*seconds)).size(11).color(iced::Color::WHITE))
                 .padding([1, 6])
                 .style(style::pill(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
             let mut c = column![iced::widget::stack![
@@ -941,7 +941,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             });
             c = c.push(pic.unwrap_or_else(|| {
                 // download automatico spento: la foto arriva con un click
-                if !app.media_prefs.photos && !app.pending.contains(&tg::media_key(media)) {
+                if !app.media_prefs.photos && !app.pending.contains(media.key()) {
                     return button(text(if *gif { tr("⬇ Mostra la GIF") } else { tr("⬇ Mostra la foto") }).size(13))
                         .on_press(Msg::LoadPreview(r.id))
                         .padding([10, 16])
@@ -960,7 +960,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         RowKind::Doc { name, size, caption, .. } => {
             let mut info = name.clone();
             if let Some(s) = size {
-                info.push_str(&format!(" · {}", tg::fmt_size(*s as f64)));
+                info.push_str(&format!(" · {}", model::fmt_size(*s as f64)));
             }
             let mut c = column![row![
                 text("📄").size(28),
@@ -981,7 +981,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
                 button(text("▶")).on_press(Msg::Play(r.id)).style(style::primary),
                 column![
                     text(label),
-                    text(tg::fmt_secs(*seconds)).size(12).color(style::p().muted)
+                    text(model::fmt_secs(*seconds)).size(12).color(style::p().muted)
                 ],
             ]
             .spacing(10)
@@ -1033,7 +1033,7 @@ fn actions<'a>(g: &Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         button(text(label).size(13)).on_press(m).padding([4, 8]).style(style::flat(false))
     };
     let mut bar = Row::new().spacing(2).align_y(Center);
-    for e in tg::QUICK_REACTIONS {
+    for e in model::QUICK_REACTIONS {
         let mine = r.reactions.iter().any(|it| it.mine && it.emoticon == e);
         bar = bar.push(
             button(text(e).size(16))
@@ -1138,7 +1138,7 @@ fn attachment(app: &App) -> Option<Element<'_, Msg>> {
     };
     let kb = std::fs::metadata(&path).map(|m| m.len() / 1024).unwrap_or(0);
     let size = if kb >= 1024 { format!("{:.1} MB", kb as f64 / 1024.0) } else { format!("{kb} KB") };
-    let thumb: Element<'_, Msg> = if tg::is_photo_file(&path) {
+    let thumb: Element<'_, Msg> = if model::is_photo_file(&path) {
         image(image::Handle::from_path(&path)).height(72).into()
     } else {
         container(text("📄").size(36)).center(72).into()
@@ -1221,7 +1221,7 @@ fn stickers(app: &App) -> Element<'_, Msg> {
         button(text(label).size(13)).on_press(m).padding([4, 10]).style(style::flat(on))
     };
     let title = match here {
-        Some(tg::FAVED_SET) | Some(tg::RECENT_SET) | None => "",
+        Some(model::FAVED_SET) | Some(model::RECENT_SET) | None => "",
         Some(id) => app
             .sets
             .as_ref()
@@ -1230,8 +1230,8 @@ fn stickers(app: &App) -> Element<'_, Msg> {
             .unwrap_or(""),
     };
     let head = row![
-        tab(tr("⭐ Preferiti"), here == Some(tg::FAVED_SET), Msg::OpenSet(tg::FAVED_SET)),
-        tab(tr("🕘 Recenti"), here == Some(tg::RECENT_SET), Msg::OpenSet(tg::RECENT_SET)),
+        tab(tr("⭐ Preferiti"), here == Some(model::FAVED_SET), Msg::OpenSet(model::FAVED_SET)),
+        tab(tr("🕘 Recenti"), here == Some(model::RECENT_SET), Msg::OpenSet(model::RECENT_SET)),
         tab(tr("☰ Set"), here.is_none(), Msg::SetsBack),
         text(title).font(BOLD).wrapping(text::Wrapping::None),
     ]
@@ -1264,9 +1264,9 @@ fn stickers(app: &App) -> Element<'_, Msg> {
                         let mut line = Row::new().spacing(4);
                         for (c, media) in chunk.iter().enumerate() {
                             let face: Element<'_, Msg> = preview(app, media, 72.0).unwrap_or_else(|| {
-                                let emoji = match media {
-                                    Media::Sticker(s) => s.emoji().to_string(),
-                                    _ => "…".into(),
+                                let emoji = match media.emoji() {
+                                    "" => "…".to_string(),
+                                    e => e.to_string(),
                                 };
                                 container(text(emoji).size(36)).center(72).into()
                             });
@@ -1646,7 +1646,7 @@ fn settings_storage(g: &Gui) -> Element<'_, Msg> {
         total += bytes;
         usage = usage.push(
             row![
-                column![text(label), text(trf!("{} file · {}", n, tg::fmt_size(bytes as f64))).size(12).color(p.muted)]
+                column![text(label), text(trf!("{} file · {}", n, model::fmt_size(bytes as f64))).size(12).color(p.muted)]
                     .spacing(1)
                     .width(Fill),
                 button(text(tr("Svuota")).size(13))
@@ -1666,7 +1666,7 @@ fn settings_storage(g: &Gui) -> Element<'_, Msg> {
     column![
         section(tr("SPAZIO USATO")),
         container(usage).padding(14).style(style::pill(p.sidebar)),
-        text(trf!("Totale: {}", tg::fmt_size(total as f64))).font(BOLD),
+        text(trf!("Totale: {}", model::fmt_size(total as f64))).font(BOLD),
         text(tr("La cronologia non resta sul disco: si salvano solo anteprime e foto profilo."))
             .size(12)
             .color(p.muted),
@@ -2011,7 +2011,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     let ttl_now = info.map_or(0, |i| i.ttl);
     let ttl_choice = |label: &'static str, secs: i32| -> Element<'_, Msg> {
         button(text(label).size(12))
-            .on_press(Msg::ChatDo(chat.peer_id, tg::ChatAction::Ttl(secs)))
+            .on_press(Msg::ChatDo(chat.peer_id, model::ChatAction::Ttl(secs)))
             .padding([4, 10])
             .style(style::chip(ttl_now == secs))
             .into()
@@ -2030,7 +2030,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     ]
     .spacing(6);
 
-    let tabs = Row::with_children(tg::SharedTab::ALL.iter().map(|&t| {
+    let tabs = Row::with_children(model::SharedTab::ALL.iter().map(|&t| {
         button(text(t.label()).size(13))
             .on_press(Msg::InfoTab(t))
             .padding([4, 10])
@@ -2043,17 +2043,17 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
         None => text(tr("carico…")).size(12).color(p.muted).into(),
         Some(items) if items.is_empty() => {
             let what = match g.info_tab {
-                tg::SharedTab::Media => tr("Nessuna foto o video"),
-                tg::SharedTab::Files => tr("Nessun file"),
-                tg::SharedTab::Links => tr("Nessun link"),
-                tg::SharedTab::Audio => tr("Nessun brano"),
-                tg::SharedTab::Voice => tr("Nessun messaggio vocale"),
+                model::SharedTab::Media => tr("Nessuna foto o video"),
+                model::SharedTab::Files => tr("Nessun file"),
+                model::SharedTab::Links => tr("Nessun link"),
+                model::SharedTab::Audio => tr("Nessun brano"),
+                model::SharedTab::Voice => tr("Nessun messaggio vocale"),
             };
             text(what).size(12).color(p.muted).into()
         }
         Some(items) => match g.info_tab {
-            tg::SharedTab::Media => shared_grid(app, items),
-            tg::SharedTab::Links => shared_links(g, items),
+            model::SharedTab::Media => shared_grid(app, items),
+            model::SharedTab::Links => shared_links(g, items),
             _ => Column::with_children(items.iter().map(|it| shared_row(g, &it.row)))
                 .spacing(4)
                 .into(),
@@ -2086,7 +2086,7 @@ fn short_date(g: &Gui, secs: i64) -> String {
 }
 
 /// foto e video in una griglia di miniature quadrate (click: visore o player)
-fn shared_grid<'a>(app: &'a App, items: &'a [tg::SharedItem]) -> Element<'a, Msg> {
+fn shared_grid<'a>(app: &'a App, items: &'a [model::SharedItem]) -> Element<'a, Msg> {
     let p = style::p();
     let mut rows = Column::new().spacing(3);
     for chunk in items.chunks(3) {
@@ -2098,7 +2098,7 @@ fn shared_grid<'a>(app: &'a App, items: &'a [tg::SharedItem]) -> Element<'a, Msg
                 RowKind::Video { media, .. } => (media, true),
                 _ => continue,
             };
-            let thumb: Element<'a, Msg> = match app.previews.get(&tg::media_key(media)) {
+            let thumb: Element<'a, Msg> = match app.previews.get(media.key()) {
                 Some(path) => image(image::Handle::from_path(path))
                     .width(SHARED_PX)
                     .height(SHARED_PX)
@@ -2138,22 +2138,22 @@ fn shared_row<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         RowKind::Doc { name, size, .. } => (
             "📄",
             name.clone(),
-            size.map(|s| tg::fmt_size(s as f64)).unwrap_or_default(),
+            size.map(|s| model::fmt_size(s as f64)).unwrap_or_default(),
             Some((tr("Salva"), Msg::Save(r.id))),
         ),
         RowKind::Audio { voice: true, seconds, .. } => (
             "🎤",
             author(&g.app, r).to_string(),
-            tg::fmt_secs(*seconds),
+            model::fmt_secs(*seconds),
             Some(("▶", Msg::Play(r.id))),
         ),
         RowKind::Audio { name, seconds, .. } => {
-            ("🎵", name.clone(), tg::fmt_secs(*seconds), Some(("▶", Msg::Play(r.id))))
+            ("🎵", name.clone(), model::fmt_secs(*seconds), Some(("▶", Msg::Play(r.id))))
         }
         RowKind::Video { round, seconds, .. } => (
             if *round { "📹" } else { "🎥" },
             if *round { author(&g.app, r).to_string() } else { tr("Video").into() },
-            tg::fmt_secs(*seconds),
+            model::fmt_secs(*seconds),
             Some(("▶", Msg::Play(r.id))),
         ),
         RowKind::Photo { .. } => ("🖼", tr("Foto").into(), String::new(), Some((tr("Apri"), Msg::View(r.id)))),
@@ -2178,7 +2178,7 @@ fn shared_row<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
 }
 
 /// i link condivisi: l'indirizzo cliccabile e il messaggio che lo contiene
-fn shared_links<'a>(g: &'a Gui, items: &'a [tg::SharedItem]) -> Element<'a, Msg> {
+fn shared_links<'a>(g: &'a Gui, items: &'a [model::SharedItem]) -> Element<'a, Msg> {
     let p = style::p();
     let mut col = Column::new().spacing(10);
     for it in items {
@@ -2332,7 +2332,7 @@ fn forward_picker(g: &Gui) -> Element<'_, Msg> {
     let items = app
         .contacts
         .iter()
-        .filter(|d| !d.broadcast || app.open.is_some_and(|o| tg::same_peer(o, d.peer_id)))
+        .filter(|d| !d.broadcast || app.open.is_some_and(|o| model::same_peer(o, d.peer_id)))
         .filter(|d| needle.is_empty() || d.name.to_lowercase().contains(&needle))
         .map(|d| {
             button(
