@@ -37,6 +37,10 @@ pub struct DialogInfo {
     pub broadcast: bool,
     /// silenziata: niente notifiche.
     pub muted: bool,
+    /// nell'archivio di Telegram (cartella 1)
+    pub archived: bool,
+    /// segnata a mano come «da leggere»
+    pub unread_mark: bool,
     /// foto profilo o della chat (id per la cache e il download).
     pub photo_id: Option<i64>,
     /// ultimo accesso (solo chat private).
@@ -475,7 +479,7 @@ fn data_base() -> PathBuf {
     base
 }
 
-fn data_dir() -> PathBuf {
+pub fn data_dir() -> PathBuf {
     data_base().join(APP_DIR)
 }
 
@@ -805,9 +809,11 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
             tl::enums::Dialog::Dialog(raw) => raw.unread_count.max(0) as usize,
             _ => 0,
         };
-        let (pinned, read_out) = match &dialog.raw {
-            tl::enums::Dialog::Dialog(raw) => (raw.pinned, raw.read_outbox_max_id),
-            _ => (false, 0),
+        let (pinned, read_out, archived, unread_mark) = match &dialog.raw {
+            tl::enums::Dialog::Dialog(raw) => {
+                (raw.pinned, raw.read_outbox_max_id, raw.folder_id == Some(1), raw.unread_mark)
+            }
+            _ => (false, 0, false, false),
         };
         let muted = match &dialog.raw {
             tl::enums::Dialog::Dialog(raw) => {
@@ -829,6 +835,8 @@ pub async fn load_dialogs(client: &Client) -> Result<Vec<DialogInfo>, Invocation
             seen,
             broadcast: is_broadcast(&peer),
             muted,
+            archived,
+            unread_mark,
         });
     }
     Ok(out)
@@ -849,6 +857,8 @@ pub async fn dialog_from_message(
     let (photo_id, seen) = peer_extras(&peer);
     Some(DialogInfo {
         muted: false,
+        archived: false,
+        unread_mark: false,
         broadcast: is_broadcast(&peer),
         photo_id,
         seen,
@@ -1242,6 +1252,8 @@ pub struct PeerInfo {
     pub bot: bool,
     /// la chat con me stesso (Messaggi salvati)
     pub me: bool,
+    /// messaggi effimeri: secondi dopo cui si cancellano (0 = spenti)
+    pub ttl: i32,
 }
 
 /// Legge la scheda completa: GetFullUser / GetFullChat / GetFullChannel.
@@ -1269,6 +1281,7 @@ pub async fn peer_info(client: &Client, peer_ref: ChatRef) -> Result<PeerInfo, S
             let tl::enums::UserFull::Full(u) = full.full_user;
             info.about = u.about.unwrap_or_default();
             info.blocked = u.blocked;
+            info.ttl = u.ttl_period.unwrap_or(0);
         }
         PeerKind::Chat => {
             let tl::enums::messages::ChatFull::Full(full) = client
@@ -1292,6 +1305,7 @@ fn fill_chat_full(info: &mut PeerInfo, full: tl::enums::ChatFull) {
     match full {
         tl::enums::ChatFull::Full(c) => {
             info.about = c.about;
+            info.ttl = c.ttl_period.unwrap_or(0);
             info.members = match c.participants {
                 tl::enums::ChatParticipants::Participants(p) => Some(p.participants.len() as i32),
                 tl::enums::ChatParticipants::Forbidden(_) => None,
@@ -1299,6 +1313,7 @@ fn fill_chat_full(info: &mut PeerInfo, full: tl::enums::ChatFull) {
         }
         tl::enums::ChatFull::ChannelFull(c) => {
             info.about = c.about;
+            info.ttl = c.ttl_period.unwrap_or(0);
             info.members = c.participants_count;
         }
         tl::enums::ChatFull::CommunityFull(c) => info.about = c.about,
@@ -1407,6 +1422,72 @@ pub async fn shared_media(
         out.push(SharedItem { row: HistoryRow::from_message(&m, from), links });
     }
     Ok(out)
+}
+
+/// Un'azione rapida su una chat (menu della lista, scheda della chat).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ChatAction {
+    Archive(bool),
+    Pin(bool),
+    Mute(bool),
+    /// segna come da leggere (true) o toglie il segno
+    MarkUnread(bool),
+    /// messaggi effimeri: secondi (0 = spenti)
+    Ttl(i32),
+}
+
+/// Esegue un'azione rapida sulla chat.
+pub async fn chat_action(client: &Client, peer_ref: ChatRef, action: ChatAction) -> Result<(), InvocationError> {
+    let dialog_peer = || tl::enums::InputDialogPeer::Peer(tl::types::InputDialogPeer { peer: peer_ref.into() });
+    match action {
+        ChatAction::Archive(on) => {
+            client
+                .invoke(&tl::functions::folders::EditPeerFolders {
+                    folder_peers: vec![tl::enums::InputFolderPeer::Peer(tl::types::InputFolderPeer {
+                        peer: peer_ref.into(),
+                        folder_id: if on { 1 } else { 0 },
+                    })],
+                })
+                .await?;
+        }
+        ChatAction::Pin(pinned) => {
+            client
+                .invoke(&tl::functions::messages::ToggleDialogPin { pinned, peer: dialog_peer() })
+                .await?;
+        }
+        ChatAction::Mute(on) => {
+            client
+                .invoke(&tl::functions::account::UpdateNotifySettings {
+                    peer: tl::enums::InputNotifyPeer::Peer(tl::types::InputNotifyPeer { peer: peer_ref.into() }),
+                    settings: tl::enums::InputPeerNotifySettings::Settings(tl::types::InputPeerNotifySettings {
+                        show_previews: None,
+                        silent: None,
+                        // «per sempre» per Telegram è il massimo di un i32
+                        mute_until: Some(if on { i32::MAX } else { 0 }),
+                        sound: None,
+                        stories_muted: None,
+                        stories_hide_sender: None,
+                        stories_sound: None,
+                    }),
+                })
+                .await?;
+        }
+        ChatAction::MarkUnread(unread) => {
+            client
+                .invoke(&tl::functions::messages::MarkDialogUnread {
+                    unread,
+                    parent_peer: None,
+                    peer: dialog_peer(),
+                })
+                .await?;
+        }
+        ChatAction::Ttl(period) => {
+            client
+                .invoke(&tl::functions::messages::SetHistoryTtl { peer: peer_ref.into(), period })
+                .await?;
+        }
+    }
+    Ok(())
 }
 
 /// Blocca o sblocca un utente.
@@ -1823,6 +1904,8 @@ pub async fn resolve_link(client: &Client, link: TgLink) -> Result<LinkHit, Stri
             Ok(LinkHit::Chat {
                 dialog: DialogInfo {
                     muted: false,
+                    archived: false,
+                    unread_mark: false,
                     broadcast: is_broadcast(&peer),
                     photo_id,
                     seen,

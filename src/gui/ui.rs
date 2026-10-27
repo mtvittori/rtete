@@ -17,8 +17,8 @@ use rondine::tg::{self, HistoryRow, RowKind};
 use rondine::{tr, trf};
 
 use crate::style;
-use crate::settings::ThemeChoice;
-use crate::{CacheKind, Confirm, Gui, Msg, Phase, SettingsPage, COMPOSE, FWD_SEARCH, HISTORY};
+use crate::settings::{ThemeChoice, UiStyle};
+use crate::{CacheKind, ChatFilter, Confirm, Gui, Msg, Phase, SettingsPage, COMPOSE, FWD_SEARCH, HISTORY};
 
 const BOLD: Font = Font {
     weight: Weight::Bold,
@@ -59,6 +59,8 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
                 forward_picker(g)
             } else if g.show_settings {
                 settings(g)
+            } else if g.show_starred {
+                starred_view(g)
             } else if info && size.width < INFO_SIDE_BELOW {
                 info_panel(g, false)
             } else if info {
@@ -214,126 +216,244 @@ fn failed(e: &str) -> Element<'_, Msg> {
 fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
     let app = &g.app;
     let p = style::p();
+    let wa = style::wa();
     let needle = g.filter.to_lowercase();
     let open = app.open;
-    let items = app
-        .contacts
-        .iter()
-        .filter(|d| needle.is_empty() || d.name.to_lowercase().contains(&needle))
-        .map(|d| {
-            let is_open = open.is_some_and(|o| tg::same_peer(o, d.peer_id));
-            if compact {
-                let mut face = iced::widget::Stack::new().push(avatar(app, d, 46.0));
-                if d.unread > 0 {
-                    face = face.push(
-                        container(
-                            container(text(d.unread.min(999).to_string()).size(10))
-                                .padding([0, 5])
-                                .style(style::pill(p.accent)),
-                        )
-                        .width(46)
-                        .align_x(iced::Right),
-                    );
-                }
-                return button(container(face).center_x(Fill))
+    let favorite = |d: &tg::DialogInfo| d.peer_id.bot_api_dialog_id().is_some_and(|id| g.settings.favorites.contains(&id));
+    // archivio a parte; il filtro scelto vale per la lista principale
+    let visible = |d: &&tg::DialogInfo| {
+        if d.archived != g.show_archived {
+            return false;
+        }
+        if !needle.is_empty() {
+            return d.name.to_lowercase().contains(&needle);
+        }
+        g.show_archived
+            || match g.chat_filter {
+                ChatFilter::All => true,
+                ChatFilter::Unread => d.unread > 0 || d.unread_mark,
+                ChatFilter::Favorites => favorite(d),
+                ChatFilter::Groups => d.is_group && !d.broadcast,
+            }
+    };
+    let mut list = Column::new();
+    if !compact && !g.show_archived && needle.is_empty() {
+        let archived: Vec<&tg::DialogInfo> = app.contacts.iter().filter(|d| d.archived).collect();
+        if !archived.is_empty() {
+            let unread = archived.iter().filter(|d| d.unread > 0 && !d.muted).count();
+            let mut line = row![text("📦").size(18).width(46).align_x(Center), text(tr("Archiviate")).width(Fill)]
+                .spacing(10)
+                .align_y(Center);
+            if unread > 0 {
+                line = line.push(text(unread.to_string()).size(12).color(p.accent));
+            }
+            list = list.push(
+                button(line)
+                    .on_press(Msg::ShowArchived(true))
+                    .padding([9, 10])
+                    .width(Fill)
+                    .style(style::chat_item(false)),
+            );
+        }
+    }
+    for d in app.contacts.iter().filter(visible) {
+        let is_open = open.is_some_and(|o| tg::same_peer(o, d.peer_id));
+        let badge = |n: String| container(text(n).size(if compact { 10 } else { 12 })).padding([1, 7]).style(style::pill(p.accent));
+        if compact {
+            let mut face = iced::widget::Stack::new().push(avatar(app, d, 46.0));
+            if d.unread > 0 || d.unread_mark {
+                let n = if d.unread > 0 { d.unread.min(999).to_string() } else { String::new() };
+                face = face.push(container(badge(n)).width(46).align_x(iced::Right));
+            }
+            list = list.push(
+                button(container(face).center_x(Fill))
                     .on_press(Msg::Open(d.peer_id))
                     .padding([6, 4])
                     .width(Fill)
-                    .style(style::chat_item(is_open))
-                    .into();
-            }
-            // spazio per il nome: larghezza fissa meno avatar, ora, icone
-            let time = d.last.as_ref().map(|l| list_time(g, l.date)).unwrap_or_default();
-            let mut room = SIDEBAR_W - 46.0 - 52.0 - time.chars().count() as f32 * 7.5;
-            if d.last.as_ref().is_some_and(|l| l.outgoing) {
-                room -= 20.0;
-            }
-            if d.is_group {
-                room -= 20.0;
-            }
-            let name_max = (room / 8.6).max(4.0) as usize;
-            let preview_max = ((SIDEBAR_W - 46.0 - 80.0) / 7.2) as usize;
-            // riga 1: (gruppo) nome … spunte e ora, come Telegram
-            let mut top = Row::new().spacing(6).align_y(Center);
-            if d.broadcast {
-                top = top.push(text("📢").size(12));
-            } else if d.is_group {
-                top = top.push(text("👥").size(12));
-            }
-            top = top.push(
-                container(text(ellipsize(&d.name, name_max)).font(BOLD).wrapping(text::Wrapping::None))
-                    .width(Fill)
-                    .clip(true),
+                    .style(style::chat_item(is_open)),
             );
-            if let Some(last) = &d.last {
-                if last.outgoing {
-                    top = top.push(ticks(last.id, d.read_out, 12.0));
-                }
-                top = top.push(text(time).size(12).color(p.muted));
+            continue;
+        }
+        // spazio per il nome: larghezza fissa meno avatar, ora, icone
+        let time = d.last.as_ref().map(|l| list_time(g, l.date)).unwrap_or_default();
+        let mut room = SIDEBAR_W - 46.0 - 52.0 - time.chars().count() as f32 * 7.5;
+        if d.last.as_ref().is_some_and(|l| l.outgoing) {
+            room -= 20.0;
+        }
+        if d.is_group {
+            room -= 20.0;
+        }
+        let name_max = (room / 8.6).max(4.0) as usize;
+        let preview_max = ((SIDEBAR_W - 46.0 - 100.0) / 7.2) as usize;
+        let unread = d.unread > 0 || d.unread_mark;
+        // riga 1: (gruppo) nome … spunte e ora
+        let mut top = Row::new().spacing(6).align_y(Center);
+        if d.broadcast {
+            top = top.push(text("📢").size(12));
+        } else if d.is_group {
+            top = top.push(text("👥").size(12));
+        }
+        top = top.push(
+            container(text(ellipsize(&d.name, name_max)).font(BOLD).wrapping(text::Wrapping::None))
+                .width(Fill)
+                .clip(true),
+        );
+        if let Some(last) = &d.last {
+            if last.outgoing && !wa {
+                top = top.push(ticks(last.id, d.read_out, 12.0));
             }
-            // riga 2: anteprima (o «sta scrivendo…») … badge o puntina
-            let (preview, color) = match app.typing_in(d.peer_id) {
-                Some(t) => (format!("{t}{}", dots(g)), p.link),
-                None => (
-                    d.last
-                        .as_ref()
-                        .and_then(|l| l.text.lines().next())
-                        .unwrap_or("")
-                        .to_string(),
-                    p.muted,
-                ),
-            };
-            let mut bottom = row![container(
-                text(ellipsize(&preview, preview_max)).size(13).color(color).wrapping(text::Wrapping::None)
-            )
-            .width(Fill)
-            .clip(true)]
-            .spacing(6)
-            .align_y(Center);
-            if d.unread > 0 {
-                bottom = bottom.push(
-                    container(text(d.unread.to_string()).size(12))
-                        .padding([1, 7])
-                        .style(style::pill(p.accent)),
-                );
-            } else if d.pinned {
-                bottom = bottom.push(text("📌").size(12));
+            // WhatsApp: l'ora diventa verde se ci sono messaggi da leggere
+            let time_color = if wa && unread { p.accent } else { p.muted };
+            top = top.push(text(time).size(12).color(time_color));
+        }
+        // riga 2: (spunte) anteprima o «sta scrivendo…» … icone e badge
+        let (preview, color) = match app.typing_in(d.peer_id) {
+            Some(t) => (format!("{t}{}", dots(g)), p.link),
+            None => (
+                d.last.as_ref().and_then(|l| l.text.lines().next()).unwrap_or("").to_string(),
+                p.muted,
+            ),
+        };
+        let mut bottom = Row::new().spacing(6).align_y(Center);
+        if wa {
+            if let Some(last) = d.last.as_ref().filter(|l| l.outgoing) {
+                bottom = bottom.push(ticks(last.id, d.read_out, 12.0));
             }
-            let line = row![
-                avatar(app, d, 46.0),
-                column![top, bottom].spacing(3).width(Fill),
-            ]
+        }
+        bottom = bottom.push(
+            container(text(ellipsize(&preview, preview_max)).size(13).color(color).wrapping(text::Wrapping::None))
+                .width(Fill)
+                .clip(true),
+        );
+        if d.muted {
+            bottom = bottom.push(text("🔕").size(11));
+        }
+        if d.pinned {
+            bottom = bottom.push(text("📌").size(11));
+        }
+        if d.unread > 0 {
+            bottom = bottom.push(badge(d.unread.to_string()));
+        } else if d.unread_mark {
+            bottom = bottom.push(badge(" ".into()));
+        }
+        let line = row![avatar(app, d, 46.0), column![top, bottom].spacing(3).width(Fill)]
             .spacing(10)
             .align_y(Center);
-            button(line)
-                .on_press(Msg::Open(d.peer_id))
-                .padding([7, 10])
-                .width(Fill)
-                .style(style::chat_item(is_open))
-                .into()
-        });
-    let search = text_input(tr("Cerca chat…"), &g.filter)
-        .style(style::input)
-        .on_input(Msg::Filter)
-        .padding(9);
+        // click: apre; tasto destro: il menu della chat
+        list = list.push(
+            mouse_area(
+                button(line)
+                    .on_press(Msg::Open(d.peer_id))
+                    .padding([7, 10])
+                    .width(Fill)
+                    .style(style::chat_item(is_open || g.chat_menu == Some(d.peer_id))),
+            )
+            .on_right_press(Msg::ChatMenu(Some(d.peer_id))),
+        );
+        if g.chat_menu == Some(d.peer_id) {
+            list = list.push(chat_menu(d, favorite(d)));
+        }
+    }
     let gear = button(text("⚙").size(18))
         .on_press(Msg::ToggleSettings)
         .padding([6, 10])
         .style(style::flat(g.show_settings));
+    let star = button(text("⭐").size(16))
+        .on_press(Msg::ShowStarred(!g.show_starred))
+        .padding([6, 10])
+        .style(style::flat(g.show_starred));
+    let search = text_input(tr("Cerca chat…"), &g.filter)
+        .style(style::input)
+        .on_input(Msg::Filter)
+        .padding(9);
     let head: Element<'_, Msg> = if compact {
-        container(gear).center_x(Fill).padding(10).into()
+        container(column![gear, star].spacing(4).align_x(Center)).center_x(Fill).padding(10).into()
+    } else if g.show_archived {
+        container(
+            row![
+                button(text("←").size(18)).on_press(Msg::ShowArchived(false)).padding([2, 10]).style(style::flat(false)),
+                text(tr("Archiviate")).size(18).font(BOLD).width(Fill),
+            ]
+            .spacing(8)
+            .align_y(Center),
+        )
+        .padding(12)
+        .into()
     } else {
-        container(row![gear, search].spacing(6).align_y(Center)).padding(10).into()
+        let chip = |label: &'static str, f: ChatFilter| -> Element<'_, Msg> {
+            button(text(label).size(12))
+                .on_press(Msg::ChatFilter(f))
+                .padding([4, 8])
+                .style(style::chip(g.chat_filter == f))
+                .into()
+        };
+        let chips = row![
+            chip(tr("Tutte"), ChatFilter::All),
+            chip(tr("Non lette"), ChatFilter::Unread),
+            chip(tr("Preferite"), ChatFilter::Favorites),
+            chip(tr("Gruppi"), ChatFilter::Groups),
+        ]
+        .spacing(4)
+        .wrap();
+        let top: Element<'_, Msg> = if wa {
+            // WhatsApp: il titolo grande e le icone a destra, la ricerca sotto
+            column![
+                row![text(tr("Chat")).size(22).font(BOLD).width(Fill), star, gear].spacing(2).align_y(Center),
+                search,
+            ]
+            .spacing(10)
+            .into()
+        } else {
+            row![gear, search, star].spacing(6).align_y(Center).into()
+        };
+        container(column![top, chips].spacing(10)).padding(10).into()
     };
-    container(column![
-        head,
-        scrollable(Column::with_children(items).padding(iced::Padding::ZERO.right(10)))
-            .height(Fill),
-    ])
-    .width(if compact { COMPACT_W } else { SIDEBAR_W })
-    .height(Fill)
-    .style(style::fill(p.sidebar))
-    .into()
+    let empty = !compact && !app.contacts.iter().any(|d| visible(&d));
+    let mut body = Column::new().push(head);
+    if empty {
+        let what = if g.show_archived { tr("Nessuna chat archiviata") } else { tr("Nessuna chat qui") };
+        body = body.push(container(text(what).size(13).color(p.muted)).center_x(Fill).padding(20));
+    }
+    container(body.push(scrollable(list.padding(iced::Padding::ZERO.right(10))).height(Fill)))
+        .width(if compact { COMPACT_W } else { SIDEBAR_W })
+        .height(Fill)
+        .style(style::fill(p.sidebar))
+        .into()
+}
+
+/// Il menu di una chat della lista (tasto destro), aperto sotto la voce.
+fn chat_menu<'a>(d: &tg::DialogInfo, favorite: bool) -> Element<'a, Msg> {
+    let p = style::p();
+    let pid = d.peer_id;
+    let item = |icon: &'static str, label: &'static str, m: Msg| -> Element<'a, Msg> {
+        button(row![text(icon).width(24), text(label).size(14)].spacing(8).align_y(Center))
+            .on_press(m)
+            .width(Fill)
+            .padding([6, 12])
+            .style(style::flat(false))
+            .into()
+    };
+    let unread = d.unread > 0 || d.unread_mark;
+    let mut col = column![
+        item("📦", if d.archived { tr("Togli dall'archivio") } else { tr("Archivia") }, Msg::ChatDo(pid, tg::ChatAction::Archive(!d.archived))),
+        item("📌", if d.pinned { tr("Non fissare") } else { tr("Fissa in alto") }, Msg::ChatDo(pid, tg::ChatAction::Pin(!d.pinned))),
+        item("🔕", if d.muted { tr("Riattiva le notifiche") } else { tr("Silenzia le notifiche") }, Msg::ChatDo(pid, tg::ChatAction::Mute(!d.muted))),
+        item("●", if unread { tr("Segna come letta") } else { tr("Segna come da leggere") }, Msg::ChatDo(pid, tg::ChatAction::MarkUnread(!unread))),
+        item("⭐", if favorite { tr("Togli dalle preferite") } else { tr("Aggiungi alle preferite") }, Msg::ToggleFavorite(pid)),
+    ]
+    .spacing(1);
+    col = col.push(
+        button(row![text("🗑").width(24), text(if d.is_group { tr("Esci ed elimina") } else { tr("Elimina chat") }).size(14).color(p.danger)].spacing(8))
+            .on_press(Msg::MenuDelete(pid))
+            .width(Fill)
+            .padding([6, 12])
+            .style(style::flat(false)),
+    );
+    container(col)
+        .padding(4)
+        .width(Fill)
+        .style(style::pill(style::mix(p.sidebar, p.text, 0.06)))
+        .into()
 }
 
 /// ✓ inviato, ✓✓ letto (nel colore dei link)
@@ -575,7 +695,11 @@ fn meta<'a>(g: &Gui, r: &HistoryRow) -> Row<'a, Msg> {
     if let Some(z) = local(g, r.date) {
         label.push_str(&z.strftime("%H:%M").to_string());
     }
-    let mut m = row![text(label).size(11).color(p.muted)].spacing(3).align_y(Center);
+    let mut m = Row::new().spacing(3).align_y(Center);
+    if g.app.open.is_some_and(|peer| g.app.is_starred(peer, r.id)) {
+        m = m.push(text("⭐").size(10));
+    }
+    m = m.push(text(label).size(11).color(p.muted));
     if r.outgoing {
         let read_out = g.app.current_chat().map_or(0, |c| c.read_out);
         m = m.push(ticks(r.id, read_out, 11.0));
@@ -666,7 +790,7 @@ fn message<'a>(
         container(content)
             .max_width(BUBBLE_W)
             .padding([7, 11])
-            .style(style::bubble(r.outgoing, selected))
+            .style(style::bubble(r.outgoing, selected, first))
             .into()
     };
     // click: azioni; doppio click: risposta al volo
@@ -930,6 +1054,8 @@ fn actions<'a>(g: &Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             .is_some_and(|s| matches!(s, TrState::Shown(_)));
         bar = bar.push(act(if shown { tr("🌐 Originale") } else { tr("🌐 Traduci") }, Msg::Translate(r.id)));
     }
+    let starred = g.app.open.is_some_and(|peer| g.app.is_starred(peer, r.id));
+    bar = bar.push(act(if starred { tr("☆ Non importante") } else { tr("⭐ Importante") }, Msg::Star(r.id)));
     bar = bar.push(act(tr("↪ Inoltra"), Msg::Forward(r.id)));
     bar = bar.push(act(tr("⧉ Copia"), Msg::Copy(r.id)));
     if r.outgoing {
@@ -1036,6 +1162,32 @@ fn attachment(app: &App) -> Option<Element<'_, Msg>> {
 fn composer(app: &App) -> Element<'_, Msg> {
     let attached = app.pending_photo.is_some() || app.pending_file.is_some();
     let placeholder = if attached { tr("Didascalia…") } else { tr("Scrivi un messaggio…") };
+    if style::wa() {
+        // WhatsApp: emoji e allegato a sinistra, campo tondo, invio verde tondo
+        return container(
+            row![
+                button(text("😊").size(20)).on_press(Msg::Stickers).style(style::flat(app.show_sticker)),
+                button(text("📎").size(20)).on_press(Msg::Attach).style(style::flat(false)),
+                text_input(placeholder, &app.compose)
+                    .style(style::input)
+                    .id(COMPOSE)
+                    .on_input(Msg::Compose)
+                    .on_paste(Msg::Pasted)
+                    .on_submit(Msg::Submit)
+                    .padding([10, 16])
+                    .width(Fill),
+                button(container(text("➤").size(18)).center(24))
+                    .on_press(Msg::Submit)
+                    .padding(8)
+                    .style(style::send_round),
+            ]
+            .spacing(8)
+            .align_y(Center),
+        )
+        .padding([8, 12])
+        .style(style::fill(style::p().header))
+        .into();
+    }
     container(
         row![
             button(text("📎").size(18))
@@ -1390,12 +1542,26 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         )
         .spacing(8)
         .wrap(),
-        section(tr("TEMA")),
+        section(tr("STILE")),
         row![
-            choice(omarchy_label, s.theme == ThemeChoice::Omarchy, Msg::SetTheme(ThemeChoice::Omarchy)),
-            choice(tr("Rondine scuro").into(), s.theme == ThemeChoice::Rondine, Msg::SetTheme(ThemeChoice::Rondine)),
+            choice("Telegram".into(), s.style == UiStyle::Telegram, Msg::SetStyle(UiStyle::Telegram)),
+            choice("WhatsApp".into(), s.style == UiStyle::WhatsApp, Msg::SetStyle(UiStyle::WhatsApp)),
         ]
         .spacing(8),
+        section(tr("TEMA")),
+        row![
+            choice(omarchy_label, s.active_theme() == ThemeChoice::Omarchy, Msg::SetTheme(ThemeChoice::Omarchy)),
+            choice(tr("Rondine scuro").into(), s.active_theme() == ThemeChoice::Rondine, Msg::SetTheme(ThemeChoice::Rondine)),
+            choice(tr("Verde WhatsApp").into(), s.active_theme() == ThemeChoice::WhatsApp, Msg::SetTheme(ThemeChoice::WhatsApp)),
+        ]
+        .spacing(8)
+        .wrap(),
+        text(match s.style {
+            UiStyle::Telegram => tr("Il tema scelto vale solo per lo stile Telegram."),
+            UiStyle::WhatsApp => tr("Il tema scelto vale solo per lo stile WhatsApp."),
+        })
+        .size(12)
+        .color(p.muted),
         text(tr("Con il tema Omarchy i colori seguono `omarchy theme set` mentre Rondine è aperta."))
             .size(12)
             .color(p.muted),
@@ -1697,6 +1863,58 @@ fn settings_links(g: &Gui) -> Element<'_, Msg> {
     .into()
 }
 
+// ------------------------------------------------- messaggi importanti
+
+/// La lista dei messaggi con la stella, dal più recente; click: apre la
+/// chat su quel messaggio.
+fn starred_view(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let mut list: Vec<&rondine::starred::Star> = g.app.starred.iter().collect();
+    list.sort_by_key(|s| std::cmp::Reverse(s.date));
+    let head = row![
+        text(tr("⭐ Messaggi importanti")).size(20).font(BOLD).width(Fill),
+        button(text("✕")).on_press(Msg::ShowStarred(false)).style(style::flat(false)),
+    ]
+    .align_y(Center);
+    let body: Element<'_, Msg> = if list.is_empty() {
+        text(tr("Nessun messaggio importante: aprine uno e premi «⭐ Importante» nelle sue azioni."))
+            .color(p.muted)
+            .into()
+    } else {
+        let items = list.into_iter().map(|s| {
+            let when = local(g, s.date).map(|z| z.strftime("%d/%m/%y %H:%M").to_string()).unwrap_or_default();
+            let card = column![
+                row![
+                    text(if s.from.is_empty() || s.from == s.chat_name { s.chat_name.clone() } else { format!("{} · {}", s.chat_name, s.from) }).size(12).font(BOLD).color(style::name_color(&s.chat_name)).width(Fill),
+                    text(when).size(11).color(p.muted),
+                ]
+                .spacing(8),
+                text(ellipsize(&s.text, 300)).wrapping(text::Wrapping::WordOrGlyph),
+            ]
+            .spacing(4)
+            .width(Fill);
+            row![
+                button(container(card).padding([8, 12]).style(style::bubble(false, false, true)))
+                    .on_press(Msg::OpenStarred(s.chat, s.id))
+                    .padding(0)
+                    .width(Fill)
+                    .style(|_: &iced::Theme, _| button::Style::default()),
+                button(text("✕").size(12)).on_press(Msg::Unstar(s.chat, s.id)).style(style::flat(false)),
+            ]
+            .spacing(6)
+            .align_y(Center)
+            .into()
+        });
+        scrollable(Column::with_children(items).spacing(8).padding(iced::Padding::ZERO.right(12))).height(Fill).into()
+    };
+    container(column![head, body].spacing(16).max_width(720))
+        .padding(24)
+        .center_x(Fill)
+        .height(Fill)
+        .style(style::fill(p.bg))
+        .into()
+}
+
 // ------------------------------------------------------ scheda della chat
 
 /// La scheda della chat aperta: foto, nome, bio/descrizione, contatti,
@@ -1789,6 +2007,28 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     let auto_tr = iced::widget::toggler(app.translate.is_auto(chat.peer_id))
         .label(tr("🌐 Traduci da solo i messaggi di questa chat"))
         .on_toggle(Msg::AutoTranslate);
+    // messaggi effimeri: come i «messaggi temporanei» di WhatsApp
+    let ttl_now = info.map_or(0, |i| i.ttl);
+    let ttl_choice = |label: &'static str, secs: i32| -> Element<'_, Msg> {
+        button(text(label).size(12))
+            .on_press(Msg::ChatDo(chat.peer_id, tg::ChatAction::Ttl(secs)))
+            .padding([4, 10])
+            .style(style::chip(ttl_now == secs))
+            .into()
+    };
+    let ephemeral = column![
+        text(tr("⏱ Messaggi effimeri")).size(14),
+        row![
+            ttl_choice(tr("Spenti"), 0),
+            ttl_choice(tr("24 ore"), 86_400),
+            ttl_choice(tr("7 giorni"), 604_800),
+            ttl_choice(tr("90 giorni"), 7_776_000),
+        ]
+        .spacing(6)
+        .wrap(),
+        text(tr("I nuovi messaggi spariscono per tutti dopo il tempo scelto.")).size(11).color(p.muted),
+    ]
+    .spacing(6);
 
     let tabs = Row::with_children(tg::SharedTab::ALL.iter().map(|&t| {
         button(text(t.label()).size(13))
@@ -1821,7 +2061,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     };
 
     let sep = || container(space()).width(Fill).height(1).style(style::fill(p.selected));
-    let body = column![top, face, details, sep(), acts, auto_tr, sep(), tabs, shared]
+    let body = column![top, face, details, sep(), acts, auto_tr, ephemeral, sep(), tabs, shared]
         .spacing(14)
         .padding(iced::Padding::new(18.0).right(24.0));
     container(scrollable(body).height(Fill))

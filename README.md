@@ -52,6 +52,23 @@ automatico, miniature, misura delle foto), dati e archiviazione (spazio
 usato, svuota cache, tetto della cache), dispositivi (sessioni attive da
 chiudere) e link.
 
+## Stile WhatsApp
+
+In Impostazioni → Aspetto si sceglie lo **stile**: Telegram (com'era) o
+WhatsApp (titolo «Chat», bolle con la punta, campo tondo e invio verde).
+Ogni stile ricorda il **suo tema** (Omarchy, Rondine scuro o Verde
+WhatsApp): cambiarlo in uno non tocca l'altro. In entrambi gli stili:
+
+- filtri sopra la lista: Tutte, Non lette, Preferite, Gruppi, più la voce
+  **Archiviate** (l'archivio di Telegram, sincronizzato);
+- **tasto destro su una chat**: archivia, fissa in alto, silenzia, segna
+  come letta/da leggere, aggiungi alle preferite, elimina;
+- **messaggi effimeri** dalla scheda della chat: spenti, 24 ore, 7 giorni,
+  90 giorni (il timer di auto-eliminazione di Telegram);
+- **messaggi importanti ⭐**: «⭐ Importante» nelle azioni del messaggio, la
+  lista completa dal pulsante ⭐ in alto. Telegram non ha la stella, quindi
+  restano sul PC (`~/.local/share/rondine/starred.json`), con una copia del testo.
+
 ## Traduzione dei messaggi
 
 Con una chiave **DeepL** (predefinito; il piano «API Free» è gratuito) o di

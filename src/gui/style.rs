@@ -51,7 +51,43 @@ pub const RONDINE: Pal = Pal {
     ],
 };
 
+/// Il verde di WhatsApp Desktop (modo scuro).
+pub const WHATSAPP: Pal = Pal {
+    bg: color!(0x0b141a),
+    sidebar: color!(0x111b21),
+    header: color!(0x202c33),
+    bubble_in: color!(0x202c33),
+    bubble_out: color!(0x005c4b),
+    accent: color!(0x00a884),
+    text: color!(0xe9edef),
+    muted: color!(0x8696a0),
+    // le spunte blu di «letto»
+    link: color!(0x53bdeb),
+    danger: color!(0xf15c6d),
+    selected: color!(0x2a3942),
+    hover: color!(0x202c33),
+    names: [
+        color!(0xff7eb6),
+        color!(0x25d366),
+        color!(0x53bdeb),
+        color!(0xffd279),
+        color!(0xa5b4fc),
+        color!(0x06cf9c),
+        color!(0xfc9775),
+    ],
+};
+
 static PAL: RwLock<Pal> = RwLock::new(RONDINE);
+/// disposizione in stile WhatsApp (bolle con la punta, campo tondo…)
+static WA: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_wa(on: bool) {
+    WA.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn wa() -> bool {
+    WA.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 /// la palette in uso
 pub fn p() -> Pal {
@@ -183,14 +219,26 @@ pub fn fill(c: Color) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-pub fn bubble(outgoing: bool, selected: bool) -> impl Fn(&Theme) -> container::Style {
+/// `tail`: primo messaggio di una serie; in stile WhatsApp l'angolo verso
+/// chi scrive resta vivo, come la punta delle sue bolle.
+pub fn bubble(outgoing: bool, selected: bool, tail: bool) -> impl Fn(&Theme) -> container::Style {
     move |_| {
         let p = p();
+        let radius = if wa() {
+            let r = border::radius(8);
+            match (tail, outgoing) {
+                (true, true) => r.top_right(0),
+                (true, false) => r.top_left(0),
+                _ => r,
+            }
+        } else {
+            border::radius(12)
+        };
         container::Style {
             background: Some(Background::Color(if outgoing { p.bubble_out } else { p.bubble_in })),
             text_color: Some(p.text),
             border: Border {
-                radius: border::radius(12),
+                radius,
                 width: if selected { 2.0 } else { 0.0 },
                 color: p.link,
             },
@@ -265,6 +313,38 @@ pub fn primary(_: &Theme, status: button::Status) -> button::Style {
     }
 }
 
+/// i filtri sopra la lista chat (Tutte, Non lette…): pillole come WhatsApp
+pub fn chip(on: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let p = p();
+        let bg = match (on, status) {
+            (true, _) => mix(p.sidebar, p.accent, 0.3),
+            (false, button::Status::Hovered | button::Status::Pressed) => p.hover,
+            _ => mix(p.sidebar, p.text, 0.08),
+        };
+        button::Style {
+            background: Some(Background::Color(bg)),
+            text_color: if on { mix(p.accent, p.text, 0.35) } else { p.muted },
+            border: border::rounded(14),
+            ..Default::default()
+        }
+    }
+}
+
+/// il pulsante tondo d'invio di WhatsApp
+pub fn send_round(_: &Theme, status: button::Status) -> button::Style {
+    let p = p();
+    button::Style {
+        background: Some(Background::Color(match status {
+            button::Status::Hovered | button::Status::Pressed => mix(p.accent, Color::WHITE, 0.15),
+            _ => p.accent,
+        })),
+        text_color: Color::WHITE,
+        border: border::rounded(100),
+        ..Default::default()
+    }
+}
+
 pub fn danger(_: &Theme, _: button::Status) -> button::Style {
     button::Style {
         background: Some(Background::Color(p().danger)),
@@ -283,10 +363,11 @@ pub fn input(_: &Theme, status: text_input::Status) -> text_input::Style {
         text_input::Status::Hovered => mix(p.selected, p.text, 0.2),
         _ => p.selected,
     };
+    let (fill, radius) = if wa() { (p.header, 20) } else { (mix(p.bg, Color::BLACK, 0.15), 12) };
     text_input::Style {
-        background: Background::Color(mix(p.bg, Color::BLACK, 0.15)),
+        background: Background::Color(fill),
         border: Border {
-            radius: border::radius(12),
+            radius: border::radius(radius),
             width: 1.0,
             color: edge,
         },

@@ -222,6 +222,8 @@ pub struct App {
     pub tr_queue: Vec<(PeerId, i32, bool)>,
     /// esito della traduzione di prova nelle impostazioni
     pub tr_test: Option<Result<String, String>>,
+    /// messaggi importanti (stella), salvati sul PC
+    pub starred: Vec<crate::starred::Star>,
     pub quit: bool,
 }
 
@@ -672,6 +674,64 @@ impl App {
         }
     }
 
+    /// Il messaggio ha la stella?
+    pub fn is_starred(&self, peer: PeerId, id: i32) -> bool {
+        let Some(chat) = peer.bot_api_dialog_id() else { return false };
+        self.starred.iter().any(|s| s.chat == chat && s.id == id)
+    }
+
+    /// Mette o toglie la stella a un messaggio caricato; salva la lista.
+    pub fn toggle_star(&mut self, peer: PeerId, id: i32) {
+        let Some(chat) = peer.bot_api_dialog_id() else { return };
+        if self.is_starred(peer, id) {
+            self.starred.retain(|s| !(s.chat == chat && s.id == id));
+        } else {
+            let Some(row) = self.histories.get(&peer).and_then(|r| r.iter().find(|r| r.id == id)) else {
+                return;
+            };
+            let text = match &row.kind {
+                tg::RowKind::Text(t) => t.clone(),
+                k => k.summary(),
+            };
+            let from = if row.outgoing { self.me.clone() } else { row.from.clone() };
+            let chat_name = self
+                .contacts
+                .iter()
+                .find(|d| tg::same_peer(d.peer_id, peer))
+                .map(|d| d.name.clone())
+                .unwrap_or_default();
+            self.starred.push(crate::starred::Star { chat, chat_name, id, date: row.date, from, text });
+        }
+        crate::starred::save(&self.starred);
+    }
+
+    /// Applica un'azione rapida riuscita (o arrivata da un altro dispositivo).
+    pub fn apply_chat_action(&mut self, peer: PeerId, action: tg::ChatAction) {
+        if let tg::ChatAction::Ttl(t) = action {
+            if let Some(info) = self.peer_info.get_mut(&peer) {
+                info.ttl = t;
+            }
+            return;
+        }
+        let Some(d) = self.contacts.iter_mut().find(|d| tg::same_peer(d.peer_id, peer)) else {
+            return;
+        };
+        match action {
+            tg::ChatAction::Archive(on) => d.archived = on,
+            tg::ChatAction::Pin(on) => d.pinned = on,
+            tg::ChatAction::Mute(on) => d.muted = on,
+            tg::ChatAction::MarkUnread(on) => d.unread_mark = on,
+            tg::ChatAction::Ttl(_) => {}
+        }
+        if matches!(action, tg::ChatAction::Pin(_)) {
+            let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
+            pinned_first(&mut self.contacts);
+            if let Some(i) = sel.and_then(|s| self.contacts.iter().position(|c| tg::same_peer(c.peer_id, s))) {
+                self.contact_cursor = i;
+            }
+        }
+    }
+
     /// Toglie una chat eliminata (o da cui si è usciti) da lista e memoria.
     pub fn forget_chat(&mut self, peer: PeerId) {
         let sel = self.contacts.get(self.contact_cursor).map(|c| c.peer_id);
@@ -742,6 +802,8 @@ mod tests {
             seen: tg::Seen::Unknown,
             broadcast: false,
             muted: false,
+            archived: false,
+            unread_mark: false,
         }
     }
 

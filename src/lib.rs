@@ -6,6 +6,7 @@ pub mod clipboard;
 pub mod i18n;
 pub mod loader;
 pub mod send;
+pub mod starred;
 pub mod sync;
 pub mod tg;
 pub mod translate;

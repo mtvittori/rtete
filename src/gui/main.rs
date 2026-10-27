@@ -21,7 +21,7 @@ use rondine::{i18n, tr, trf, translate};
 use grammers_client::tl;
 
 use crate::net::{Carrier, Link, NetEvent};
-use crate::settings::{Settings, ThemeChoice};
+use crate::settings::{Settings, ThemeChoice, UiStyle};
 
 pub const COMPOSE: &str = "compose";
 pub const HISTORY: &str = "history";
@@ -130,6 +130,26 @@ pub enum Msg {
     TrTarget(Option<String>),
     /// traduce una frase di prova
     TrTest,
+    /// stile dell'interfaccia: Telegram o WhatsApp
+    SetStyle(UiStyle),
+    /// filtro della lista chat (Tutte, Non lette…)
+    ChatFilter(ChatFilter),
+    /// mostra le chat archiviate (o torna alla lista)
+    ShowArchived(bool),
+    /// menu di una chat della lista (tasto destro); None lo chiude
+    ChatMenu(Option<PeerId>),
+    /// archivia, fissa, silenzia, segna da leggere, timer effimero
+    ChatDo(PeerId, tg::ChatAction),
+    ToggleFavorite(PeerId),
+    /// elimina la chat dal menu della lista (passa dalla conferma)
+    MenuDelete(PeerId),
+    /// stella sul messaggio
+    Star(i32),
+    /// la lista dei messaggi importanti
+    ShowStarred(bool),
+    /// apre la chat sul messaggio importante (chat Bot API, id)
+    OpenStarred(i64, i32),
+    Unstar(i64, i32),
     Quit,
 }
 
@@ -164,6 +184,15 @@ impl CacheKind {
             CacheKind::Temp => tg::tmp_dir(),
         }
     }
+}
+
+/// I filtri sopra la lista chat, come in WhatsApp.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ChatFilter {
+    All,
+    Unread,
+    Favorites,
+    Groups,
 }
 
 /// L'azione in attesa di conferma nel popup.
@@ -228,6 +257,12 @@ pub struct Gui {
     pub pf: tg::MyProfile,
     /// spazio della cache: media, foto profilo, temporanei (file, byte)
     pub cache_usage: [(usize, u64); 3],
+    pub chat_filter: ChatFilter,
+    pub show_archived: bool,
+    /// la chat della lista col menu aperto
+    pub chat_menu: Option<PeerId>,
+    /// la lista dei messaggi importanti al posto della chat
+    pub show_starred: bool,
 }
 
 fn main() -> iced::Result {
@@ -279,7 +314,8 @@ pub fn focus_existing() {
 
 fn boot() -> Gui {
     let settings = Settings::load();
-    apply_theme(settings.theme);
+    style::set_wa(settings.style == UiStyle::WhatsApp);
+    apply_theme(settings.active_theme());
     Gui {
         settings: settings.clone(),
         show_settings: false,
@@ -302,9 +338,14 @@ fn boot() -> Gui {
         settings_page: SettingsPage::Main,
         pf: tg::MyProfile::default(),
         cache_usage: [(0, 0); 3],
+        chat_filter: ChatFilter::All,
+        show_archived: false,
+        chat_menu: None,
+        show_starred: false,
         app: App {
             media_prefs: settings.media_prefs(),
             translate: translate::Config::load(),
+            starred: rondine::starred::load(),
             ..App::default()
         },
         phase: Phase::Connecting(0, tr("avvio…").into()),
@@ -319,6 +360,7 @@ fn apply_theme(choice: ThemeChoice) {
     let pal = match choice {
         ThemeChoice::Omarchy => style::omarchy().unwrap_or(style::RONDINE),
         ThemeChoice::Rondine => style::RONDINE,
+        ThemeChoice::WhatsApp => style::WHATSAPP,
     };
     style::set(pal);
 }
@@ -356,7 +398,7 @@ impl Gui {
             Some(80)
         } else if !self.app.typing.is_empty() {
             Some(400)
-        } else if self.settings.theme == ThemeChoice::Omarchy {
+        } else if self.settings.active_theme() == ThemeChoice::Omarchy {
             Some(2000)
         } else {
             None
@@ -709,7 +751,7 @@ impl Gui {
                 let stamp = style::omarchy_stamp();
                 if stamp != self.theme_stamp {
                     self.theme_stamp = stamp;
-                    apply_theme(self.settings.theme);
+                    apply_theme(self.settings.active_theme());
                 }
                 Task::none()
             }
@@ -900,9 +942,94 @@ impl Gui {
                 }
                 Task::none()
             }
+            Msg::SetStyle(s) => {
+                self.settings.style = s;
+                style::set_wa(s == UiStyle::WhatsApp);
+                apply_theme(self.settings.active_theme());
+                self.theme_stamp = style::omarchy_stamp();
+                self.settings.save();
+                Task::none()
+            }
+            Msg::ChatFilter(f) => {
+                self.chat_filter = f;
+                self.show_archived = false;
+                Task::none()
+            }
+            Msg::ShowArchived(on) => {
+                self.show_archived = on;
+                self.chat_menu = None;
+                Task::none()
+            }
+            Msg::ChatMenu(pid) => {
+                self.chat_menu = if self.chat_menu == pid { None } else { pid };
+                Task::none()
+            }
+            Msg::ChatDo(pid, action) => {
+                self.chat_menu = None;
+                let target = self.app.contacts.iter().find(|c| tg::same_peer(c.peer_id, pid)).map(|c| c.peer_ref);
+                let target = target.or_else(|| self.app.current_chat().filter(|c| c.peer_id == pid).map(|c| c.peer_ref));
+                if let (Some(peer_ref), Some(req)) = (target, self.req()) {
+                    let _ = req.send(Request::ChatAction { peer_ref, peer: pid, action });
+                }
+                Task::none()
+            }
+            Msg::ToggleFavorite(pid) => {
+                self.chat_menu = None;
+                if let Some(id) = pid.bot_api_dialog_id() {
+                    let favs = &mut self.settings.favorites;
+                    if favs.contains(&id) {
+                        favs.retain(|x| *x != id);
+                    } else {
+                        favs.push(id);
+                    }
+                    self.settings.save();
+                }
+                Task::none()
+            }
+            Msg::MenuDelete(pid) => {
+                self.chat_menu = None;
+                let open = self.open_chat(pid);
+                self.revoke = false;
+                self.confirm = Some(Confirm::DeleteChat);
+                return open;
+            }
+            Msg::Star(id) => {
+                if let Some(peer) = self.app.open {
+                    self.app.toggle_star(peer, id);
+                    self.app.msg_cursor = None;
+                }
+                Task::none()
+            }
+            Msg::ShowStarred(on) => {
+                self.show_starred = on;
+                if on {
+                    self.show_settings = false;
+                    self.show_info = false;
+                }
+                Task::none()
+            }
+            Msg::OpenStarred(chat, id) => {
+                match PeerId::from_bot_api_dialog_id(chat)
+                    .filter(|p| self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, *p)))
+                {
+                    Some(p) => {
+                        self.show_starred = false;
+                        self.show_archived = self.app.contacts.iter().any(|c| c.peer_id == p && c.archived);
+                        self.app.link_open = Some((p, Some(id)));
+                    }
+                    None => self.app.status = tr("la chat non è più fra le tue").into(),
+                }
+                Task::none()
+            }
+            Msg::Unstar(chat, id) => {
+                self.app.starred.retain(|s| !(s.chat == chat && s.id == id));
+                rondine::starred::save(&self.app.starred);
+                Task::none()
+            }
             Msg::Quit => return iced::exit(),
             Msg::SetTheme(choice) => {
-                self.settings.theme = choice;
+                // il tema vale solo per lo stile in uso
+                *self.settings.active_theme_mut() = choice;
                 apply_theme(choice);
                 self.theme_stamp = style::omarchy_stamp();
                 self.settings.save();
@@ -1055,6 +1182,12 @@ impl Gui {
             return;
         }
         if self.confirm.take().is_some() {
+            return;
+        }
+        if self.chat_menu.take().is_some() {
+            return;
+        }
+        if std::mem::take(&mut self.show_starred) {
             return;
         }
         if self.forwarding.take().is_some() {
@@ -1327,6 +1460,8 @@ impl Gui {
         };
         self.app.contact_cursor = i;
         self.show_settings = false;
+        self.show_starred = false;
+        self.chat_menu = None;
         if self.app.open == Some(pid) {
             return operation::focus(COMPOSE);
         }
