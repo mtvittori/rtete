@@ -995,8 +995,8 @@ Checking the account
 Video
 Video
 
-avvisi dei messaggi nuovi
-alerts for new messages
+avvisi dei messaggi nuovi, online e «sta scrivendo»
+alerts for new messages, online and typing
 
 bio
 bio
@@ -1671,3 +1671,15 @@ Single feed: chats from both in one list
 
 Il servizio si vede dall'icona sulla foto e accanto al nome della chat aperta. Account e dispositivi in queste impostazioni sono quelli dell'ultima chat aperta (Ctrl+1 Telegram, Ctrl+2 WhatsApp).
 The service shows as an icon on the photo and next to the open chat's name. Account and devices in these settings belong to the last chat you opened (Ctrl+1 Telegram, Ctrl+2 WhatsApp).
+
+PRIVACY
+PRIVACY
+
+Fammi vedere online quando Rondine è in primo piano
+Show me as online while Rondine is in the foreground
+
+Fai vedere «sta scrivendo» mentre scrivo
+Show "typing" while I type
+
+Su Telegram e WhatsApp. Su WhatsApp, senza online non arrivano nemmeno l'online e «sta scrivendo» degli altri (è il server a deciderlo).
+On Telegram and WhatsApp. On WhatsApp, without online you also stop receiving other people's online and typing status (the server decides that).

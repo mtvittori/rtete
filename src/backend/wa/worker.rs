@@ -452,6 +452,13 @@ pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mps
                         let _ = if on { p.set_available().await } else { p.set_unavailable().await };
                     });
                 }
+                Request::Typing { peer_ref, on } => {
+                    tokio::spawn(async move {
+                        let Some(jid) = wa.jid(peer_ref).ok().and_then(|j| j.parse::<Jid>().ok()) else { return };
+                        let cs = wa.client.chatstate();
+                        let _ = if on { cs.send_composing(&jid).await } else { cs.send_paused(&jid).await };
+                    });
+                }
                 Request::Hist { peer_ref, peer } => {
                     // chat privata aperta: online e ultimo accesso dell'altro
                     if let Some(jid) = wa.jid(peer_ref).ok().filter(|j| !j.ends_with("@g.us")) {
