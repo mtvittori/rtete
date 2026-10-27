@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use grammers_client::Client;
+use grammers_client::{tl, Client};
 use tokio::sync::mpsc;
 
 use super::{row_from_message, sender_name, to_chat_id, to_peer_ref};
@@ -150,6 +150,24 @@ pub fn run_worker(
                     // fuori dal flusso eventi: l'input non aspetta la rete
                     tokio::spawn(async move {
                         let _ = cl.mark_as_read(to_peer_ref(peer_ref)).await;
+                    });
+                }
+                // online finché la finestra è davanti, poi «ultimo accesso»
+                Request::Presence(on) => {
+                    tokio::spawn(async move {
+                        let _ = cl.invoke(&tl::functions::account::UpdateStatus { offline: !on }).await;
+                    });
+                }
+                // «sta scrivendo»: dura ~6 s sul server, l'app lo ripete
+                Request::Typing { peer_ref, on } => {
+                    tokio::spawn(async move {
+                        let action = if on {
+                            tl::enums::SendMessageAction::SendMessageTypingAction
+                        } else {
+                            tl::enums::SendMessageAction::SendMessageCancelAction
+                        };
+                        let peer = to_peer_ref(peer_ref).into();
+                        let _ = cl.invoke(&tl::functions::messages::SetTyping { peer, top_msg_id: None, action }).await;
                     });
                 }
                 Request::Sets => {

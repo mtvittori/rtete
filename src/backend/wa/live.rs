@@ -10,7 +10,7 @@ use whatsapp_rust::wacore::types::presence::{ChatPresence, ChatPresenceMedia, Re
 use super::store::{chat_id_of, Store};
 use super::{dialog_of, row_of, stored_from};
 use crate::i18n::tr;
-use crate::model::{ChatAction, Live};
+use crate::model::{ChatAction, ChatId, Live, Seen};
 use crate::send::Response;
 
 /// Quello che serve a chi gestisce gli eventi: archivio, canale delle
@@ -25,6 +25,9 @@ struct Inner {
     pair: super::PairSink,
     /// un salvataggio con lista nuova già in programma (raffiche di eventi)
     refresh: std::sync::atomic::AtomicBool,
+    /// «sta scrivendo» per chat: WhatsApp lo manda una volta sola fino a
+    /// «paused», l'app lo tiene 6 s; qui si ripete finché vale
+    typing: Mutex<std::collections::HashMap<ChatId, u64>>,
 }
 
 /// Il JID senza dispositivo (`393…:12@s.whatsapp.net` → `393…@s.whatsapp.net`).
@@ -39,7 +42,7 @@ impl Shared {
         ready: mpsc::UnboundedSender<Result<(), String>>,
         pair: super::PairSink,
     ) -> Self {
-        Self(Arc::new(Inner { store, out, ready: Mutex::new(Some(ready)), pair, refresh: Default::default() }))
+        Self(Arc::new(Inner { store, out, ready: Mutex::new(Some(ready)), pair, refresh: Default::default(), typing: Default::default() }))
     }
 
     fn store(&self) -> std::sync::MutexGuard<'_, Store> {
@@ -149,6 +152,32 @@ impl Shared {
         });
     }
 
+    /// «sta scrivendo» ripetuto ogni 5 s per al massimo 30, finché non
+    /// arriva «paused» o un messaggio (che cambiano la generazione).
+    fn typing(&self, chat: ChatId, who: Option<ChatId>, what: Option<&'static str>) {
+        let gen = {
+            let mut g = self.0.typing.lock().unwrap_or_else(|e| e.into_inner());
+            let n = g.entry(chat).or_default();
+            *n += 1;
+            *n
+        };
+        self.live(Live::Typing { chat, who, what });
+        if what.is_none() {
+            return;
+        }
+        let me = self.clone();
+        tokio::spawn(async move {
+            for _ in 0..6 {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                let still = me.0.typing.lock().map(|g| g.get(&chat) == Some(&gen)).unwrap_or(false);
+                if !still {
+                    return;
+                }
+                me.live(Live::Typing { chat, who, what });
+            }
+        });
+    }
+
     fn save(&self, store: &Store) {
         if let Err(e) = store.save_meta() {
             let _ = self.0.out.send(Response::LiveErr(crate::trf!("archivio: {}", e)));
@@ -158,6 +187,11 @@ impl Shared {
     pub fn handle(&self, event: &Event, client: &Arc<Client>) {
         match event {
             Event::Connected(_) => {
+                // «disponibile»: senza, niente online né «sta scrivendo»
+                let c = Arc::clone(client);
+                tokio::spawn(async move {
+                    let _ = c.presence().set_available().await;
+                });
                 self.resolve_lids(client);
                 self.sync_contacts(client);
                 if let Some(tx) = self.0.ready.lock().ok().and_then(|mut g| g.take()) {
@@ -194,7 +228,18 @@ impl Shared {
                     let chat = chat_id_of(&store.canon(&bare(&p.source.chat)));
                     (chat, p.source.is_group.then(|| chat_id_of(&store.canon(&bare(&p.source.sender)))))
                 };
-                self.live(Live::Typing { chat, who, what });
+                self.typing(chat, who, what);
+            }
+            // online / ultimo accesso dei contatti seguiti (chat aperte)
+            Event::Presence(p) => {
+                let chat = chat_id_of(&self.store().canon(&bare(&p.from)));
+                let now = super::now_secs();
+                let seen = match (p.unavailable, p.last_seen) {
+                    (false, _) => Seen::Online(now + 3600),
+                    (true, Some(t)) => Seen::Offline(t.timestamp()),
+                    (true, None) => Seen::Recently,
+                };
+                self.live(Live::Seen { chat, seen });
             }
             Event::PushNameUpdate(p) => {
                 let mut store = self.store();
@@ -317,6 +362,10 @@ impl Shared {
                 return;
             }
         };
+        // il messaggio è arrivato: non sta più scrivendo
+        if !me && !fresh.is_empty() {
+            self.typing(chat, None, None);
+        }
         for m in fresh {
             if !me {
                 if let Some(c) = store.chat_mut(&jid) {

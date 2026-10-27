@@ -157,6 +157,11 @@ pub enum Request {
     /// stella sul messaggio: su WhatsApp si sincronizza col telefono,
     /// su Telegram (che non ce l'ha) resta solo sul PC
     Star { peer_ref: ChatRef, id: i32, on: bool },
+    /// la finestra è in primo piano (WhatsApp: «disponibile», che serve per
+    /// ricevere online e «sta scrivendo»; il telefono intanto non suona)
+    Presence(bool),
+    /// sto scrivendo in questa chat (o ho smesso)
+    Typing { peer_ref: ChatRef, on: bool },
     /// archivia, fissa, silenzia, segna da leggere, timer effimero
     ChatAction {
         peer_ref: ChatRef,
