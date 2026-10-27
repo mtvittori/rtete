@@ -23,6 +23,8 @@ struct Inner {
     out: mpsc::UnboundedSender<Response>,
     ready: Mutex<Option<mpsc::UnboundedSender<Result<(), String>>>>,
     pair: super::PairSink,
+    /// un salvataggio con lista nuova già in programma (raffiche di eventi)
+    refresh: std::sync::atomic::AtomicBool,
 }
 
 /// Il JID senza dispositivo (`393…:12@s.whatsapp.net` → `393…@s.whatsapp.net`).
@@ -37,7 +39,7 @@ impl Shared {
         ready: mpsc::UnboundedSender<Result<(), String>>,
         pair: super::PairSink,
     ) -> Self {
-        Self(Arc::new(Inner { store, out, ready: Mutex::new(Some(ready)), pair }))
+        Self(Arc::new(Inner { store, out, ready: Mutex::new(Some(ready)), pair, refresh: Default::default() }))
     }
 
     fn store(&self) -> std::sync::MutexGuard<'_, Store> {
@@ -81,15 +83,81 @@ impl Shared {
         self.live(Live::ChatChanged { chat: chat_id_of(&jid), action });
     }
 
+    /// Salva e manda la lista delle chat fra poco: le rubriche e le foto
+    /// arrivano a centinaia di eventi, basta un aggiornamento solo.
+    fn refresh_soon(&self) {
+        use std::sync::atomic::Ordering;
+        if self.0.refresh.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let me = self.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+            me.0.refresh.store(false, Ordering::Release);
+            let store = me.store();
+            me.save(&store);
+            let _ = me.0.out.send(Response::Dialogs(Ok(store.dialogs())));
+        });
+    }
+
+    /// Le chat rimaste col JID anonimo: il numero dalla tabella lid ↔
+    /// numero che whatsapp-rust impara da solo, e i doppioni si fondono.
+    fn resolve_lids(&self, client: &Arc<Client>) {
+        let me = self.clone();
+        let client = Arc::clone(client);
+        tokio::spawn(async move {
+            let lids = me.store().unlinked_lids();
+            let mut changed = false;
+            for lid in lids {
+                let Ok(jid) = lid.parse::<Jid>() else { continue };
+                if let Ok(Some(e)) = client.get_lid_pn_entry(&jid).await {
+                    let pn = format!("{}@s.whatsapp.net", e.phone_number);
+                    changed |= me.store().link(&lid, &pn);
+                }
+            }
+            // anche le mie due identità sono la stessa chat («Tu»)
+            if let (Some(lid), Some(pn)) = (client.lid(), client.pn()) {
+                changed |= me.store().link(&bare(&lid), &bare(&pn));
+            }
+            if changed {
+                me.refresh_soon();
+            }
+        });
+    }
+
+    /// La rubrica arriva con la sincronizzazione dello stato all'abbinamento:
+    /// chi aveva abbinato prima che Rondine la leggesse la riceve di nuovo,
+    /// per intero, una volta sola.
+    fn sync_contacts(&self, client: &Arc<Client>) {
+        use whatsapp_rust::sync_task::MajorSyncTask;
+        use whatsapp_rust::wacore::appstate::patch_decode::WAPatchName;
+        {
+            let mut store = self.store();
+            if store.contacts_synced {
+                return;
+            }
+            store.contacts_synced = true;
+            self.save(&store);
+        }
+        let client = Arc::clone(client);
+        tokio::spawn(async move {
+            client
+                .process_sync_task(MajorSyncTask::AppStateSync { name: WAPatchName::CriticalUnblockLow, full_sync: true })
+                .await;
+        });
+    }
+
     fn save(&self, store: &Store) {
         if let Err(e) = store.save_meta() {
             let _ = self.0.out.send(Response::LiveErr(crate::trf!("archivio: {}", e)));
         }
     }
 
-    pub fn handle(&self, event: &Event, _client: &Arc<Client>) {
+    pub fn handle(&self, event: &Event, client: &Arc<Client>) {
         match event {
             Event::Connected(_) => {
+                self.resolve_lids(client);
+                self.sync_contacts(client);
                 if let Some(tx) = self.0.ready.lock().ok().and_then(|mut g| g.take()) {
                     let _ = tx.send(Ok(()));
                 }
@@ -134,6 +202,31 @@ impl Shared {
             Event::HistorySync(h) => {
                 if let Some(hs) = h.get() {
                     self.history(hs);
+                }
+                self.resolve_lids(client);
+            }
+            // i nomi della rubrica del telefono (e il legame lid ↔ numero)
+            Event::ContactUpdate(u) => {
+                let a = &u.action;
+                let mut store = self.store();
+                if let (Some(lid), Some(pn)) = (&a.lid_jid, &a.pn_jid) {
+                    store.link(lid, pn);
+                }
+                let jid = store.canon(&bare(&u.jid));
+                let name = a.full_name.as_deref().or(a.first_name.as_deref()).unwrap_or("");
+                if store.set_contact(&jid, name) {
+                    drop(store);
+                    self.refresh_soon();
+                }
+            }
+            // foto cambiata: si richiede (id nuovo, che non è in cache)
+            Event::PictureUpdate(p) => {
+                let mut store = self.store();
+                let jid = store.canon(&bare(&p.jid));
+                if let Some(c) = store.chat_mut(&jid) {
+                    c.pic = if p.removed { "-".into() } else { String::new() };
+                    drop(store);
+                    self.refresh_soon();
                 }
             }
             _ => {}

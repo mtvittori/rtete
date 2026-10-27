@@ -21,6 +21,42 @@ fn unsupported<T>() -> Result<T, String> {
 }
 
 impl Wa {
+    /// La foto profilo (anteprima) di una chat: chiesta a WhatsApp,
+    /// scaricata dal CDN e messa nella cache col suo id.
+    async fn avatar(&self, chat: ChatRef) -> Result<std::path::PathBuf, String> {
+        let jid_s = self.jid(chat)?;
+        let jid: Jid = jid_s.parse().map_err(|e| format!("{e:?}"))?;
+        let pic = self.client.contacts().get_profile_picture(&jid, true).await.map_err(|e| e.to_string())?;
+        let set_pic = |id: &str| {
+            let mut store = self.store();
+            if let Some(c) = store.chat_mut(&jid_s) {
+                c.pic = id.to_string();
+            }
+            let _ = store.save_meta();
+        };
+        let Some(pic) = pic else {
+            set_pic("-");
+            return Err(tr("nessuna foto").into());
+        };
+        let id = super::store::avatar_id(&jid_s, &pic.id).ok_or("id")?;
+        let path = crate::paths::avatar_path(id);
+        if !path.exists() {
+            let url = pic.url.clone();
+            let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
+                let mut res = ureq::get(&url).call().map_err(|e| e.to_string())?;
+                res.body_mut().with_config().limit(4 << 20).read_to_vec().map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            }
+            std::fs::write(&path, body).map_err(|e| e.to_string())?;
+        }
+        set_pic(&pic.id);
+        Ok(path)
+    }
+
     fn jid(&self, chat: ChatRef) -> Result<String, String> {
         self.store()
             .jid_of(chat.id)
@@ -402,6 +438,8 @@ impl Wa {
 pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mpsc::UnboundedSender<Response>) {
     let conv_permits = Arc::new(tokio::sync::Semaphore::new(2));
     let tr_permits = Arc::new(tokio::sync::Semaphore::new(3));
+    // le foto profilo: tante chat all'avvio, poche richieste alla volta
+    let pic_permits = Arc::new(tokio::sync::Semaphore::new(4));
     tokio::spawn(async move {
         let mut player = Player::default();
         while let Some(req) = req_rx.recv().await {
@@ -511,8 +549,12 @@ pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mps
                     let docs = if set_id == crate::model::RECENT_SET { wa.recent_stickers() } else { Vec::new() };
                     let _ = out.send(Response::Docs { set_id, docs: Ok(docs) });
                 }
-                Request::Avatar { photo_id, .. } => {
-                    let _ = out.send(Response::Avatar { photo_id, path: unsupported() });
+                Request::Avatar { peer_ref, photo_id } => {
+                    let permits = Arc::clone(&pic_permits);
+                    tokio::spawn(async move {
+                        let _p = permits.acquire().await;
+                        let _ = out.send(Response::Avatar { photo_id, path: wa.avatar(peer_ref).await });
+                    });
                 }
                 Request::Profile => {
                     let me = wa.client.push_name();
