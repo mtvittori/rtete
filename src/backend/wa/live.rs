@@ -64,7 +64,7 @@ impl Shared {
 
     /// Un cambio di stato della chat fatto altrove: archivio locale e lista.
     fn chat_changed(&self, jid: &Jid, action: ChatAction) {
-        let jid = bare(jid);
+        let jid = self.store().canon(&bare(jid));
         {
             let mut store = self.store();
             if let Some(c) = store.chat_mut(&jid) {
@@ -119,8 +119,11 @@ impl Shared {
                     (ChatPresence::Composing, _) => Some(tr("sta scrivendo")),
                     _ => None,
                 };
-                let chat = chat_id_of(&bare(&p.source.chat));
-                let who = p.source.is_group.then(|| chat_id_of(&bare(&p.source.sender)));
+                let (chat, who) = {
+                    let store = self.store();
+                    let chat = chat_id_of(&store.canon(&bare(&p.source.chat)));
+                    (chat, p.source.is_group.then(|| chat_id_of(&store.canon(&bare(&p.source.sender)))))
+                };
                 self.live(Live::Typing { chat, who, what });
             }
             Event::PushNameUpdate(p) => {
@@ -137,14 +140,31 @@ impl Shared {
         }
     }
 
+    /// I JID alternativi di un messaggio (numero ↔ `@lid`): se è nuovo il
+    /// legame si salva e l'eventuale chat doppia si fonde. `true` se la
+    /// lista delle chat è cambiata.
+    fn learn(&self, store: &mut Store, src: &whatsapp_rust::wacore::types::message::MessageSource) -> bool {
+        let mut changed = false;
+        if let Some(alt) = &src.sender_alt {
+            changed |= store.link(&bare(&src.sender), &bare(alt));
+        }
+        if let (false, Some(alt)) = (src.is_group, &src.recipient_alt) {
+            changed |= store.link(&bare(&src.chat), &bare(alt));
+        }
+        changed
+    }
+
     /// Un messaggio (nuovo, reazione, modifica o cancellazione).
     fn message(&self, msg: &wa::Message, info: &MessageInfo) {
-        let jid = bare(&info.source.chat);
+        let mut store = self.store();
+        if self.learn(&mut store, &info.source) {
+            let _ = self.0.out.send(Response::Dialogs(Ok(store.dialogs())));
+        }
+        let jid = store.canon(&bare(&info.source.chat));
         let chat = chat_id_of(&jid);
         let me = info.source.is_from_me;
-        let sender = bare(&info.source.sender);
+        let sender = store.canon(&bare(&info.source.sender));
         let base = msg.get_base_message();
-        let mut store = self.store();
 
         if let Some(r) = base.reaction_message.as_option() {
             let Some(target) = r.key.as_option().and_then(|k| k.id.clone()) else { return };
@@ -217,9 +237,9 @@ impl Shared {
 
     /// Ricevute: l'altro ha letto (spunte doppie) o io ho letto altrove.
     fn receipt(&self, r: &whatsapp_rust::wacore::types::events::Receipt) {
-        let jid = bare(&r.source.chat);
-        let chat = chat_id_of(&jid);
         let mut store = self.store();
+        let jid = store.canon(&bare(&r.source.chat));
+        let chat = chat_id_of(&jid);
         match r.r#type {
             ReceiptType::Read | ReceiptType::Played if !r.source.is_from_me => {
                 let max = r
@@ -256,8 +276,16 @@ impl Shared {
                 store.set_name(id, name);
             }
         }
+        for m in &hs.phone_number_to_lid_mappings {
+            if let (Some(pn), Some(lid)) = (&m.pn_jid, &m.lid_jid) {
+                store.link(pn, lid);
+            }
+        }
         for conv in &hs.conversations {
-            let jid = conv.id.clone();
+            for alt in [&conv.pn_jid, &conv.lid_jid].into_iter().flatten() {
+                store.link(&conv.id, alt);
+            }
+            let jid = store.canon(&conv.id);
             let group = jid.ends_with("@g.us");
             if !(group || jid.ends_with("@s.whatsapp.net") || jid.ends_with("@lid")) {
                 continue; // stati, canali, liste broadcast

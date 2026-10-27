@@ -125,6 +125,9 @@ struct Meta {
     chats: Vec<ChatMeta>,
     #[serde(default)]
     names: HashMap<String, String>,
+    /// JID anonimo (`…@lid`) → JID col numero, per lo stesso contatto
+    #[serde(default)]
+    alias: HashMap<String, String>,
 }
 
 pub struct Store {
@@ -132,6 +135,7 @@ pub struct Store {
     chats: BTreeMap<String, ChatMeta>,
     ids: HashMap<ChatId, String>,
     names: HashMap<String, String>,
+    alias: HashMap<String, String>,
     /// messaggi in RAM per chat (ordinati per data), le più recenti in coda
     hot: HashMap<String, Vec<StoredMsg>>,
     order: VecDeque<String>,
@@ -150,12 +154,20 @@ impl Store {
             chats: BTreeMap::new(),
             ids: HashMap::new(),
             names: meta.names,
+            alias: meta.alias,
             hot: HashMap::new(),
             order: VecDeque::new(),
         };
         for c in meta.chats {
             store.ids.insert(chat_id_of(&c.jid), c.jid.clone());
             store.chats.insert(c.jid.clone(), c);
+        }
+        for (lid, pn) in store.alias.clone() {
+            store.ids.insert(chat_id_of(&lid), pn.clone());
+            // doppioni rimasti da prima che si conoscesse il legame
+            if store.chats.contains_key(&lid) {
+                let _ = store.merge(&lid, &pn);
+            }
         }
         Ok(store)
     }
@@ -165,6 +177,7 @@ impl Store {
         let meta = Meta {
             chats: self.chats.values().cloned().collect(),
             names: self.names.clone(),
+            alias: self.alias.clone(),
         };
         let body = serde_json::to_vec(&meta).map_err(std::io::Error::other)?;
         write_atomic(&self.dir.join("chats.json"), &body)
@@ -195,6 +208,58 @@ impl Store {
         true
     }
 
+    /// Il JID con cui si archivia una chat: lo stesso contatto arriva a
+    /// volte col numero e a volte col JID anonimo (`@lid`); se il legame
+    /// è noto vale sempre quello col numero.
+    pub fn canon(&self, jid: &str) -> String {
+        self.alias.get(jid).cloned().unwrap_or_else(|| jid.to_string())
+    }
+
+    /// Registra che `lid` e `pn` sono lo stesso contatto (in qualunque
+    /// ordine arrivino) e fonde la chat doppia, se c'era. `true` se la
+    /// lista delle chat è cambiata.
+    pub fn link(&mut self, a: &str, b: &str) -> bool {
+        let (lid, pn) = match (a.ends_with("@lid"), b.ends_with("@s.whatsapp.net")) {
+            (true, true) => (a, b),
+            _ if b.ends_with("@lid") && a.ends_with("@s.whatsapp.net") => (b, a),
+            _ => return false,
+        };
+        if self.alias.get(lid).is_some_and(|p| p == pn) {
+            return false;
+        }
+        self.alias.insert(lid.to_string(), pn.to_string());
+        self.ids.insert(chat_id_of(lid), pn.to_string());
+        if let Some(n) = self.names.get(lid).cloned() {
+            self.names.entry(pn.to_string()).or_insert(n);
+        }
+        self.chats.contains_key(lid) && self.merge(lid, pn).is_ok()
+    }
+
+    /// Sposta messaggi e stato della chat `from` dentro `to` (creata se
+    /// manca) e cancella `from`.
+    fn merge(&mut self, from: &str, to: &str) -> std::io::Result<()> {
+        let Some(old) = self.chats.get(from).cloned() else { return Ok(()) };
+        let msgs = self.messages(from).clone();
+        let fresh_to = !self.chats.contains_key(to);
+        let before = self.chats.get(to).map(|c| c.unread).unwrap_or(0);
+        self.insert(to, old.group, msgs)?;
+        if let Some(c) = self.chats.get_mut(to) {
+            if fresh_to {
+                c.archived = old.archived;
+            }
+            if c.name.is_empty() {
+                c.name = old.name.clone();
+            }
+            c.unread = before + old.unread;
+            c.pinned |= old.pinned;
+            c.unread_mark |= old.unread_mark;
+            c.muted_until = if c.muted_until < 0 || old.muted_until < 0 { -1 } else { c.muted_until.max(old.muted_until) };
+        }
+        self.forget(from);
+        self.ids.insert(chat_id_of(from), to.to_string());
+        self.save_meta()
+    }
+
     /// Il nome che un contatto si è dato (push name).
     pub fn set_name(&mut self, jid: &str, name: &str) {
         if !name.trim().is_empty() {
@@ -208,7 +273,7 @@ impl Store {
         if let Some(c) = self.chats.get(jid).filter(|c| !c.name.is_empty()) {
             return c.name.clone();
         }
-        if let Some(n) = self.names.get(jid) {
+        if let Some(n) = self.names.get(jid).or_else(|| self.alias.get(jid).and_then(|p| self.names.get(p))) {
             return n.clone();
         }
         let user = jid.split(['@', ':']).next().unwrap_or(jid);
@@ -508,6 +573,31 @@ mod tests {
         assert_ne!(a, chat_id_of("393331234568@s.whatsapp.net"));
         assert!(a.0 > 1 << 40, "sopra gli utenti Telegram");
         assert!(!a.own_msg_ids());
+    }
+
+    #[test]
+    fn lid_e_numero_diventano_una_chat_sola() {
+        let (dir, mut s) = tmp_store("lid");
+        let (pn, lid) = ("393331234567@s.whatsapp.net", "123456789@lid");
+        s.insert(pn, false, vec![msg("a", 10, "vecchio")]).unwrap();
+        s.insert(lid, false, vec![msg("b", 20, "nuovo"), msg("a", 10, "vecchio")]).unwrap();
+        s.chat_mut(lid).unwrap().unread = 2;
+        assert_eq!(s.dialogs().len(), 2);
+
+        assert!(s.link(lid, pn));
+        assert!(!s.link(pn, lid), "già noto");
+        assert_eq!(s.dialogs().len(), 1);
+        assert_eq!(s.canon(lid), pn);
+        assert_eq!(s.jid_of(chat_id_of(lid)), Some(pn));
+        let texts: Vec<_> = s.last(pn, 10).into_iter().map(|m| m.text).collect();
+        assert_eq!(texts, ["vecchio", "nuovo"]);
+        assert_eq!(s.chat(pn).unwrap().unread, 2);
+
+        // il legame resta dopo la riapertura
+        s.save_meta().unwrap();
+        let s = Store::open(&dir).unwrap();
+        assert_eq!(s.canon(lid), pn);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
