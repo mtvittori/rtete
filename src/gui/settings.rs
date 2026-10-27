@@ -234,3 +234,45 @@ pub fn set_tg_handler() -> bool {
         .status()
         .is_ok_and(|s| s.success())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ogni_stile_tiene_il_suo_tema() {
+        let mut s = Settings::default();
+        assert_eq!(s.active_theme(), ThemeChoice::Omarchy);
+        s.style = UiStyle::WhatsApp;
+        assert_eq!(s.active_theme(), ThemeChoice::WhatsApp);
+        // il tema cambiato nello stile WhatsApp non tocca Telegram
+        *s.active_theme_mut() = ThemeChoice::Rondine;
+        s.style = UiStyle::Telegram;
+        assert_eq!(s.active_theme(), ThemeChoice::Omarchy);
+        *s.active_theme_mut() = ThemeChoice::WhatsApp;
+        s.style = UiStyle::WhatsApp;
+        assert_eq!(s.active_theme(), ThemeChoice::Rondine);
+    }
+
+    #[test]
+    fn salva_e_rilegge_stile_temi_e_preferite() {
+        let dir = std::env::temp_dir().join(format!("rondine-conf-{}", std::process::id()));
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        let mut s = Settings::default();
+        s.style = UiStyle::WhatsApp;
+        s.theme = ThemeChoice::Rondine;
+        s.theme_wa = ThemeChoice::Omarchy;
+        s.favorites = vec![42, -100123];
+        s.save();
+        let back = Settings::load();
+        assert_eq!(back.style, UiStyle::WhatsApp);
+        assert_eq!(back.theme, ThemeChoice::Rondine);
+        assert_eq!(back.theme_wa, ThemeChoice::Omarchy);
+        assert_eq!(back.favorites, vec![42, -100123]);
+        // le impostazioni di prima del cambio di nome restano valide
+        std::fs::write(path(), "tema = rtete\n").unwrap();
+        let old = Settings::load();
+        assert_eq!((old.style, old.theme, old.theme_wa), (UiStyle::Telegram, ThemeChoice::Rondine, ThemeChoice::WhatsApp));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
