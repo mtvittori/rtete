@@ -14,14 +14,19 @@ use rondine::{app, loader, tg, tr, trf};
 /// Il runtime della rete: backend, worker e `mark_read` girano qui, non
 /// nell'executor di iced (così `Handle::enter` basta per gli spawn).
 pub static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-/// il ricevitore degli eventi di rete: la subscription lo prende una volta
-static EVENTS: Mutex<Option<mpsc::UnboundedReceiver<NetEvent>>> = Mutex::new(None);
-/// per chi manda eventi da fuori dal ciclo di rete (click sulle notifiche)
-static SENDER: OnceLock<mpsc::UnboundedSender<NetEvent>> = OnceLock::new();
+/// Telegram o WhatsApp: ogni evento dice da quale ambiente arriva.
+pub use crate::settings::UiStyle as Env;
 
-pub fn open_peer(peer: ChatId) {
+type Tx = mpsc::UnboundedSender<(Env, NetEvent)>;
+
+/// il ricevitore degli eventi di rete: la subscription lo prende una volta
+static EVENTS: Mutex<Option<mpsc::UnboundedReceiver<(Env, NetEvent)>>> = Mutex::new(None);
+/// per chi manda eventi da fuori dal ciclo di rete (click sulle notifiche)
+static SENDER: OnceLock<Tx> = OnceLock::new();
+
+pub fn open_peer(env: Env, peer: ChatId) {
     if let Some(tx) = SENDER.get() {
-        let _ = tx.send(NetEvent::OpenPeer(peer));
+        let _ = tx.send((env, NetEvent::OpenPeer(peer)));
     }
 }
 
@@ -46,15 +51,48 @@ pub enum NetEvent {
     Link(String),
     /// click su una notifica: apri la chat
     OpenPeer(ChatId),
+    /// WhatsApp da collegare: QR, codice, abbinato
+    Pair(Pairing),
+    /// Telegram chiede un dato per l'accesso
+    Login(Login),
+}
+
+/// L'accesso a Telegram nella finestra: cosa chiedere (con l'errore del
+/// tentativo prima, se c'è).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Login {
+    Credentials(Option<String>),
+    Phone(Option<String>),
+    Code(Option<String>),
+    Password { hint: String, error: Option<String> },
+}
+
+/// le risposte dell'accesso (credenziali, numero, codice, password)
+static LOGIN: Mutex<Option<mpsc::UnboundedSender<String>>> = Mutex::new(None);
+
+pub fn answer(text: String) {
+    if let Some(tx) = LOGIN.lock().ok().and_then(|g| g.clone()) {
+        let _ = tx.send(text);
+    }
+}
+
+/// Cosa mostrare mentre si collega WhatsApp (copia di quello del backend,
+/// così la GUI compila anche senza la feature `whatsapp`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pairing {
+    Qr(String),
+    Code(String),
+    Paired,
+    Status(String),
 }
 
 /// I messaggi di iced devono essere `Clone`: l'evento viaggia in una
 /// scatola condivisa e chi lo riceve lo estrae una volta sola.
 #[derive(Clone)]
-pub struct Carrier(Arc<Mutex<Option<NetEvent>>>);
+pub struct Carrier(Arc<Mutex<Option<(Env, NetEvent)>>>);
 
 impl Carrier {
-    pub fn take(&self) -> Option<NetEvent> {
+    pub fn take(&self) -> Option<(Env, NetEvent)> {
         self.0.lock().ok()?.take()
     }
 }
@@ -84,7 +122,7 @@ pub fn hand_off(link: Option<&str>) -> bool {
 }
 
 /// Ascolta le istanze successive: ogni riga non vuota è un link da aprire.
-fn listen(tx: mpsc::UnboundedSender<NetEvent>) {
+fn listen(tx: Tx) {
     use std::io::BufRead;
     let path = sock_path();
     // un socket rimasto da un'uscita brusca: nessuno risponde (hand_off è
@@ -98,14 +136,14 @@ fn listen(tx: mpsc::UnboundedSender<NetEvent>) {
             let mut line = String::new();
             let _ = std::io::BufReader::new(conn).read_line(&mut line);
             let line = line.trim();
-            if !line.is_empty() && tx.send(NetEvent::Link(line.to_string())).is_err() {
+            if !line.is_empty() && tx.send((Env::Telegram, NetEvent::Link(line.to_string()))).is_err() {
                 break;
             }
         }
     });
 }
 
-/// Avvia il runtime e la connessione; gli eventi aspettano la subscription.
+/// Avvia il runtime e Telegram; gli eventi aspettano la subscription.
 /// `cache_bytes`: tetto della cache degli asset, sfoltita prima di tutto.
 pub fn start(link: Option<String>, cache_bytes: u64) {
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -118,14 +156,62 @@ pub fn start(link: Option<String>, cache_bytes: u64) {
     let _ = SENDER.set(tx.clone());
     listen(tx.clone());
     if let Some(l) = link {
-        let _ = tx.send(NetEvent::Link(l));
+        let _ = tx.send((Env::Telegram, NetEvent::Link(l)));
     }
+    let _ = RT.set(rt);
+    loader::prune_cache_to(cache_bytes);
+    start_telegram();
+}
+
+/// (Ri)avvia la connessione a Telegram.
+pub fn start_telegram() {
+    let (Some(rt), Some(tx)) = (RT.get(), SENDER.get().cloned()) else { return };
     rt.spawn(async move {
-        if let Err(e) = run(tx.clone(), cache_bytes).await {
-            let _ = tx.send(NetEvent::Failed(e));
+        if let Err(e) = run(tx.clone()).await {
+            let _ = tx.send((Env::Telegram, NetEvent::Failed(e)));
         }
     });
-    let _ = RT.set(rt);
+}
+
+/// Collega (o ricollega) WhatsApp: la prima volta arriva il QR.
+#[cfg(feature = "whatsapp")]
+pub fn start_whatsapp() {
+    let (Some(rt), Some(tx)) = (RT.get(), SENDER.get().cloned()) else { return };
+    rt.spawn(async move {
+        if let Err(e) = run_wa(tx.clone()).await {
+            let _ = tx.send((Env::WhatsApp, NetEvent::Failed(e)));
+        }
+    });
+}
+
+#[cfg(feature = "whatsapp")]
+async fn run_wa(tx: Tx) -> Result<(), String> {
+    use rondine::backend::wa;
+    let send = |ev: NetEvent| {
+        let _ = tx.send((Env::WhatsApp, ev));
+    };
+    send(NetEvent::Status(0, tr("mi collego a WhatsApp…").into()));
+    let ptx = tx.clone();
+    let sink: wa::PairSink = Arc::new(move |p| {
+        let p = match p {
+            wa::Pairing::Qr(c) => Pairing::Qr(c),
+            wa::Pairing::Code(c) => Pairing::Code(c),
+            wa::Pairing::Paired => Pairing::Paired,
+            wa::Pairing::Status(s) => Pairing::Status(s),
+        };
+        let _ = ptx.send((Env::WhatsApp, NetEvent::Pair(p)));
+    });
+    let (req_tx, req_rx) = mpsc::unbounded_channel::<Request>();
+    let (res_tx, mut res_rx) = mpsc::unbounded_channel::<Response>();
+    let (mut contacts, me) = wa::start_with(req_rx, res_tx.clone(), sink).await.map_err(|e| e.to_string())?;
+    app::pinned_first(&mut contacts);
+    send(NetEvent::Ready { link: Link { req: req_tx, res: res_tx }, contacts, me });
+    while let Some(r) = res_rx.recv().await {
+        if tx.send((Env::WhatsApp, NetEvent::Response(r))).is_err() {
+            return Ok(()); // finestra chiusa
+        }
+    }
+    Ok(())
 }
 
 /// Lo stream della subscription: inoltra gli eventi del canale come messaggi.
@@ -139,15 +225,36 @@ pub fn events() -> impl Stream<Item = Carrier> {
     .boxed()
 }
 
-async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<(), String> {
+async fn run(tx: Tx) -> Result<(), String> {
     let status = |step: u8, s: &str| {
-        let _ = tx.send(NetEvent::Status(step, s.into()));
+        let _ = tx.send((Env::Telegram, NetEvent::Status(step, s.into())));
     };
-    // la GUI non ha un terminale per numero e codice: l'accesso si fa una
-    // volta con `rondine`, che salva credenziali e sessione
-    let creds = tg::load_credentials()
-        .ok_or(tr("nessuna credenziale: avvia prima `rondine` nel terminale per l'accesso"))?;
-    loader::prune_cache_to(cache_bytes);
+    // l'accesso nella finestra: domande alla GUI, risposte da `answer`
+    let (ans_tx, mut answers) = mpsc::unbounded_channel::<String>();
+    *LOGIN.lock().unwrap() = Some(ans_tx);
+    let ask = |a: Login| {
+        let _ = tx.send((Env::Telegram, NetEvent::Login(a)));
+    };
+    let creds = match tg::load_credentials() {
+        Some(c) => c,
+        None => {
+            let mut error = None;
+            loop {
+                ask(Login::Credentials(error.take()));
+                let raw = answers.recv().await.ok_or(tr("accesso interrotto"))?;
+                let mut it = raw.split_whitespace();
+                let id = it.next().and_then(|s| s.parse::<i32>().ok());
+                match (id, it.next()) {
+                    (Some(api_id), Some(hash)) if hash.len() >= 16 => {
+                        let c = tg::Credentials { api_id, api_hash: hash.to_string() };
+                        tg::save_credentials(&c).map_err(|e| e.to_string())?;
+                        break c;
+                    }
+                    _ => error = Some(tr("API ID (un numero) e API hash (32 caratteri) non sembrano giusti").to_string()),
+                }
+            }
+        }
+    };
 
     status(0, tr("mi collego a Telegram…"));
     let mut wait = 2u64;
@@ -159,10 +266,20 @@ async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<()
                 match authorized {
                     Ok(true) => break (session, client, updates),
                     Ok(false) => {
-                        return Err(
-                            tr("sessione non autorizzata: accedi una volta con `rondine` nel terminale")
-                                .into(),
-                        )
+                        let (qtx, mut qrx) = mpsc::unbounded_channel::<tg::LoginAsk>();
+                        let fwd = tx.clone();
+                        tokio::spawn(async move {
+                            while let Some(q) = qrx.recv().await {
+                                let l = match q {
+                                    tg::LoginAsk::Phone(e) => Login::Phone(e),
+                                    tg::LoginAsk::Code(e) => Login::Code(e),
+                                    tg::LoginAsk::Password { hint, error } => Login::Password { hint, error },
+                                };
+                                let _ = fwd.send((Env::Telegram, NetEvent::Login(l)));
+                            }
+                        });
+                        tg::sign_in_steps(&client, &creds.api_hash, &qtx, &mut answers).await?;
+                        break (session, client, updates);
                     }
                     Err(e) if wait <= 16 => status(0, &trf!("rete non pronta ({}), ritento…", e)),
                     Err(e) => return Err(e.to_string()),
@@ -185,17 +302,17 @@ async fn run(tx: mpsc::UnboundedSender<NetEvent>, cache_bytes: u64) -> Result<()
     // il backend: dispatcher e update live, tutto sul canale delle risposte
     tg::worker::start(client, updates, req_rx, res_tx.clone()).await?;
 
-    let _ = tx.send(NetEvent::Ready {
+    let _ = tx.send((Env::Telegram, NetEvent::Ready {
         link: Link {
             req: req_tx,
             res: res_tx,
         },
         contacts,
         me,
-    });
+    }));
 
     while let Some(r) = res_rx.recv().await {
-        if tx.send(NetEvent::Response(r)).is_err() {
+        if tx.send((Env::Telegram, NetEvent::Response(r))).is_err() {
             return Ok(()); // finestra chiusa
         }
     }

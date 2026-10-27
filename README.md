@@ -52,6 +52,15 @@ automatico, miniature, misura delle foto), dati e archiviazione (spazio
 usato, svuota cache, tetto della cache), dispositivi (sessioni attive da
 chiudere) e link.
 
+## Telegram e WhatsApp nella GUI
+
+`cargo build --release --features gui,whatsapp`: a sinistra una barra con
+i due **ambienti**, ognuno con le sue chat, il suo stile (Telegram o
+WhatsApp) e il suo tema. L'accesso si fa nella finestra: per Telegram
+API ID/hash (una volta), numero, codice e 2FA; per WhatsApp «Mostra il
+QR» e lo si inquadra dal telefono (Dispositivi collegati). WhatsApp è un
+collegamento non ufficiale: meglio un numero secondario per provare.
+
 ## Stile WhatsApp
 
 In Impostazioni → Aspetto si sceglie lo **stile**: Telegram (com'era) o

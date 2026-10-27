@@ -638,17 +638,11 @@ unrecognized link: {}
 nuovo messaggio
 new message
 
-nessuna credenziale: avvia prima `rondine` nel terminale per l'accesso
-no credentials: run `rondine` in a terminal first to sign in
-
 mi collego a Telegram…
 connecting to Telegram…
 
 verifico l'account…
 checking the account…
-
-sessione non autorizzata: accedi una volta con `rondine` nel terminale
-session not authorized: sign in once with `rondine` in a terminal
 
 rete non pronta ({}), ritento…
 network not ready ({}), retrying…
@@ -739,9 +733,6 @@ With the Omarchy theme the colors follow `omarchy theme set` while Rondine is op
 
 Connessione a Telegram
 Connecting to Telegram
-
-Controlla la connessione; il primo accesso si fa con `rondine` nel terminale.
-Check your connection; the first sign-in is done with `rondine` in a terminal.
 
 DIMENSIONE
 SIZE
@@ -1491,3 +1482,123 @@ Paired! Downloading chats from the phone…
 
 messaggio sconosciuto
 unknown message
+
+mi collego a WhatsApp…
+connecting to WhatsApp…
+
+Collega WhatsApp
+Link WhatsApp
+
+Rondine si collega come dispositivo, come WhatsApp Web.
+Rondine links as a device, like WhatsApp Web.
+
+Apri WhatsApp sul telefono
+Open WhatsApp on your phone
+
+Impostazioni → Dispositivi collegati → Collega un dispositivo
+Settings → Linked devices → Link a device
+
+Inquadra il QR che comparirà qui
+Scan the QR code that will appear here
+
+Collegamento non ufficiale: WhatsApp potrebbe sospendere il numero, meglio provare prima con un numero secondario. Le chat arrivano dal telefono e restano solo su questo PC.
+Unofficial connection: WhatsApp might suspend the number, better try with a secondary number first. Chats come from the phone and stay only on this PC.
+
+Mostra il QR
+Show the QR code
+
+aspetto il QR…
+waiting for the QR code…
+
+Inquadra il QR col telefono
+Scan the QR code with your phone
+
+WhatsApp → Impostazioni → Dispositivi collegati → Collega un dispositivo
+WhatsApp → Settings → Linked devices → Link a device
+
+Il QR si rinnova da solo ogni poco: se scade, aspetta il nuovo.
+The QR code refreshes on its own every so often: if it expires, wait for the new one.
+
+Connessione a WhatsApp
+Connecting to WhatsApp
+
+Sincronizzazione col telefono
+Syncing with the phone
+
+{} leggero per Linux
+Lightweight {} for Linux
+
+WhatsApp non si collega
+WhatsApp can't connect
+
+Controlla la connessione; se hai scollegato il dispositivo dal telefono, ricollegalo col QR.
+Check your connection; if you unlinked the device from the phone, link it again with the QR code.
+
+Riprova
+Retry
+
+TEMA DI TELEGRAM
+TELEGRAM THEME
+
+TEMA DI WHATSAPP
+WHATSAPP THEME
+
+Vale solo per Telegram: WhatsApp tiene il suo.
+Applies only to Telegram: WhatsApp keeps its own.
+
+Vale solo per WhatsApp: Telegram tiene il suo.
+Applies only to WhatsApp: Telegram keeps its own.
+
+WhatsApp non risponde: controlla la connessione (deve raggiungere web.whatsapp.com). Rondine continua a riprovare da sola.
+WhatsApp isn't answering: check your connection (it must reach web.whatsapp.com). Rondine keeps retrying on its own.
+
+accesso interrotto
+sign-in interrupted
+
+numero troppo corto: scrivilo col prefisso, es. +39 333 1234567
+number too short: include the country code, e.g. +44 7700 900123
+
+numero non valido
+invalid number
+
+codice errato, riprova
+wrong code, try again
+
+password errata, riprova
+wrong password, try again
+
+API ID (un numero) e API hash (32 caratteri) non sembrano giusti
+API ID (a number) and API hash (32 characters) don't look right
+
+Collega Telegram
+Link Telegram
+
+Serve una volta sola: su my.telegram.org → API development tools crea un'app e copia qui API ID e API hash.
+Needed only once: on my.telegram.org → API development tools create an app and copy the API ID and API hash here.
+
+Il tuo numero
+Your number
+
+Col prefisso internazionale: ti arriva un codice nell'app Telegram.
+With the international prefix: you'll get a code in the Telegram app.
+
+Il codice
+The code
+
+Scrivi il codice che Telegram ti ha mandato (nell'app o per SMS).
+Type the code Telegram sent you (in the app or by SMS).
+
+L'account ha la verifica in due passaggi.
+The account has two-step verification.
+
+Suggerimento: {}
+Hint: {}
+
+Avanti
+Next
+
+Controlla la connessione e riprova.
+Check your connection and try again.
+
+Password 2FA
+2FA password

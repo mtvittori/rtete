@@ -10,7 +10,7 @@ use whatsapp_rust::wacore::types::presence::{ChatPresence, ChatPresenceMedia, Re
 use super::store::{chat_id_of, Store};
 use super::{dialog_of, row_of, stored_from};
 use crate::i18n::tr;
-use crate::model::Live;
+use crate::model::{ChatAction, Live};
 use crate::send::Response;
 
 /// Quello che serve a chi gestisce gli eventi: archivio, canale delle
@@ -22,6 +22,7 @@ struct Inner {
     store: Arc<Mutex<Store>>,
     out: mpsc::UnboundedSender<Response>,
     ready: Mutex<Option<mpsc::UnboundedSender<Result<(), String>>>>,
+    pair: super::PairSink,
 }
 
 /// Il JID senza dispositivo (`393…:12@s.whatsapp.net` → `393…@s.whatsapp.net`).
@@ -34,8 +35,9 @@ impl Shared {
         store: Arc<Mutex<Store>>,
         out: mpsc::UnboundedSender<Response>,
         ready: mpsc::UnboundedSender<Result<(), String>>,
+        pair: super::PairSink,
     ) -> Self {
-        Self(Arc::new(Inner { store, out, ready: Mutex::new(Some(ready)) }))
+        Self(Arc::new(Inner { store, out, ready: Mutex::new(Some(ready)), pair }))
     }
 
     fn store(&self) -> std::sync::MutexGuard<'_, Store> {
@@ -60,6 +62,25 @@ impl Shared {
         }
     }
 
+    /// Un cambio di stato della chat fatto altrove: archivio locale e lista.
+    fn chat_changed(&self, jid: &Jid, action: ChatAction) {
+        let jid = bare(jid);
+        {
+            let mut store = self.store();
+            if let Some(c) = store.chat_mut(&jid) {
+                match action {
+                    ChatAction::Archive(on) => c.archived = on,
+                    ChatAction::Pin(on) => c.pinned = on,
+                    ChatAction::Mute(on) => c.muted_until = if on { -1 } else { 0 },
+                    ChatAction::MarkUnread(on) => c.unread_mark = on,
+                    ChatAction::Ttl(_) => {}
+                }
+            }
+            self.save(&store);
+        }
+        self.live(Live::ChatChanged { chat: chat_id_of(&jid), action });
+    }
+
     fn save(&self, store: &Store) {
         if let Err(e) = store.save_meta() {
             let _ = self.0.out.send(Response::LiveErr(crate::trf!("archivio: {}", e)));
@@ -73,7 +94,7 @@ impl Shared {
                     let _ = tx.send(Ok(()));
                 }
             }
-            Event::PairSuccess(_) => println!("{}", tr("Abbinato! Scarico le chat dal telefono…")),
+            Event::PairSuccess(_) => (self.0.pair)(super::Pairing::Paired),
             Event::PairError(e) => self.fail(crate::trf!("abbinamento non riuscito: {}", e.error)),
             Event::LoggedOut(_) => self.fail(tr("dispositivo scollegato dal telefono: riavvia per abbinarlo di nuovo").into()),
             Event::TemporaryBan(b) => self.fail(crate::trf!("WhatsApp ha sospeso l'account: {}", format!("{b:?}"))),
@@ -83,6 +104,15 @@ impl Shared {
                 }
             }
             Event::Receipt(r) => self.receipt(r),
+            // archivio, fissate, silenziate e «da leggere» cambiati dal telefono
+            Event::ArchiveUpdate(u) => {
+                self.chat_changed(&u.jid, ChatAction::Archive(u.action.archived.unwrap_or(false)))
+            }
+            Event::PinUpdate(u) => self.chat_changed(&u.jid, ChatAction::Pin(u.action.pinned.unwrap_or(false))),
+            Event::MuteUpdate(u) => self.chat_changed(&u.jid, ChatAction::Mute(u.action.muted.unwrap_or(false))),
+            Event::MarkChatAsReadUpdate(u) => {
+                self.chat_changed(&u.jid, ChatAction::MarkUnread(!u.action.read.unwrap_or(true)))
+            }
             Event::ChatPresence(p) => {
                 let what = match (&p.state, &p.media) {
                     (ChatPresence::Composing, ChatPresenceMedia::Audio) => Some(tr("registra un vocale")),

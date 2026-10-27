@@ -66,6 +66,23 @@ impl Wa {
         Ok(())
     }
 
+    async fn block(&self, chat: ChatRef, on: bool) -> Result<(), String> {
+        let jid: Jid = self.jid(chat)?.parse().map_err(|e| format!("{e:?}"))?;
+        let b = self.client.blocking();
+        if on { b.block(&jid).await } else { b.unblock(&jid).await }.map_err(|e| e.to_string())
+    }
+
+    /// Elimina la chat anche dal telefono e la toglie dall'archivio locale.
+    async fn delete_chat(&self, chat: ChatRef) -> Result<(), String> {
+        let jid_s = self.jid(chat)?;
+        let jid: Jid = jid_s.parse().map_err(|e| format!("{e:?}"))?;
+        self.client.chat_actions().delete_chat(&jid, true, None).await.map_err(|e| e.to_string())?;
+        let mut store = self.store();
+        store.forget(&jid_s);
+        let _ = store.save_meta();
+        Ok(())
+    }
+
     /// La stella di WhatsApp, sincronizzata con il telefono.
     async fn star(&self, chat: ChatRef, id: i32, on: bool) -> Result<(), String> {
         let jid_s = self.jid(chat)?;
@@ -424,11 +441,17 @@ pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mps
                 Request::Forward { .. } => {
                     let _ = out.send(Response::Forwarded(unsupported()));
                 }
-                Request::Block { peer, .. } => {
-                    let _ = out.send(Response::Blocked { peer, res: unsupported() });
+                Request::Block { peer_ref, peer, blocked } => {
+                    tokio::spawn(async move {
+                        let res = wa.block(peer_ref, blocked).await.map(|()| blocked);
+                        let _ = out.send(Response::Blocked { peer, res });
+                    });
                 }
-                Request::DeleteChat { peer, .. } => {
-                    let _ = out.send(Response::ChatDeleted { peer, res: unsupported() });
+                Request::DeleteChat { peer_ref, peer, .. } => {
+                    tokio::spawn(async move {
+                        let res = wa.delete_chat(peer_ref).await;
+                        let _ = out.send(Response::ChatDeleted { peer, res });
+                    });
                 }
                 Request::SaveProfile { .. } | Request::ProfilePhoto(_) => {
                     let _ = out.send(Response::ProfileSaved(unsupported()));

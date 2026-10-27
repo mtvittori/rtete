@@ -16,6 +16,7 @@ use rondine::app::{App, TrState};
 use rondine::model::{self, HistoryRow, RowKind};
 use rondine::{tr, trf};
 
+use crate::net::Env;
 use crate::style;
 use crate::settings::{ThemeChoice, UiStyle};
 use crate::{CacheKind, ChatFilter, Confirm, Gui, Msg, Phase, SettingsPage, COMPOSE, FWD_SEARCH, HISTORY};
@@ -50,9 +51,12 @@ fn ellipsize(s: &str, max: usize) -> String {
 }
 
 pub fn view(g: &Gui) -> Element<'_, Msg> {
-    match &g.phase {
+    let content: Element<'_, Msg> = match &g.phase {
         Phase::Connecting(step, s) => loading(g, *step, s),
-        Phase::Failed(e) => failed(e),
+        Phase::Failed(e) => failed(g, e),
+        Phase::Linking => wa_linking(),
+        Phase::Login(l) => tg_login(g, l),
+        Phase::Pairing { qr, code } => wa_pairing(qr.as_ref(), code.as_deref()),
         Phase::Ready => iced::widget::responsive(move |size| {
             let info = g.show_info && g.app.current_chat().is_some();
             let right = if g.forwarding.is_some() {
@@ -89,7 +93,195 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
             layers.into()
         })
         .into(),
+    };
+    // con WhatsApp: a sinistra la barra per passare da un ambiente all'altro
+    if g.parked.is_some() {
+        row![env_rail(g), content].into()
+    } else {
+        content
     }
+}
+
+/// i colori dei due servizi, per la barra e le schermate d'avvio
+const TELEGRAM_BLUE: iced::Color = iced::color!(0x2aabee);
+const WHATSAPP_GREEN: iced::Color = iced::color!(0x25d366);
+
+fn brand(env: Env) -> (iced::Color, &'static str, &'static str) {
+    match env {
+        Env::Telegram => (TELEGRAM_BLUE, "✈", "Telegram"),
+        Env::WhatsApp => (WHATSAPP_GREEN, "✆", "WhatsApp"),
+    }
+}
+
+/// La barra a sinistra con i due ambienti: icona del servizio, nome e le
+/// chat da leggere (quelle non silenziate né archiviate).
+fn env_rail(g: &Gui) -> Element<'_, Msg> {
+    let p = style::p();
+    let unread = |app: &App| {
+        app.contacts
+            .iter()
+            .filter(|d| (d.unread > 0 || d.unread_mark) && !d.muted && !d.archived)
+            .count()
+    };
+    let other = g.parked.as_ref().map_or(0, |p| unread(&p.app));
+    let item = |env: Env| -> Element<'_, Msg> {
+        let (color, glyph, name) = brand(env);
+        let n = if env == g.env { unread(&g.app) } else { other };
+        let mut face = iced::widget::Stack::new().push(
+            container(text(glyph).size(22).color(iced::Color::WHITE))
+                .center(44)
+                .style(style::avatar(color)),
+        );
+        if n > 0 {
+            face = face.push(
+                container(
+                    container(text(n.min(99).to_string()).size(10).color(iced::Color::WHITE))
+                        .padding([0, 5])
+                        .style(style::pill(p.danger)),
+                )
+                .width(48)
+                .align_x(iced::Right),
+            );
+        }
+        let active = env == g.env;
+        // l'ambiente in vista ha la tacca a sinistra, come le app desktop
+        let mark = container(space())
+            .width(3)
+            .height(32)
+            .style(style::pill(if active { color } else { iced::Color::TRANSPARENT }));
+        row![
+            mark,
+            button(column![face, text(name).size(10).color(if active { p.text } else { p.muted })].spacing(4).align_x(Center))
+                .on_press(Msg::SwitchEnv(env))
+                .padding([6, 4])
+                .width(Fill)
+                .style(style::flat(false)),
+        ]
+        .align_y(Center)
+        .into()
+    };
+    container(column![item(Env::Telegram), item(Env::WhatsApp)].spacing(10).padding([12, 0]))
+        .width(72)
+        .height(Fill)
+        .style(style::fill(style::mix(p.sidebar, iced::Color::BLACK, 0.3)))
+        .into()
+}
+
+/// L'accesso a Telegram nella finestra, un passo alla volta.
+fn tg_login<'a>(g: &'a Gui, l: &'a crate::net::Login) -> Element<'a, Msg> {
+    use crate::net::Login;
+    let p = style::p();
+    let field = |ph: &'static str, v: &'a str, secret: bool, on: fn(String) -> Msg, first: bool| -> Element<'a, Msg> {
+        let mut t = text_input(ph, v).secure(secret).on_input(on).on_submit(Msg::LoginSubmit).style(style::input).padding(10);
+        if first {
+            t = t.id(crate::LOGIN_FIELD);
+        }
+        t.into()
+    };
+    let (title, help, error, fields): (&str, String, Option<&String>, Element<'a, Msg>) = match l {
+        Login::Credentials(e) => (
+            tr("Collega Telegram"),
+            tr("Serve una volta sola: su my.telegram.org → API development tools crea un'app e copia qui API ID e API hash.").into(),
+            e.as_ref(),
+            column![field("API ID", &g.login_a, false, Msg::LoginA, true), field("API hash", &g.login_b, true, Msg::LoginB, false)]
+                .spacing(8)
+                .into(),
+        ),
+        Login::Phone(e) => (
+            tr("Il tuo numero"),
+            tr("Col prefisso internazionale: ti arriva un codice nell'app Telegram.").into(),
+            e.as_ref(),
+            field("+39 333 1234567", &g.login_a, false, Msg::LoginA, true),
+        ),
+        Login::Code(e) => (
+            tr("Il codice"),
+            tr("Scrivi il codice che Telegram ti ha mandato (nell'app o per SMS).").into(),
+            e.as_ref(),
+            field("12345", &g.login_a, false, Msg::LoginA, true),
+        ),
+        Login::Password { hint, error } => (
+            tr("Password 2FA"),
+            if hint.is_empty() { tr("L'account ha la verifica in due passaggi.").into() } else { trf!("Suggerimento: {}", hint) },
+            error.as_ref(),
+            field("••••••", &g.login_a, true, Msg::LoginA, true),
+        ),
+    };
+    let mut col = column![
+        container(text("✈").size(40).color(iced::Color::WHITE)).center(84).style(style::avatar(TELEGRAM_BLUE)),
+        text(title).size(24).font(BOLD),
+        container(text(help).size(13).color(p.muted).align_x(Center)).max_width(440),
+        container(fields).width(360),
+    ];
+    if let Some(e) = error {
+        col = col.push(text(e.as_str()).size(13).color(p.danger));
+    }
+    if matches!(l, Login::Credentials(_)) {
+        col = col.push(
+            button(text("my.telegram.org").size(13).color(p.link))
+                .on_press(Msg::Link("https://my.telegram.org/apps".into()))
+                .style(style::flat(false)),
+        );
+    }
+    centered(col.push(button(text(tr("Avanti"))).on_press(Msg::LoginSubmit).padding([10, 22]).style(style::primary)))
+}
+
+/// WhatsApp da collegare: come si fa e cosa sapere, poi il QR.
+fn wa_linking<'a>() -> Element<'a, Msg> {
+    let p = style::p();
+    let step = |n: &'static str, t: &'static str| -> Element<'a, Msg> {
+        row![
+            container(text(n).size(13).font(BOLD).color(iced::Color::WHITE)).center(24).style(style::avatar(WHATSAPP_GREEN)),
+            text(t).size(14),
+        ]
+        .spacing(10)
+        .align_y(Center)
+        .into()
+    };
+    centered(column![
+        container(text("✆").size(46).color(iced::Color::WHITE)).center(92).style(style::avatar(WHATSAPP_GREEN)),
+        text(tr("Collega WhatsApp")).size(26).font(BOLD),
+        text(tr("Rondine si collega come dispositivo, come WhatsApp Web.")).color(p.muted),
+        space().height(6),
+        container(
+            column![
+                step("1", tr("Apri WhatsApp sul telefono")),
+                step("2", tr("Impostazioni → Dispositivi collegati → Collega un dispositivo")),
+                step("3", tr("Inquadra il QR che comparirà qui")),
+            ]
+            .spacing(10),
+        )
+        .padding([14, 22])
+        .style(style::pill(p.sidebar)),
+        container(
+            text(tr("Collegamento non ufficiale: WhatsApp potrebbe sospendere il numero, meglio provare prima con un numero secondario. Le chat arrivano dal telefono e restano solo su questo PC."))
+                .size(12)
+                .color(p.muted)
+                .align_x(Center),
+        )
+        .max_width(480),
+        space().height(4),
+        button(text(tr("Mostra il QR"))).on_press(Msg::LinkWhatsApp).padding([10, 22]).style(style::send_round),
+    ])
+}
+
+/// Il QR da inquadrare (o il codice da scrivere sul telefono).
+fn wa_pairing<'a>(qr: Option<&'a iced::widget::qr_code::Data>, code: Option<&'a str>) -> Element<'a, Msg> {
+    let p = style::p();
+    let what: Element<'a, Msg> = match (qr, code) {
+        (Some(data), _) => container(iced::widget::qr_code(data).cell_size(5))
+            .padding(14)
+            .style(style::fill(iced::Color::WHITE))
+            .into(),
+        (None, Some(c)) => text(c).size(36).font(BOLD).into(),
+        (None, None) => text(tr("aspetto il QR…")).color(p.muted).into(),
+    };
+    centered(column![
+        text(tr("Inquadra il QR col telefono")).size(22).font(BOLD),
+        text(tr("WhatsApp → Impostazioni → Dispositivi collegati → Collega un dispositivo")).size(13).color(p.muted),
+        space().height(6),
+        what,
+        text(tr("Il QR si rinnova da solo ogni poco: se scade, aspetta il nuovo.")).size(12).color(p.muted),
+    ])
 }
 
 /// Foto a tutta finestra: rotella per lo zoom, trascina per spostarla,
@@ -167,7 +359,11 @@ fn spinner<'a>(g: &Gui, size: f32) -> Element<'a, Msg> {
 /// da fare) con la riga di stato che arriva dalla rete.
 fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
     let p = style::p();
-    let steps_l = [tr("Connessione a Telegram"), tr("Verifica dell'account"), tr("Caricamento delle chat")];
+    let steps_l = match g.env {
+        Env::Telegram => [tr("Connessione a Telegram"), tr("Verifica dell'account"), tr("Caricamento delle chat")],
+        Env::WhatsApp => [tr("Connessione a WhatsApp"), tr("Sincronizzazione col telefono"), tr("Caricamento delle chat")],
+    };
+    let (color, _, name) = brand(g.env);
     let mut steps = Column::new().spacing(8);
     for (i, label) in steps_l.iter().enumerate() {
         let (mark, color) = match (i as u8).cmp(&step) {
@@ -182,32 +378,62 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
         );
     }
     let card = container(steps).padding([14, 22]).style(style::pill(p.sidebar));
+    // con due ambienti il marchio dice quale si sta collegando
+    let subtitle = if g.parked.is_some() { trf!("{} leggero per Linux", name) } else { tr("Telegram leggero per Linux").into() };
+    // WhatsApp che non risponde: lo si dice, invece di far girare la rotella
+    let silent = g.env == Env::WhatsApp && g.wa_since.is_some_and(|t| t.elapsed().as_secs() >= 30);
+    let hint: Element<'_, Msg> = if silent {
+        container(
+            text(tr("WhatsApp non risponde: controlla la connessione (deve raggiungere web.whatsapp.com). Rondine continua a riprovare da sola."))
+                .size(12)
+                .color(p.danger)
+                .align_x(Center),
+        )
+        .max_width(460)
+        .into()
+    } else {
+        space().height(0).into()
+    };
     centered(column![
-        logo(p.accent),
+        logo(if g.parked.is_some() { color } else { p.accent }),
         text("Rondine").size(30).font(BOLD),
-        text(tr("Telegram leggero per Linux")).size(13).color(p.muted),
+        text(subtitle).size(13).color(p.muted),
         space().height(14),
         spinner(g, 54.0),
         text(status).size(13).color(p.muted),
         space().height(6),
         card,
+        hint,
     ])
 }
 
-/// Avvio fallito: cosa è successo e come rimediare.
-fn failed(e: &str) -> Element<'_, Msg> {
+/// Avvio fallito: cosa è successo e come rimediare. Con due ambienti
+/// l'altro resta usabile: qui si riprova, non si chiude.
+fn failed<'a>(g: &Gui, e: &'a str) -> Element<'a, Msg> {
     let p = style::p();
+    let (title, hint) = match g.env {
+        Env::Telegram => (
+            tr("Rondine non riesce a partire"),
+            tr("Controlla la connessione e riprova."),
+        ),
+        Env::WhatsApp => (
+            tr("WhatsApp non si collega"),
+            tr("Controlla la connessione; se hai scollegato il dispositivo dal telefono, ricollegalo col QR."),
+        ),
+    };
+    let mut buttons = row![button(text(tr("Riprova"))).on_press(Msg::Retry).padding([8, 18]).style(style::primary)].spacing(8);
+    if g.parked.is_none() {
+        buttons = buttons.push(button(text(tr("Chiudi"))).on_press(Msg::Quit).padding([8, 18]).style(style::flat(false)));
+    }
     centered(column![
         container(text("!").size(46).font(BOLD).color(iced::Color::WHITE))
             .center(92)
             .style(style::avatar(p.danger)),
-        text(tr("Rondine non riesce a partire")).size(22).font(BOLD),
+        text(title).size(22).font(BOLD),
         container(text(e).color(p.danger).align_x(Center)).max_width(520),
-        text(tr("Controlla la connessione; il primo accesso si fa con `rondine` nel terminale."))
-            .size(12)
-            .color(p.muted),
+        text(hint).size(12).color(p.muted),
         space().height(6),
-        button(text(tr("Chiudi"))).on_press(Msg::Quit).padding([8, 18]).style(style::primary),
+        buttons,
     ])
 }
 
@@ -576,7 +802,7 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
     if panel_h > 0.5 {
         body = body.push(container(stickers(app)).height(panel_h).clip(true));
     }
-    body = body.push(banners(app)).push(composer(app));
+    body = body.push(banners(app)).push(composer(app, g.env == Env::Telegram));
     if !app.status.is_empty() {
         body = body.push(
             container(text(app.status.as_str()).size(12).color(style::p().muted)).padding([4, 16]),
@@ -1056,7 +1282,10 @@ fn actions<'a>(g: &Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     }
     let starred = g.app.open.is_some_and(|peer| g.app.is_starred(peer, r.id));
     bar = bar.push(act(if starred { tr("☆ Non importante") } else { tr("⭐ Importante") }, Msg::Star(r.id)));
-    bar = bar.push(act(tr("↪ Inoltra"), Msg::Forward(r.id)));
+    // WhatsApp: l'inoltro fra chat non c'è ancora
+    if g.env == Env::Telegram {
+        bar = bar.push(act(tr("↪ Inoltra"), Msg::Forward(r.id)));
+    }
     bar = bar.push(act(tr("⧉ Copia"), Msg::Copy(r.id)));
     if r.outgoing {
         bar = bar.push(
@@ -1159,15 +1388,20 @@ fn attachment(app: &App) -> Option<Element<'_, Msg>> {
     )
 }
 
-fn composer(app: &App) -> Element<'_, Msg> {
+/// `stickers`: il pannello dei set di sticker (solo Telegram).
+fn composer(app: &App, stickers: bool) -> Element<'_, Msg> {
     let attached = app.pending_photo.is_some() || app.pending_file.is_some();
     let placeholder = if attached { tr("Didascalia…") } else { tr("Scrivi un messaggio…") };
     if style::wa() {
         // WhatsApp: emoji e allegato a sinistra, campo tondo, invio verde tondo
+        let mut left = Row::new().spacing(8).align_y(Center);
+        if stickers {
+            left = left.push(button(text("😊").size(20)).on_press(Msg::Stickers).style(style::flat(app.show_sticker)));
+        }
+        left = left.push(button(text("📎").size(20)).on_press(Msg::Attach).style(style::flat(false)));
         return container(
             row![
-                button(text("😊").size(20)).on_press(Msg::Stickers).style(style::flat(app.show_sticker)),
-                button(text("📎").size(20)).on_press(Msg::Attach).style(style::flat(false)),
+                left,
                 text_input(placeholder, &app.compose)
                     .style(style::input)
                     .id(COMPOSE)
@@ -1430,17 +1664,25 @@ fn settings_main(g: &Gui) -> Element<'_, Msg> {
         .style(style::flat(false))
         .into()
     };
-    let list = column![
-        entry("👤", tr("Il mio account"), tr("nome, username, bio e foto"), SettingsPage::Account),
-        entry("🎨", tr("Aspetto"), tr("lingua, tema, dimensione, accelerazione GPU"), SettingsPage::Appearance),
-        entry("🔔", tr("Notifiche"), tr("avvisi dei messaggi nuovi"), SettingsPage::Notifications),
-        entry("🖼", tr("Immagini e media"), tr("download automatico, miniature, misura delle foto"), SettingsPage::Media),
-        entry("💾", tr("Dati e archiviazione"), tr("cache e spazio su disco"), SettingsPage::Storage),
-        entry("💻", tr("Dispositivi"), tr("sessioni attive dell'account"), SettingsPage::Devices),
-        entry("🌐", tr("Traduzione"), tr("traduzione dei messaggi con DeepL, Groq e altri"), SettingsPage::Translation),
-        entry("🔗", "Link", tr("t.me e tg:// dentro Rondine"), SettingsPage::Links),
-    ]
-    .spacing(2);
+    // account e dispositivi sono quelli di Telegram: con WhatsApp in vista
+    // si gestiscono dal telefono
+    let telegram = g.env == Env::Telegram;
+    let mut list = Column::new().spacing(2);
+    if telegram {
+        list = list.push(entry("👤", tr("Il mio account"), tr("nome, username, bio e foto"), SettingsPage::Account));
+    }
+    list = list
+        .push(entry("🎨", tr("Aspetto"), tr("lingua, tema, dimensione, accelerazione GPU"), SettingsPage::Appearance))
+        .push(entry("🔔", tr("Notifiche"), tr("avvisi dei messaggi nuovi"), SettingsPage::Notifications))
+        .push(entry("🖼", tr("Immagini e media"), tr("download automatico, miniature, misura delle foto"), SettingsPage::Media))
+        .push(entry("💾", tr("Dati e archiviazione"), tr("cache e spazio su disco"), SettingsPage::Storage));
+    if telegram {
+        list = list.push(entry("💻", tr("Dispositivi"), tr("sessioni attive dell'account"), SettingsPage::Devices));
+    }
+    list = list.push(entry("🌐", tr("Traduzione"), tr("traduzione dei messaggi con DeepL, Groq e altri"), SettingsPage::Translation));
+    if telegram {
+        list = list.push(entry("🔗", "Link", tr("t.me e tg:// dentro Rondine"), SettingsPage::Links));
+    }
     column![
         container(card).style(style::pill(p.sidebar)),
         container(list).padding(4).style(style::pill(p.sidebar)),
@@ -1528,6 +1770,21 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         Some(n) => trf!("Tema Omarchy · {}", n),
         None => tr("Tema Omarchy").into(),
     };
+    // con WhatsApp lo stile segue l'ambiente in vista; senza, si sceglie
+    let style_choice: Element<'_, Msg> = if g.parked.is_some() {
+        space().height(0).into()
+    } else {
+        column![
+            section(tr("STILE")),
+            row![
+                choice("Telegram".into(), s.style == UiStyle::Telegram, Msg::SetStyle(UiStyle::Telegram)),
+                choice("WhatsApp".into(), s.style == UiStyle::WhatsApp, Msg::SetStyle(UiStyle::WhatsApp)),
+            ]
+            .spacing(8),
+        ]
+        .spacing(14)
+        .into()
+    };
     column![
         section(tr("LINGUA")),
         Row::with_children(
@@ -1542,13 +1799,12 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         )
         .spacing(8)
         .wrap(),
-        section(tr("STILE")),
-        row![
-            choice("Telegram".into(), s.style == UiStyle::Telegram, Msg::SetStyle(UiStyle::Telegram)),
-            choice("WhatsApp".into(), s.style == UiStyle::WhatsApp, Msg::SetStyle(UiStyle::WhatsApp)),
-        ]
-        .spacing(8),
-        section(tr("TEMA")),
+        style_choice,
+        section(match (g.parked.is_some(), s.style) {
+            (false, _) => tr("TEMA"),
+            (true, UiStyle::Telegram) => tr("TEMA DI TELEGRAM"),
+            (true, UiStyle::WhatsApp) => tr("TEMA DI WHATSAPP"),
+        }),
         row![
             choice(omarchy_label, s.active_theme() == ThemeChoice::Omarchy, Msg::SetTheme(ThemeChoice::Omarchy)),
             choice(tr("Rondine scuro").into(), s.active_theme() == ThemeChoice::Rondine, Msg::SetTheme(ThemeChoice::Rondine)),
@@ -1556,9 +1812,11 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         ]
         .spacing(8)
         .wrap(),
-        text(match s.style {
-            UiStyle::Telegram => tr("Il tema scelto vale solo per lo stile Telegram."),
-            UiStyle::WhatsApp => tr("Il tema scelto vale solo per lo stile WhatsApp."),
+        text(match (g.parked.is_some(), s.style) {
+            (false, UiStyle::Telegram) => tr("Il tema scelto vale solo per lo stile Telegram."),
+            (false, UiStyle::WhatsApp) => tr("Il tema scelto vale solo per lo stile WhatsApp."),
+            (true, UiStyle::Telegram) => tr("Vale solo per Telegram: WhatsApp tiene il suo."),
+            (true, UiStyle::WhatsApp) => tr("Vale solo per WhatsApp: Telegram tiene il suo."),
         })
         .size(12)
         .color(p.muted),

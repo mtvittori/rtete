@@ -336,6 +336,39 @@ pub async fn upload_message(client: &Client, path: &std::path::Path, caption: &s
 
 // ---------------- accesso e avvio --------------------------------------
 
+/// Cosa mostrare all'utente mentre si collega WhatsApp: la TUI lo stampa
+/// nel terminale, la GUI lo disegna nella finestra.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pairing {
+    /// il QR da inquadrare col telefono (il testo da codificare)
+    Qr(String),
+    /// il codice di 8 caratteri (abbinamento col numero)
+    Code(String),
+    /// abbinato: arrivano le chat dal telefono
+    Paired,
+    /// una riga di stato («mi collego…»)
+    Status(String),
+}
+
+pub type PairSink = Arc<dyn Fn(Pairing) + Send + Sync>;
+
+/// Il terminale come destinazione (TUI).
+pub fn terminal_sink() -> PairSink {
+    Arc::new(|p| match p {
+        Pairing::Qr(code) => print_qr(&code),
+        Pairing::Code(code) => {
+            println!("{}", crate::trf!("Codice di abbinamento: {} (WhatsApp → Dispositivi collegati → Collega con numero)", code))
+        }
+        Pairing::Paired => println!("{}", tr("Abbinato! Scarico le chat dal telefono…")),
+        Pairing::Status(s) => println!("{s}"),
+    })
+}
+
+/// Esiste già una sessione WhatsApp su questo PC (abbinata in passato)?
+pub fn has_session() -> bool {
+    crate::paths::data_dir().join("whatsapp").join("whatsapp.db").exists()
+}
+
 /// Disegna il QR dell'abbinamento nel terminale (mezzi blocchi Unicode).
 fn print_qr(code: &str) {
     use qrcode::render::unicode::Dense1x2;
@@ -357,6 +390,15 @@ pub async fn start(
     req_rx: mpsc::UnboundedReceiver<Request>,
     res_tx: mpsc::UnboundedSender<Response>,
 ) -> Result<(Vec<DialogInfo>, String), Box<dyn std::error::Error>> {
+    start_with(req_rx, res_tx, terminal_sink()).await
+}
+
+/// Come `start`, con QR e avvisi dell'abbinamento mandati a `pair`.
+pub async fn start_with(
+    req_rx: mpsc::UnboundedReceiver<Request>,
+    res_tx: mpsc::UnboundedSender<Response>,
+    pair: PairSink,
+) -> Result<(Vec<DialogInfo>, String), Box<dyn std::error::Error>> {
     let dir = crate::paths::data_dir().join("whatsapp");
     crate::paths::ensure_private_dir(&dir)?;
     let store = Arc::new(Mutex::new(Store::open(&dir)?));
@@ -364,10 +406,14 @@ pub async fn start(
     let backend = whatsapp_rust_sqlite_storage::SqliteStore::new(db.to_string_lossy().as_ref()).await?;
 
     let (ready_tx, mut ready_rx) = mpsc::unbounded_channel::<Result<(), String>>();
-    let shared = live::Shared::new(Arc::clone(&store), res_tx.clone(), ready_tx);
+    let shared = live::Shared::new(Arc::clone(&store), res_tx.clone(), ready_tx, Arc::clone(&pair));
+    let on_qr = Arc::clone(&pair);
     let mut builder = Bot::builder()
         .with_backend(backend)
-        .on_qr_code(|code, _timeout| async move { print_qr(&code) })
+        .on_qr_code(move |code, _timeout| {
+            let on_qr = Arc::clone(&on_qr);
+            async move { on_qr(Pairing::Qr(code)) }
+        })
         .on_event({
             let shared = shared.clone();
             move |event, client| {
@@ -383,12 +429,16 @@ pub async fn start(
                 phone_number: phone,
                 ..Default::default()
             })
-            .on_pair_code(|code, _timeout| async move {
-                println!("{}", crate::trf!("Codice di abbinamento: {} (WhatsApp → Dispositivi collegati → Collega con numero)", code));
+            .on_pair_code({
+                let pair = Arc::clone(&pair);
+                move |code, _timeout| {
+                    let pair = Arc::clone(&pair);
+                    async move { pair(Pairing::Code(code)) }
+                }
             });
     }
     let bot = builder.build().await?;
-    println!("{}", tr("Mi collego a WhatsApp…"));
+    pair(Pairing::Status(tr("Mi collego a WhatsApp…").into()));
     let handle = bot.spawn();
     let client = handle.client();
     // il bot vive finché vive l'app (droppare l'handle lo fermerebbe)

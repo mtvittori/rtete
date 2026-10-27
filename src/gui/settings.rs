@@ -44,8 +44,9 @@ impl ThemeChoice {
     }
 }
 
-/// La disposizione dell'interfaccia; ognuna ricorda il suo tema.
-#[derive(Clone, Copy, PartialEq, Debug)]
+/// L'ambiente (Telegram o WhatsApp) e con esso la disposizione
+/// dell'interfaccia; ognuno ricorda il suo tema.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum UiStyle {
     Telegram,
     WhatsApp,

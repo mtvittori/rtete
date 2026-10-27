@@ -19,12 +19,13 @@ use rondine::sync::{handle_live, handle_response};
 use rondine::{links, model, paths};
 use rondine::{i18n, tr, trf, translate};
 
-use crate::net::{Carrier, Link, NetEvent};
+use crate::net::{Carrier, Env, Link, NetEvent, Pairing};
 use crate::settings::{Settings, ThemeChoice, UiStyle};
 
 pub const COMPOSE: &str = "compose";
 pub const HISTORY: &str = "history";
 pub const FWD_SEARCH: &str = "fwd-search";
+pub const LOGIN_FIELD: &str = "login";
 
 #[derive(Debug, Clone)]
 pub enum Msg {
@@ -114,6 +115,16 @@ pub enum Msg {
     LoadPreview(i32),
     /// lingua dell'interfaccia (None: quella del sistema)
     Lang(Option<i18n::Lang>),
+    /// passa a Telegram o a WhatsApp
+    SwitchEnv(Env),
+    /// collega WhatsApp (mostra il QR)
+    LinkWhatsApp,
+    /// riprova a collegare l'ambiente in vista
+    Retry,
+    /// i campi dell'accesso a Telegram e l'invio
+    LoginA(String),
+    LoginB(String),
+    LoginSubmit,
     /// mostra o nasconde la traduzione di un messaggio
     Translate(i32),
     /// traduzione automatica della chat aperta
@@ -209,12 +220,47 @@ pub enum Phase {
     Connecting(u8, String),
     Failed(String),
     Ready,
+    /// WhatsApp non ancora collegato: la pagina che spiega e il pulsante
+    Linking,
+    /// accesso a Telegram: credenziali, numero, codice o password 2FA
+    Login(net::Login),
+    /// WhatsApp in abbinamento: il QR (o il codice) da usare col telefono
+    Pairing { qr: Option<iced::widget::qr_code::Data>, code: Option<String> },
+}
+
+/// L'ambiente che non è in vista, con tutto il suo stato: le sue chat,
+/// il collegamento alla rete e a che punto è.
+pub struct Parked {
+    pub app: App,
+    link: Option<Link>,
+    pub phase: Phase,
+}
+
+/// Uno stato dell'app nuovo, con le preferenze e le liste condivise.
+fn new_app(settings: &Settings) -> App {
+    App {
+        media_prefs: settings.media_prefs(),
+        translate: translate::Config::load(),
+        starred: rondine::starred::load(),
+        ..App::default()
+    }
 }
 
 pub struct Gui {
     pub app: App,
     pub phase: Phase,
     link: Option<Link>,
+    /// l'ambiente in vista (Telegram o WhatsApp)
+    pub env: Env,
+    /// l'altro ambiente, fermo dietro le quinte (None senza WhatsApp)
+    pub parked: Option<Parked>,
+    /// sto aggiornando l'ambiente nascosto: niente scorrimenti né fuoco
+    background: bool,
+    /// da quando WhatsApp prova a collegarsi senza risposta (per l'avviso)
+    pub wa_since: Option<std::time::Instant>,
+    /// i campi dell'accesso (API ID e hash, oppure il dato chiesto)
+    pub login_a: String,
+    pub login_b: String,
     pub filter: String,
     pub tz: jiff::tz::TimeZone,
     /// la vista è in fondo alla cronologia: i nuovi messaggi la seguono
@@ -280,6 +326,11 @@ fn main() -> iced::Result {
         return Ok(());
     }
     net::start(link, Settings::load().cache_mb as u64 * 1024 * 1024);
+    // WhatsApp già collegato: si connette insieme a Telegram
+    #[cfg(feature = "whatsapp")]
+    if rondine::backend::wa::has_session() {
+        net::start_whatsapp();
+    }
     iced::application(boot, Gui::update, ui::view)
         .title("Rondine")
         .theme(|_: &Gui| style::theme())
@@ -313,9 +364,24 @@ pub fn focus_existing() {
 
 fn boot() -> Gui {
     let settings = Settings::load();
+    // con WhatsApp l'ambiente dell'ultima volta; senza, lo stile scelto
+    let env = if cfg!(feature = "whatsapp") { settings.style } else { Env::Telegram };
     style::set_wa(settings.style == UiStyle::WhatsApp);
     apply_theme(settings.active_theme());
+    let telegram = Parked { app: new_app(&settings), link: None, phase: Phase::Connecting(0, tr("avvio…").into()) };
+    let whatsapp = whatsapp_slot(&settings);
+    let (active, parked) = match (env, whatsapp) {
+        (Env::WhatsApp, Some(wa)) => (wa, Some(telegram)),
+        (_, wa) => (telegram, wa),
+    };
+    let env = if parked.is_some() && env == Env::WhatsApp { Env::WhatsApp } else { Env::Telegram };
     Gui {
+        env,
+        parked,
+        background: false,
+        wa_since: None,
+        login_a: String::new(),
+        login_b: String::new(),
         settings: settings.clone(),
         show_settings: false,
         tg_handler: String::new(),
@@ -341,18 +407,30 @@ fn boot() -> Gui {
         show_archived: false,
         chat_menu: None,
         show_starred: false,
-        app: App {
-            media_prefs: settings.media_prefs(),
-            translate: translate::Config::load(),
-            starred: rondine::starred::load(),
-            ..App::default()
-        },
-        phase: Phase::Connecting(0, tr("avvio…").into()),
-        link: None,
+        app: active.app,
+        phase: active.phase,
+        link: active.link,
         filter: String::new(),
         tz: jiff::tz::TimeZone::system(),
         at_bottom: true,
     }
+}
+
+/// L'ambiente WhatsApp all'avvio: già collegato (si connette subito) o
+/// da collegare. Senza la feature non c'è.
+#[cfg(feature = "whatsapp")]
+fn whatsapp_slot(settings: &Settings) -> Option<Parked> {
+    let phase = if rondine::backend::wa::has_session() {
+        Phase::Connecting(0, tr("mi collego a WhatsApp…").into())
+    } else {
+        Phase::Linking
+    };
+    Some(Parked { app: new_app(settings), link: None, phase })
+}
+
+#[cfg(not(feature = "whatsapp"))]
+fn whatsapp_slot(_: &Settings) -> Option<Parked> {
+    None
 }
 
 fn apply_theme(choice: ThemeChoice) {
@@ -487,9 +565,56 @@ impl Gui {
                 Task::none()
             }
             Msg::Net(c) => match c.take() {
-                Some(ev) => self.on_net(ev),
+                // click su una notifica dell'altro ambiente: ci si sposta lì
+                Some((env, NetEvent::OpenPeer(pid))) => {
+                    let switch = self.switch_env(env);
+                    Task::batch([switch, self.open_chat(pid)])
+                }
+                Some((env, ev)) => self.in_env(env, |g| g.on_net(ev)),
                 None => Task::none(),
             },
+            Msg::SwitchEnv(env) => self.switch_env(env),
+            Msg::LoginA(s) => {
+                self.login_a = s;
+                Task::none()
+            }
+            Msg::LoginB(s) => {
+                self.login_b = s;
+                Task::none()
+            }
+            Msg::LoginSubmit => {
+                let a = std::mem::take(&mut self.login_a);
+                let b = std::mem::take(&mut self.login_b);
+                let text = match &self.phase {
+                    Phase::Login(net::Login::Credentials(_)) => format!("{} {}", a.trim(), b.trim()),
+                    _ => a,
+                };
+                if !text.trim().is_empty() {
+                    net::answer(text);
+                    self.phase = Phase::Connecting(1, tr("verifico l'account…").into());
+                }
+                Task::none()
+            }
+            Msg::LinkWhatsApp => {
+                #[cfg(feature = "whatsapp")]
+                {
+                    self.phase = Phase::Connecting(0, tr("mi collego a WhatsApp…").into());
+                    self.wa_since = Some(std::time::Instant::now());
+                    net::start_whatsapp();
+                }
+                Task::none()
+            }
+            Msg::Retry => {
+                self.phase = Phase::Connecting(0, tr("avvio…").into());
+                match self.env {
+                    Env::Telegram => net::start_telegram(),
+                    #[cfg(feature = "whatsapp")]
+                    Env::WhatsApp => net::start_whatsapp(),
+                    #[cfg(not(feature = "whatsapp"))]
+                    Env::WhatsApp => {}
+                }
+                Task::none()
+            }
             Msg::Open(pid) => self.open_chat(pid),
             Msg::Filter(s) => {
                 self.filter = s;
@@ -994,9 +1119,15 @@ impl Gui {
                 return open;
             }
             Msg::Star(id) => {
-                if let Some(peer) = self.app.open {
+                if let Some(chat) = self.app.current_chat() {
+                    let (peer, peer_ref) = (chat.peer_id, chat.peer_ref);
                     self.app.toggle_star(peer, id);
                     self.app.msg_cursor = None;
+                    // su WhatsApp la stella arriva anche al telefono
+                    let on = self.app.is_starred(peer, id);
+                    if let Some(req) = self.req() {
+                        let _ = req.send(Request::Star { peer_ref, id, on });
+                    }
                 }
                 Task::none()
             }
@@ -1009,6 +1140,15 @@ impl Gui {
                 Task::none()
             }
             Msg::OpenStarred(chat, id) => {
+                // il messaggio può stare nell'altro ambiente: prima ci si va
+                let p = ChatId(chat);
+                let elsewhere = !self.app.contacts.iter().any(|c| model::same_peer(c.peer_id, p))
+                    && self.parked.as_ref().is_some_and(|k| k.app.contacts.iter().any(|c| model::same_peer(c.peer_id, p)));
+                let mut switch = Task::none();
+                if elsewhere {
+                    let other = if self.env == Env::Telegram { Env::WhatsApp } else { Env::Telegram };
+                    switch = self.switch_env(other);
+                }
                 match Some(ChatId(chat))
                     .filter(|p| self.app.contacts.iter().any(|c| model::same_peer(c.peer_id, *p)))
                 {
@@ -1019,7 +1159,8 @@ impl Gui {
                     }
                     None => self.app.status = tr("la chat non è più fra le tue").into(),
                 }
-                Task::none()
+                // niente return: più sotto il link_open apre la chat
+                switch
             }
             Msg::Unstar(chat, id) => {
                 self.app.starred.retain(|s| !(s.chat == chat && s.id == id));
@@ -1333,9 +1474,39 @@ impl Gui {
             }
             NetEvent::Failed(e) => {
                 self.phase = Phase::Failed(e);
+                if self.env == Env::WhatsApp {
+                    self.wa_since = None;
+                }
+                Task::none()
+            }
+            NetEvent::Login(l) => {
+                self.phase = Phase::Login(l);
+                operation::focus(LOGIN_FIELD)
+            }
+            NetEvent::Pair(p) => {
+                // WhatsApp ha risposto: niente avviso di attesa
+                self.wa_since = None;
+                match p {
+                    Pairing::Qr(qr) => {
+                        self.phase = Phase::Pairing { qr: iced::widget::qr_code::Data::new(qr).ok(), code: None }
+                    }
+                    Pairing::Code(code) => self.phase = Phase::Pairing { qr: None, code: Some(code) },
+                    Pairing::Paired => {
+                        self.phase = Phase::Connecting(1, tr("Abbinato! Scarico le chat dal telefono…").into())
+                    }
+                    // durante l'abbinamento resta il QR; prima, la riga di stato
+                    Pairing::Status(s) => {
+                        if !matches!(self.phase, Phase::Pairing { .. }) {
+                            self.phase = Phase::Connecting(0, s);
+                        }
+                    }
+                }
                 Task::none()
             }
             NetEvent::Ready { link, contacts, me } => {
+                if self.env == Env::WhatsApp {
+                    self.wa_since = None;
+                }
                 self.app.contacts = contacts;
                 self.app.me = me;
                 self.link = Some(link);
@@ -1414,10 +1585,69 @@ impl Gui {
         }
     }
 
+    /// Passa all'altro ambiente: ognuno tiene le sue chat, il suo stile e
+    /// il suo tema; la lista dei messaggi importanti è una sola e viene via.
+    fn switch_env(&mut self, to: Env) -> Task<Msg> {
+        if to == self.env {
+            return Task::none();
+        }
+        let Some(mut p) = self.parked.take() else {
+            return Task::none();
+        };
+        std::mem::swap(&mut self.app, &mut p.app);
+        std::mem::swap(&mut self.link, &mut p.link);
+        std::mem::swap(&mut self.phase, &mut p.phase);
+        self.app.starred = std::mem::take(&mut p.app.starred);
+        self.parked = Some(p);
+        self.env = to;
+        self.settings.style = to;
+        self.settings.save();
+        style::set_wa(to == Env::WhatsApp);
+        apply_theme(self.settings.active_theme());
+        self.theme_stamp = style::omarchy_stamp();
+        // quello che era aperto riguardava l'altro ambiente
+        self.show_info = false;
+        self.show_settings = false;
+        self.show_starred = false;
+        self.show_archived = false;
+        self.chat_menu = None;
+        self.confirm = None;
+        self.forwarding = None;
+        self.viewer = None;
+        self.filter.clear();
+        self.snap_bottom()
+    }
+
+    /// Esegue `f` sull'ambiente `env`: quello in vista direttamente, l'altro
+    /// scambiandolo per un attimo (i task di scorrimento e fuoco si buttano).
+    fn in_env(&mut self, env: Env, f: impl FnOnce(&mut Self) -> Task<Msg>) -> Task<Msg> {
+        if env == self.env {
+            return f(self);
+        }
+        let Some(mut p) = self.parked.take() else {
+            return Task::none();
+        };
+        std::mem::swap(&mut self.app, &mut p.app);
+        std::mem::swap(&mut self.link, &mut p.link);
+        std::mem::swap(&mut self.phase, &mut p.phase);
+        let (env_was, at_bottom) = (self.env, self.at_bottom);
+        self.env = env;
+        self.background = true;
+        let _ = f(self);
+        self.background = false;
+        self.env = env_was;
+        self.at_bottom = at_bottom;
+        std::mem::swap(&mut self.app, &mut p.app);
+        std::mem::swap(&mut self.link, &mut p.link);
+        std::mem::swap(&mut self.phase, &mut p.phase);
+        self.parked = Some(p);
+        Task::none()
+    }
+
     /// Notifica di un messaggio nuovo: non per le chat silenziate né per
     /// quella aperta mentre la finestra è a fuoco.
     fn notify(&self, peer: ChatId, from: String) {
-        if !self.settings.notify || (self.focused && self.app.open == Some(peer)) {
+        if !self.settings.notify || (self.focused && !self.background && self.app.open == Some(peer)) {
             return;
         }
         let Some(d) = self.app.contacts.iter().find(|d| model::same_peer(d.peer_id, peer)) else {
@@ -1436,7 +1666,7 @@ impl Gui {
             text
         };
         let icon = d.photo_id.and_then(|id| self.app.avatars.get(&id));
-        notify::show(peer, &d.name, &body, icon.map(|p| p.as_path()));
+        notify::show(self.env, peer, &d.name, &body, icon.map(|p| p.as_path()));
     }
 
     fn open_chat(&mut self, pid: ChatId) -> Task<Msg> {

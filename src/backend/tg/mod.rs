@@ -289,6 +289,12 @@ pub async fn prompt_credentials() -> Result<Credentials, Box<dyn std::error::Err
         api_id,
         api_hash: hash.trim().to_string(),
     };
+    save_credentials(&creds)?;
+    Ok(creds)
+}
+
+/// Salva le credenziali dell'app (my.telegram.org) in un file 0600.
+pub fn save_credentials(creds: &Credentials) -> std::io::Result<()> {
     ensure_private_dir(&config_dir())?;
     let cred_path = config_dir().join(CONFIG_FILE);
     // il file contiene l'api_hash: nasce 0600 dall'open, senza la finestra
@@ -299,8 +305,70 @@ pub async fn prompt_credentials() -> Result<Credentials, Box<dyn std::error::Err
         .truncate(true)
         .mode(0o600)
         .open(&cred_path)?;
-    file.write_all(format!("{} {}\n", creds.api_id, creds.api_hash).as_bytes())?;
-    Ok(creds)
+    file.write_all(format!("{} {}\n", creds.api_id, creds.api_hash).as_bytes())
+}
+
+/// Cosa chiedere a chi accede da una finestra (GUI), con l'errore del
+/// tentativo prima se c'è.
+#[derive(Clone, Debug, PartialEq)]
+pub enum LoginAsk {
+    Phone(Option<String>),
+    Code(Option<String>),
+    Password { hint: String, error: Option<String> },
+}
+
+/// Accesso passo passo senza terminale: le domande escono su `ask`, le
+/// risposte arrivano da `answers` (numero, codice, password 2FA).
+pub async fn sign_in_steps(
+    client: &Client,
+    api_hash: &str,
+    ask: &tokio::sync::mpsc::UnboundedSender<LoginAsk>,
+    answers: &mut tokio::sync::mpsc::UnboundedReceiver<String>,
+) -> Result<(), String> {
+    let closed = || tr("accesso interrotto").to_string();
+    let mut error = None;
+    let token = loop {
+        let _ = ask.send(LoginAsk::Phone(error.take()));
+        let phone = normalize_phone(&answers.recv().await.ok_or_else(closed)?);
+        if phone.len() < 7 {
+            error = Some(tr("numero troppo corto: scrivilo col prefisso, es. +39 333 1234567").into());
+            continue;
+        }
+        match client.request_login_code(&phone, api_hash).await {
+            Ok(t) => break t,
+            Err(e) if e.is("PHONE_NUMBER_INVALID") => error = Some(tr("numero non valido").into()),
+            Err(e) => error = Some(e.to_string()),
+        }
+    };
+    let mut error = None;
+    loop {
+        let _ = ask.send(LoginAsk::Code(error.take()));
+        let code = answers.recv().await.ok_or_else(closed)?;
+        match client.sign_in(&token, code.trim()).await {
+            Ok(_) => return Ok(()),
+            Err(SignInError::InvalidCode) => error = Some(tr("codice errato, riprova").into()),
+            Err(SignInError::SignUpRequired) => {
+                return Err(tr("Account senza Telegram: crea prima un account con l'app ufficiale.").into())
+            }
+            Err(SignInError::PasswordRequired(mut pt)) => {
+                let mut error = None;
+                loop {
+                    let hint = pt.hint().unwrap_or_default().to_string();
+                    let _ = ask.send(LoginAsk::Password { hint, error: error.take() });
+                    let pass = answers.recv().await.ok_or_else(closed)?;
+                    match client.check_password(pt, pass.trim()).await {
+                        Ok(_) => return Ok(()),
+                        Err(SignInError::InvalidPassword(next)) => {
+                            pt = next;
+                            error = Some(tr("password errata, riprova").into());
+                        }
+                        Err(e) => return Err(e.to_string()),
+                    }
+                }
+            }
+            Err(e) => error = Some(e.to_string()),
+        }
+    }
 }
 
 /// Connect the backend: sqlite session + runner task + client handle.

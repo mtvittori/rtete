@@ -219,6 +219,14 @@ impl Store {
         }
     }
 
+    /// Dimentica una chat eliminata: voce, messaggi in RAM e file.
+    pub fn forget(&mut self, jid: &str) {
+        let _ = std::fs::remove_file(self.msgs_path(jid));
+        self.chats.remove(jid);
+        self.hot.remove(jid);
+        self.order.retain(|j| j != jid);
+    }
+
     fn msgs_path(&self, jid: &str) -> PathBuf {
         self.dir.join("msgs").join(format!("{}.jsonl", chat_id_of(jid).0))
     }
