@@ -95,7 +95,7 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
         .into(),
     };
     // con WhatsApp: a sinistra la barra per passare da un ambiente all'altro
-    if g.parked.is_some() && g.settings.env_rail {
+    if g.parked.is_some() && g.settings.env_rail && !g.settings.mixed() {
         row![env_rail(g), content].into()
     } else {
         content
@@ -487,11 +487,19 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
                 ChatFilter::Groups => d.is_group && !d.broadcast,
             }
     };
+    // le chat da mostrare con il loro ambiente: col feed unico anche
+    // quelle dell'altro, tutte per data (le fissate in alto)
+    let mut entries: Vec<(Env, &App, &model::DialogInfo)> = app.contacts.iter().map(|d| (g.env, app, d)).collect();
+    let feed = g.feed();
+    if let (true, Some(k)) = (feed, &g.parked) {
+        entries.extend(k.app.contacts.iter().map(|d| (g.other_env(), &k.app, d)));
+        entries.sort_by_key(|(_, _, d)| (!d.pinned, std::cmp::Reverse(d.last.as_ref().map_or(0, |l| l.date))));
+    }
     let mut list = Column::new();
     if !compact && !g.show_archived && needle.is_empty() {
-        let archived: Vec<&model::DialogInfo> = app.contacts.iter().filter(|d| d.archived).collect();
+        let archived: Vec<&model::DialogInfo> = entries.iter().map(|e| e.2).filter(|d| d.archived).collect();
         // su WhatsApp la voce c'è sempre, come nell'app
-        if !archived.is_empty() || g.env == Env::WhatsApp {
+        if !archived.is_empty() || g.env == Env::WhatsApp || feed {
             let unread = archived.iter().filter(|d| d.unread > 0 && !d.muted).count();
             let mut line = row![text("📦").size(18).width(46).align_x(Center), text(tr("Archiviate")).width(Fill)]
                 .spacing(10)
@@ -508,18 +516,23 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
             );
         }
     }
-    for d in app.contacts.iter().filter(visible) {
-        let is_open = open.is_some_and(|o| model::same_peer(o, d.peer_id));
+    for &(env, app, d) in entries.iter().filter(|e| visible(&e.2)) {
+        // un'azione su una chat dell'altro ambiente passa da lì
+        let here = move |m: Msg| if env == g.env { m } else { Msg::InEnv(env, Box::new(m)) };
+        let is_open = env == g.env && open.is_some_and(|o| model::same_peer(o, d.peer_id));
+        let face_of = |size: f32| -> Element<'_, Msg> {
+            if feed { env_badge(avatar(app, d, size), env, size) } else { avatar(app, d, size) }
+        };
         let badge = |n: String| container(text(n).size(if compact { 10 } else { 12 })).padding([1, 7]).style(style::pill(p.accent));
         if compact {
-            let mut face = iced::widget::Stack::new().push(avatar(app, d, 46.0));
+            let mut face = iced::widget::Stack::new().push(face_of(46.0));
             if d.unread > 0 || d.unread_mark {
                 let n = if d.unread > 0 { d.unread.min(999).to_string() } else { String::new() };
                 face = face.push(container(badge(n)).width(46).align_x(iced::Right));
             }
             list = list.push(
                 button(container(face).center_x(Fill))
-                    .on_press(Msg::Open(d.peer_id))
+                    .on_press(here(Msg::Open(d.peer_id)))
                     .padding([6, 4])
                     .width(Fill)
                     .style(style::chat_item(is_open)),
@@ -588,14 +601,14 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         } else if d.unread_mark {
             bottom = bottom.push(badge(" ".into()));
         }
-        let line = row![avatar(app, d, 46.0), column![top, bottom].spacing(3).width(Fill)]
+        let line = row![face_of(46.0), column![top, bottom].spacing(3).width(Fill)]
             .spacing(10)
             .align_y(Center);
         // click: apre; tasto destro: il menu della chat
         list = list.push(
             mouse_area(
                 button(line)
-                    .on_press(Msg::Open(d.peer_id))
+                    .on_press(here(Msg::Open(d.peer_id)))
                     .padding([7, 10])
                     .width(Fill)
                     .style(style::chat_item(is_open || g.chat_menu == Some(d.peer_id))),
@@ -603,7 +616,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
             .on_right_press(Msg::ChatMenu(Some(d.peer_id))),
         );
         if g.chat_menu == Some(d.peer_id) {
-            list = list.push(chat_menu(d, favorite(d)));
+            list = list.push(chat_menu(d, favorite(d), here));
         }
     }
     let gear = button(text("⚙").size(18))
@@ -660,7 +673,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         };
         container(column![top, chips].spacing(10)).padding(10).into()
     };
-    let empty = !compact && !app.contacts.iter().any(|d| visible(&d));
+    let empty = !compact && !entries.iter().any(|e| visible(&e.2));
     let mut body = Column::new().push(head);
     if empty {
         let what = if g.show_archived { tr("Nessuna chat archiviata") } else { tr("Nessuna chat qui") };
@@ -673,13 +686,25 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         .into()
 }
 
+/// Col feed unico: il servizio della chat nell'angolo della foto.
+fn env_badge<'a>(face: Element<'a, Msg>, env: Env, size: f32) -> Element<'a, Msg> {
+    let (color, glyph, _) = brand(env);
+    let dot = container(text(glyph).size(9).color(iced::Color::WHITE))
+        .center(16)
+        .style(style::avatar(color));
+    iced::widget::Stack::new()
+        .push(face)
+        .push(container(dot).width(size).height(size).align_x(iced::Right).align_y(iced::Bottom))
+        .into()
+}
+
 /// Il menu di una chat della lista (tasto destro), aperto sotto la voce.
-fn chat_menu<'a>(d: &model::DialogInfo, favorite: bool) -> Element<'a, Msg> {
+fn chat_menu<'a>(d: &model::DialogInfo, favorite: bool, here: impl Fn(Msg) -> Msg) -> Element<'a, Msg> {
     let p = style::p();
     let pid = d.peer_id;
     let item = |icon: &'static str, label: &'static str, m: Msg| -> Element<'a, Msg> {
         button(row![text(icon).width(24), text(label).size(14)].spacing(8).align_y(Center))
-            .on_press(m)
+            .on_press(here(m))
             .width(Fill)
             .padding([6, 12])
             .style(style::flat(false))
@@ -696,7 +721,7 @@ fn chat_menu<'a>(d: &model::DialogInfo, favorite: bool) -> Element<'a, Msg> {
     .spacing(1);
     col = col.push(
         button(row![text("🗑").width(24), text(if d.is_group { tr("Esci ed elimina") } else { tr("Elimina chat") }).size(14).color(p.danger)].spacing(8))
-            .on_press(Msg::MenuDelete(pid))
+            .on_press(here(Msg::MenuDelete(pid)))
             .width(Fill)
             .padding([6, 12])
             .style(style::flat(false)),
@@ -769,6 +794,18 @@ fn avatar<'a>(app: &App, d: &model::DialogInfo, size: f32) -> Element<'a, Msg> {
     .into()
 }
 
+/// Col feed unico, accanto al nome della chat aperta: di che servizio è.
+fn env_chip<'a>(g: &Gui, name: Element<'a, Msg>) -> Element<'a, Msg> {
+    if !g.feed() {
+        return name;
+    }
+    let (color, glyph, label) = brand(g.env);
+    let chip = container(text(format!("{glyph} {label}")).size(11).color(iced::Color::WHITE))
+        .padding([1, 7])
+        .style(style::pill(color));
+    row![name, chip].spacing(8).align_y(Center).into()
+}
+
 fn initial<'a>(name: &str, size: f32) -> Element<'a, Msg> {
     let initial: String = name
         .chars()
@@ -799,7 +836,7 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
         row![
             avatar(app, chat, 38.0),
             column![
-                text(chat.name.as_str()).font(BOLD).size(16),
+                env_chip(g, text(chat.name.as_str()).font(BOLD).size(16).into()),
                 subtitle(g, chat),
             ]
         ]
@@ -1799,14 +1836,15 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         None => tr("Tema Omarchy").into(),
     };
     // con WhatsApp lo stile segue l'ambiente in vista; senza, si sceglie
-    let style_choice: Element<'_, Msg> = if g.two_envs() {
+    let separate = g.two_envs() && !s.mixed();
+    let style_choice: Element<'_, Msg> = if separate {
         space().height(0).into()
     } else {
         column![
             section(tr("STILE")),
             row![
-                choice("Telegram".into(), s.style == UiStyle::Telegram, Msg::SetStyle(UiStyle::Telegram)),
-                choice("WhatsApp".into(), s.style == UiStyle::WhatsApp, Msg::SetStyle(UiStyle::WhatsApp)),
+                choice("Telegram".into(), s.layout() == UiStyle::Telegram, Msg::SetStyle(UiStyle::Telegram)),
+                choice("WhatsApp".into(), s.layout() == UiStyle::WhatsApp, Msg::SetStyle(UiStyle::WhatsApp)),
             ]
             .spacing(8),
         ]
@@ -1828,7 +1866,7 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         .spacing(8)
         .wrap(),
         style_choice,
-        section(match (g.two_envs(), s.style) {
+        section(match (separate, s.style) {
             (false, _) => tr("TEMA"),
             (true, UiStyle::Telegram) => tr("TEMA DI TELEGRAM"),
             (true, UiStyle::WhatsApp) => tr("TEMA DI WHATSAPP"),
@@ -1840,7 +1878,8 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         ]
         .spacing(8)
         .wrap(),
-        text(match (g.two_envs(), s.style) {
+        text(match (separate, s.layout()) {
+            _ if s.mixed() => tr("Feed unico: stile e tema valgono per tutte le chat."),
             (false, UiStyle::Telegram) => tr("Il tema scelto vale solo per lo stile Telegram."),
             (false, UiStyle::WhatsApp) => tr("Il tema scelto vale solo per lo stile WhatsApp."),
             (true, UiStyle::Telegram) => tr("Vale solo per Telegram: WhatsApp tiene il suo."),
@@ -1874,17 +1913,27 @@ fn env_rail_choice(g: &Gui) -> Element<'_, Msg> {
     if g.parked.is_none() {
         return space().height(0).into();
     }
-    column![
+    let mixed = g.settings.mixed();
+    let mut col = column![
         section(tr("TELEGRAM E WHATSAPP")),
-        iced::widget::toggler(g.settings.env_rail)
-            .label(tr("Barra a sinistra per passare da uno all'altro"))
-            .on_toggle(Msg::EnvRail),
-        text(tr("Senza barra: Ctrl+1 Telegram, Ctrl+2 WhatsApp. Per averli come due app separate: rondine-gui --telegram e rondine-gui --whatsapp."))
-            .size(12)
-            .color(style::p().muted),
+        iced::widget::toggler(mixed)
+            .label(tr("Feed unico: le chat di tutti e due in una lista sola"))
+            .on_toggle(Msg::Unified),
     ]
-    .spacing(14)
-    .into()
+    .spacing(14);
+    if !mixed {
+        col = col.push(
+            iced::widget::toggler(g.settings.env_rail)
+                .label(tr("Barra a sinistra per passare da uno all'altro"))
+                .on_toggle(Msg::EnvRail),
+        );
+    }
+    let hint = if mixed {
+        tr("Il servizio si vede dall'icona sulla foto e accanto al nome della chat aperta. Account e dispositivi in queste impostazioni sono quelli dell'ultima chat aperta (Ctrl+1 Telegram, Ctrl+2 WhatsApp).")
+    } else {
+        tr("Senza barra: Ctrl+1 Telegram, Ctrl+2 WhatsApp. Per averli come due app separate: rondine-gui --telegram e rondine-gui --whatsapp.")
+    };
+    col.push(text(hint).size(12).color(style::p().muted)).into()
 }
 
 fn settings_notifications(g: &Gui) -> Element<'_, Msg> {
