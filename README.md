@@ -52,6 +52,28 @@ automatico, miniature, misura delle foto), dati e archiviazione (spazio
 usato, svuota cache, tetto della cache), dispositivi (sessioni attive da
 chiudere) e link.
 
+## Telegram e WhatsApp nella GUI
+
+`cargo build --release --features gui,whatsapp`: a sinistra una barra con
+i due **ambienti**, ognuno con le sue chat, il suo stile (Telegram o
+WhatsApp) e il suo tema. L'accesso si fa nella finestra: per Telegram
+API ID/hash (una volta), numero, codice e 2FA; per WhatsApp «Mostra il
+QR» e lo si inquadra dal telefono (Dispositivi collegati). WhatsApp è un
+collegamento non ufficiale: meglio un numero secondario per provare.
+
+La barra si nasconde da *Impostazioni → Aspetto* (restano Ctrl+1 per
+Telegram e Ctrl+2 per WhatsApp). Per averli come due app indipendenti:
+
+```sh
+rondine-gui --telegram   # o -t: finestra rondine-telegram
+rondine-gui --whatsapp   # o -w: finestra rondine-whatsapp
+```
+
+Ognuna ha la sua finestra (classe per Hyprland), la sua istanza unica e
+il suo tema; i link `tg://` vanno a quella con Telegram. Se è già aperta
+la finestra con tutti e due, si porta a fuoco quella (userebbero le
+stesse sessioni).
+
 ## Stile WhatsApp
 
 In Impostazioni → Aspetto si sceglie lo **stile**: Telegram (com'era) o
@@ -90,6 +112,57 @@ aggiungere una lingua basta un file nuovo e una voce in `src/i18n.rs`;
 `cargo test` segnala i testi senza traduzione.
 Disegna in software (tiny-skia, ~75 MB di RAM); `ICED_BACKEND=wgpu` usa
 la GPU (~105 MB).
+
+## WhatsApp (sperimentale)
+
+Rondine può usare anche WhatsApp, con
+[`whatsapp-rust`](https://github.com/jlucaso1/whatsapp-rust): lo stesso
+protocollo multi-device di WhatsApp Web, in Rust puro. **Non è un client
+ufficiale**: Meta può sospendere l'account, meglio provarlo su un numero
+secondario.
+
+```
+cargo build --release --features whatsapp
+target/release/rondine --whatsapp
+```
+
+Al primo avvio compare un QR nel terminale: sul telefono *WhatsApp →
+Dispositivi collegati → Collega un dispositivo*. In alternativa
+`RONDINE_WA_PHONE=39333… rondine --whatsapp` mostra un codice di 8
+caratteri da inserire nel telefono (*Collega con numero*). Poi la sessione
+resta in `~/.local/share/rondine/whatsapp/`.
+
+WhatsApp non tiene la cronologia sul server: le chat arrivano dal telefono
+all'abbinamento e da lì in poi Rondine le salva in locale
+(`whatsapp/chats.json` e `whatsapp/msgs/*.jsonl`, leggibili solo da te).
+
+Cosa c'è già: lista chat, cronologia, messaggi in tempo reale, invio di
+testo, risposte, modifica, cancellazione dei propri messaggi, reazioni,
+spunte di lettura, «sta scrivendo», foto/sticker/miniature dei video,
+salvataggio e riproduzione dei media, invio di foto e file, ricerca nella
+chat. Non ci sono (o non ancora): set di sticker, foto profilo, inoltro,
+blocco, eliminazione delle chat, nomi dei gruppi nuovi prima della
+sincronizzazione, la GUI (per ora solo la TUI).
+
+## Architettura
+
+L'interfaccia (TUI e GUI) e lo stato non conoscono il servizio di
+messaggistica: parlano con un **backend** solo coi tipi neutri di
+`src/model.rs` (chat, messaggi, media) e col protocollo `Request` /
+`Response` di `src/send.rs`. Anche gli eventi live (messaggi nuovi,
+letture, «sta scrivendo») arrivano come `Response::Live` sullo stesso
+canale.
+
+| Dove | Cosa |
+| --- | --- |
+| `src/model.rs`, `src/paths.rs`, `src/links.rs` | tipi, cartelle e link, uguali per ogni backend |
+| `src/app.rs`, `src/sync.rs` | stato e come cambia a ogni evento/risposta |
+| `src/worker.rs`, `src/loader.rs` | salvataggi, player, traduzioni, conversione delle anteprime |
+| `src/backend/tg/` | Telegram (grammers): accesso, dispatcher delle richieste, update live |
+| `src/backend/wa/` | WhatsApp (whatsapp-rust): abbinamento, archivio locale, dispatcher, eventi |
+
+Ogni backend esegue le stesse `Request` e manda le stesse `Response`; un
+servizio nuovo è un'altra cartella sotto `src/backend/`.
 
 ## Primo avvio
 

@@ -44,8 +44,9 @@ impl ThemeChoice {
     }
 }
 
-/// La disposizione dell'interfaccia; ognuna ricorda il suo tema.
-#[derive(Clone, Copy, PartialEq, Debug)]
+/// L'ambiente (Telegram o WhatsApp) e con esso la disposizione
+/// dell'interfaccia; ognuno ricorda il suo tema.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum UiStyle {
     Telegram,
     WhatsApp,
@@ -81,6 +82,20 @@ pub struct Settings {
     /// tetto della cache di foto e sticker, in MB (sfoltita all'avvio)
     pub cache_mb: u32,
     pub lang: LangChoice,
+    /// la barra a sinistra per passare tra Telegram e WhatsApp
+    pub env_rail: bool,
+}
+
+/// Avviata con `--telegram` o `--whatsapp`: un solo ambiente, come
+/// un'app a sé (finestra, istanza e tema suoi).
+static SOLO: std::sync::OnceLock<UiStyle> = std::sync::OnceLock::new();
+
+pub fn set_solo(env: UiStyle) {
+    let _ = SOLO.set(env);
+}
+
+pub fn solo() -> Option<UiStyle> {
+    SOLO.get().copied()
 }
 
 /// le misure delle foto in chat proposte nelle impostazioni
@@ -106,6 +121,7 @@ impl Default for Settings {
             photo_px: 320,
             cache_mb: 32,
             lang: LangChoice(None),
+            env_rail: true,
         }
     }
 }
@@ -171,6 +187,7 @@ impl Settings {
                         s.photo_px = n.clamp(160, 600);
                     }
                 }
+                ("barra_ambienti", v) => s.env_rail = v != "false",
                 ("lingua", v) => s.lang = LangChoice(Lang::from_code(v)),
                 ("cache_mb", v) => {
                     if let Ok(n) = v.parse::<u32>() {
@@ -184,6 +201,22 @@ impl Settings {
     }
 
     pub fn save(&self) {
+        // da sola l'istanza non tocca l'ambiente dell'ultima volta né il
+        // tema dell'altro, che magari è aperto accanto e lo sta cambiando
+        if let Some(env) = solo() {
+            let disk = Self::load();
+            let mut s = self.clone();
+            s.style = disk.style;
+            match env {
+                UiStyle::Telegram => s.theme_wa = disk.theme_wa,
+                UiStyle::WhatsApp => s.theme = disk.theme,
+            }
+            return s.write();
+        }
+        self.write()
+    }
+
+    fn write(&self) {
         let p = path();
         if let Some(dir) = p.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -199,7 +232,7 @@ impl Settings {
             format!(
                 "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n\
                  foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n\
-                 stile = {style}\ntema_whatsapp = {}\npreferite = {}\n",
+                 stile = {style}\ntema_whatsapp = {}\npreferite = {}\nbarra_ambienti = {}\n",
                 self.scale,
                 self.links_in_app,
                 self.gpu,
@@ -212,7 +245,8 @@ impl Settings {
                 self.cache_mb,
                 self.lang.0.map_or("auto", |l| l.code()),
                 self.theme_wa.code(),
-                favorites.join(",")
+                favorites.join(","),
+                self.env_rail
             ),
         );
     }

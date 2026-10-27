@@ -1,4 +1,4 @@
-//! Rondine GUI — la stessa Rondine (grammers, worker, cache delle anteprime,
+//! Rondine GUI — la stessa Rondine (backend, worker, cache delle anteprime,
 //! stato `App`) con un'interfaccia iced al posto della TUI. L'accesso
 //! (numero, codice) resta alla TUI: qui si riusa la sessione salvata.
 
@@ -8,29 +8,29 @@ mod settings;
 mod style;
 mod ui;
 
-use grammers_client::session::types::PeerId;
 use iced::widget::{operation, scrollable};
 use iced::{keyboard, Subscription, Task};
 
 use rondine::app::App;
 use rondine::clipboard;
+use rondine::model::ChatId;
 use rondine::send::{Request, SendJob, SendKind};
-use rondine::sync::{handle_response, handle_update};
-use rondine::tg;
+use rondine::sync::{handle_live, handle_response};
+use rondine::{links, model, paths};
 use rondine::{i18n, tr, trf, translate};
-use grammers_client::tl;
 
-use crate::net::{Carrier, Link, NetEvent};
+use crate::net::{Carrier, Env, Link, NetEvent, Pairing};
 use crate::settings::{Settings, ThemeChoice, UiStyle};
 
 pub const COMPOSE: &str = "compose";
 pub const HISTORY: &str = "history";
 pub const FWD_SEARCH: &str = "fwd-search";
+pub const LOGIN_FIELD: &str = "login";
 
 #[derive(Debug, Clone)]
 pub enum Msg {
     Net(Carrier),
-    Open(PeerId),
+    Open(ChatId),
     Filter(String),
     Compose(String),
     Submit,
@@ -71,7 +71,7 @@ pub enum Msg {
     Join,
     Gpu(bool),
     Forward(i32),
-    ForwardTo(PeerId),
+    ForwardTo(ChatId),
     FwdFilter(String),
     /// un frame mentre un'animazione corre
     Frame(std::time::Instant),
@@ -83,7 +83,7 @@ pub enum Msg {
     NotifyText(bool),
     /// apre o chiude la scheda della chat (info, media, link…)
     ToggleInfo,
-    InfoTab(tg::SharedTab),
+    InfoTab(model::SharedTab),
     /// chiede conferma per bloccare (true) o sbloccare l'utente
     AskBlock(bool),
     /// chiede conferma per eliminare la chat (o uscire dal gruppo)
@@ -115,6 +115,19 @@ pub enum Msg {
     LoadPreview(i32),
     /// lingua dell'interfaccia (None: quella del sistema)
     Lang(Option<i18n::Lang>),
+    /// passa a Telegram o a WhatsApp
+    SwitchEnv(Env),
+    EnvRail(bool),
+    /// collega WhatsApp: col QR (false) o col numero di telefono (true)
+    LinkWhatsApp(bool),
+    /// il numero per l'abbinamento col codice
+    WaPhone(String),
+    /// riprova a collegare l'ambiente in vista
+    Retry,
+    /// i campi dell'accesso a Telegram e l'invio
+    LoginA(String),
+    LoginB(String),
+    LoginSubmit,
     /// mostra o nasconde la traduzione di un messaggio
     Translate(i32),
     /// traduzione automatica della chat aperta
@@ -137,12 +150,12 @@ pub enum Msg {
     /// mostra le chat archiviate (o torna alla lista)
     ShowArchived(bool),
     /// menu di una chat della lista (tasto destro); None lo chiude
-    ChatMenu(Option<PeerId>),
+    ChatMenu(Option<ChatId>),
     /// archivia, fissa, silenzia, segna da leggere, timer effimero
-    ChatDo(PeerId, tg::ChatAction),
-    ToggleFavorite(PeerId),
+    ChatDo(ChatId, model::ChatAction),
+    ToggleFavorite(ChatId),
     /// elimina la chat dal menu della lista (passa dalla conferma)
-    MenuDelete(PeerId),
+    MenuDelete(ChatId),
     /// stella sul messaggio
     Star(i32),
     /// la lista dei messaggi importanti
@@ -179,9 +192,9 @@ pub enum CacheKind {
 impl CacheKind {
     pub fn dir(self) -> std::path::PathBuf {
         match self {
-            CacheKind::Media => tg::media_dir(),
-            CacheKind::Avatars => tg::media_dir().join("avatars"),
-            CacheKind::Temp => tg::tmp_dir(),
+            CacheKind::Media => paths::media_dir(),
+            CacheKind::Avatars => paths::media_dir().join("avatars"),
+            CacheKind::Temp => paths::tmp_dir(),
         }
     }
 }
@@ -210,12 +223,49 @@ pub enum Phase {
     Connecting(u8, String),
     Failed(String),
     Ready,
+    /// WhatsApp non ancora collegato: la pagina che spiega e il pulsante
+    Linking,
+    /// accesso a Telegram: credenziali, numero, codice o password 2FA
+    Login(net::Login),
+    /// WhatsApp in abbinamento: il QR (o il codice) da usare col telefono
+    Pairing { qr: Option<iced::widget::qr_code::Data>, code: Option<String> },
+}
+
+/// L'ambiente che non è in vista, con tutto il suo stato: le sue chat,
+/// il collegamento alla rete e a che punto è.
+pub struct Parked {
+    pub app: App,
+    link: Option<Link>,
+    pub phase: Phase,
+}
+
+/// Uno stato dell'app nuovo, con le preferenze e le liste condivise.
+fn new_app(settings: &Settings) -> App {
+    App {
+        media_prefs: settings.media_prefs(),
+        translate: translate::Config::load(),
+        starred: rondine::starred::load(),
+        ..App::default()
+    }
 }
 
 pub struct Gui {
     pub app: App,
     pub phase: Phase,
     link: Option<Link>,
+    /// l'ambiente in vista (Telegram o WhatsApp)
+    pub env: Env,
+    /// l'altro ambiente, fermo dietro le quinte (None senza WhatsApp)
+    pub parked: Option<Parked>,
+    /// sto aggiornando l'ambiente nascosto: niente scorrimenti né fuoco
+    background: bool,
+    /// da quando WhatsApp prova a collegarsi senza risposta (per l'avviso)
+    pub wa_since: Option<std::time::Instant>,
+    /// i campi dell'accesso (API ID e hash, oppure il dato chiesto)
+    pub login_a: String,
+    pub login_b: String,
+    /// il numero per collegare WhatsApp col codice invece del QR
+    pub wa_phone: String,
     pub filter: String,
     pub tz: jiff::tz::TimeZone,
     /// la vista è in fondo alla cronologia: i nuovi messaggi la seguono
@@ -229,7 +279,7 @@ pub struct Gui {
     /// link arrivati prima della connessione
     pending_links: Vec<String>,
     /// messaggio da inoltrare: (chat di partenza, id)
-    pub forwarding: Option<(tg::ChatRef, i32)>,
+    pub forwarding: Option<(model::ChatRef, i32)>,
     pub fwd_filter: String,
     /// animazioni: pannello sticker, barra azioni del messaggio scelto
     pub panel: iced::Animation<bool>,
@@ -247,42 +297,73 @@ pub struct Gui {
     paste_undo: Option<String>,
     /// scheda della chat aperta accanto (o al posto) della cronologia
     pub show_info: bool,
-    pub info_tab: tg::SharedTab,
+    pub info_tab: model::SharedTab,
     /// popup di conferma aperto
     pub confirm: Option<Confirm>,
     /// eliminazione della chat privata anche per l'altro
     pub revoke: bool,
     pub settings_page: SettingsPage,
     /// il profilo in modifica (copiato da quello letto da Telegram)
-    pub pf: tg::MyProfile,
+    pub pf: model::MyProfile,
     /// spazio della cache: media, foto profilo, temporanei (file, byte)
     pub cache_usage: [(usize, u64); 3],
     pub chat_filter: ChatFilter,
     pub show_archived: bool,
     /// la chat della lista col menu aperto
-    pub chat_menu: Option<PeerId>,
+    pub chat_menu: Option<ChatId>,
     /// la lista dei messaggi importanti al posto della chat
     pub show_starred: bool,
 }
 
 fn main() -> iced::Result {
     // prima di leggere le impostazioni: le cartelle di RTete diventano di Rondine
-    tg::migrate_old_dirs();
+    paths::migrate_old_dirs();
     i18n::set(Settings::load().lang.resolve());
     // GPU (wgpu) per uno scorrimento fluido; dalle impostazioni si passa
     // al disegno software (tiny-skia, ~35 MB in meno). ICED_BACKEND vince.
     if std::env::var_os("ICED_BACKEND").is_none() && !Settings::load().gpu {
         std::env::set_var("ICED_BACKEND", "tiny-skia");
     }
-    let link = std::env::args().skip(1).find(|a| !a.starts_with('-'));
-    // istanza unica: la finestra già aperta riceve il link e viene a fuoco
-    if net::hand_off(link.as_deref()) {
-        focus_existing();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // `--telegram` / `--whatsapp`: un ambiente solo, come due app separate
+    if args.iter().any(|a| a == "--telegram" || a == "-t") {
+        settings::set_solo(Env::Telegram);
+    } else if cfg!(feature = "whatsapp") && args.iter().any(|a| a == "--whatsapp" || a == "-w") {
+        settings::set_solo(Env::WhatsApp);
+    }
+    let solo = settings::solo();
+    let app_id = app_id();
+    // i link tg:// sono di Telegram: all'istanza con Telegram che è aperta
+    let link = args.into_iter().find(|a| !a.starts_with('-')).filter(|_| solo != Some(Env::WhatsApp));
+    // istanza unica: la finestra già aperta (questa o quella coi due
+    // ambienti, che userebbe le stesse sessioni) riceve il link e viene a fuoco
+    let others: &[&str] = match solo {
+        None => &["rondine-gui", "rondine-telegram", "rondine-whatsapp"],
+        Some(_) => &[app_id, "rondine-gui"],
+    };
+    let mut first = None;
+    for id in others {
+        let l = link.as_deref().filter(|_| *id != "rondine-whatsapp");
+        if net::hand_off(id, l) && first.is_none() {
+            first = Some(*id);
+        }
+    }
+    if let Some(id) = first {
+        focus_existing(id);
         return Ok(());
     }
-    net::start(link, Settings::load().cache_mb as u64 * 1024 * 1024);
+    net::start(app_id, solo != Some(Env::WhatsApp), link, Settings::load().cache_mb as u64 * 1024 * 1024);
+    // WhatsApp già collegato: si connette insieme a Telegram
+    #[cfg(feature = "whatsapp")]
+    if solo != Some(Env::Telegram) && rondine::backend::wa::has_session() {
+        net::start_whatsapp(None);
+    }
     iced::application(boot, Gui::update, ui::view)
-        .title("Rondine")
+        .title(|_: &Gui| match settings::solo() {
+            Some(Env::Telegram) => "Rondine · Telegram".to_string(),
+            Some(Env::WhatsApp) => "Rondine · WhatsApp".to_string(),
+            None => "Rondine".to_string(),
+        })
         .theme(|_: &Gui| style::theme())
         .scale_factor(|g: &Gui| g.settings.scale)
         .subscription(Gui::subscription)
@@ -290,7 +371,7 @@ fn main() -> iced::Result {
             size: iced::Size::new(1100.0, 760.0),
             // la classe che Hyprland vede (regole finestra, scorciatoie)
             platform_specific: iced::window::settings::PlatformSpecific {
-                application_id: "rondine-gui".into(),
+                application_id: app_id.into(),
                 ..Default::default()
             },
             ..Default::default()
@@ -298,25 +379,61 @@ fn main() -> iced::Result {
         .run()
 }
 
+/// La classe della finestra (e il nome del socket): `rondine-gui`, o
+/// `rondine-telegram` / `rondine-whatsapp` per le istanze a sé.
+pub fn app_id() -> &'static str {
+    match settings::solo() {
+        Some(Env::Telegram) => "rondine-telegram",
+        Some(Env::WhatsApp) => "rondine-whatsapp",
+        None => "rondine-gui",
+    }
+}
+
 /// Porta a fuoco la finestra di Rondine già aperta (Hyprland).
-pub fn focus_existing() {
-    let lua = r#"hl.dsp.focus({ window = "class:rondine-gui" })"#;
+pub fn focus_existing(app_id: &str) {
+    let lua = format!(r#"hl.dsp.focus({{ window = "class:{app_id}" }})"#);
     let ok = std::process::Command::new("hyprctl")
-        .args(["dispatch", lua])
+        .args(["dispatch", &lua])
         .output()
         .is_ok_and(|o| o.status.success() && !String::from_utf8_lossy(&o.stdout).contains("rror"));
     if !ok {
         let _ = std::process::Command::new("hyprctl")
-            .args(["dispatch", "focuswindow", "class:rondine-gui"])
+            .args(["dispatch", "focuswindow", &format!("class:{app_id}")])
             .output();
     }
 }
 
 fn boot() -> Gui {
-    let settings = Settings::load();
+    let mut settings = Settings::load();
+    // da sola l'ambiente scelto all'avvio; con WhatsApp quello dell'ultima
+    // volta; senza, lo stile scelto
+    if let Some(env) = settings::solo() {
+        settings.style = env;
+    }
+    let env = if cfg!(feature = "whatsapp") { settings.style } else { Env::Telegram };
     style::set_wa(settings.style == UiStyle::WhatsApp);
     apply_theme(settings.active_theme());
+    let telegram = Parked { app: new_app(&settings), link: None, phase: Phase::Connecting(0, tr("avvio…").into()) };
+    let whatsapp = whatsapp_slot(&settings);
+    let (active, parked) = match (env, whatsapp) {
+        (Env::WhatsApp, Some(wa)) if settings::solo().is_some() => (wa, None),
+        (Env::WhatsApp, Some(wa)) => (wa, Some(telegram)),
+        (_, _) if settings::solo().is_some() => (telegram, None),
+        (_, wa) => (telegram, wa),
+    };
+    let env = if (parked.is_some() || settings::solo() == Some(Env::WhatsApp)) && env == Env::WhatsApp {
+        Env::WhatsApp
+    } else {
+        Env::Telegram
+    };
     Gui {
+        env,
+        parked,
+        background: false,
+        wa_since: None,
+        login_a: String::new(),
+        login_b: String::new(),
+        wa_phone: String::new(),
         settings: settings.clone(),
         show_settings: false,
         tg_handler: String::new(),
@@ -332,28 +449,40 @@ fn boot() -> Gui {
         viewer: None,
         paste_undo: None,
         show_info: false,
-        info_tab: tg::SharedTab::Media,
+        info_tab: model::SharedTab::Media,
         confirm: None,
         revoke: false,
         settings_page: SettingsPage::Main,
-        pf: tg::MyProfile::default(),
+        pf: model::MyProfile::default(),
         cache_usage: [(0, 0); 3],
         chat_filter: ChatFilter::All,
         show_archived: false,
         chat_menu: None,
         show_starred: false,
-        app: App {
-            media_prefs: settings.media_prefs(),
-            translate: translate::Config::load(),
-            starred: rondine::starred::load(),
-            ..App::default()
-        },
-        phase: Phase::Connecting(0, tr("avvio…").into()),
-        link: None,
+        app: active.app,
+        phase: active.phase,
+        link: active.link,
         filter: String::new(),
         tz: jiff::tz::TimeZone::system(),
         at_bottom: true,
     }
+}
+
+/// L'ambiente WhatsApp all'avvio: già collegato (si connette subito) o
+/// da collegare. Senza la feature non c'è.
+#[cfg(feature = "whatsapp")]
+fn whatsapp_slot(settings: &Settings) -> Option<Parked> {
+    let phase = if rondine::backend::wa::has_session() {
+        Phase::Connecting(0, tr("mi collego a WhatsApp…").into())
+    } else {
+        Phase::Linking
+    };
+    Some(Parked { app: new_app(settings), link: None, phase })
+}
+
+#[cfg(not(feature = "whatsapp"))]
+fn whatsapp_slot(_: &Settings) -> Option<Parked> {
+    None
 }
 
 fn apply_theme(choice: ThemeChoice) {
@@ -436,8 +565,8 @@ impl Gui {
             Msg::View(id) => {
                 // l'originale a piena risoluzione se c'è, sennò l'anteprima
                 self.viewer = self.row_media(id, |k| match k {
-                    tg::RowKind::Photo { media, .. } => rondine::loader::original(media)
-                        .or_else(|| self.app.previews.get(&tg::media_key(media)).cloned()),
+                    model::RowKind::Photo { media, .. } => rondine::loader::original(media)
+                        .or_else(|| self.app.previews.get(media.key()).cloned()),
                     _ => None,
                 });
                 return Task::none();
@@ -477,7 +606,7 @@ impl Gui {
                     .app
                     .contacts
                     .iter()
-                    .find(|c| tg::same_peer(c.peer_id, pid))
+                    .find(|c| model::same_peer(c.peer_id, pid))
                     .map(|c| (c.peer_ref, c.name.clone()));
                 if let (Some((from, id)), Some((to, to_name)), Some(req)) =
                     (self.forwarding.take(), dest, self.req())
@@ -488,9 +617,63 @@ impl Gui {
                 Task::none()
             }
             Msg::Net(c) => match c.take() {
-                Some(ev) => self.on_net(ev),
+                // click su una notifica dell'altro ambiente: ci si sposta lì
+                Some((env, NetEvent::OpenPeer(pid))) => {
+                    let switch = self.switch_env(env);
+                    Task::batch([switch, self.open_chat(pid)])
+                }
+                Some((env, ev)) => self.in_env(env, |g| g.on_net(ev)),
                 None => Task::none(),
             },
+            Msg::SwitchEnv(env) => self.switch_env(env),
+            Msg::LoginA(s) => {
+                self.login_a = s;
+                Task::none()
+            }
+            Msg::LoginB(s) => {
+                self.login_b = s;
+                Task::none()
+            }
+            Msg::LoginSubmit => {
+                let a = std::mem::take(&mut self.login_a);
+                let b = std::mem::take(&mut self.login_b);
+                let text = match &self.phase {
+                    Phase::Login(net::Login::Credentials(_)) => format!("{} {}", a.trim(), b.trim()),
+                    _ => a,
+                };
+                if !text.trim().is_empty() {
+                    net::answer(text);
+                    self.phase = Phase::Connecting(1, tr("verifico l'account…").into());
+                }
+                Task::none()
+            }
+            Msg::LinkWhatsApp(by_phone) => {
+                #[cfg(feature = "whatsapp")]
+                {
+                    let phone = by_phone.then(|| self.wa_phone.clone());
+                    self.phase = Phase::Connecting(0, tr("mi collego a WhatsApp…").into());
+                    self.wa_since = Some(std::time::Instant::now());
+                    net::start_whatsapp(phone);
+                }
+                #[cfg(not(feature = "whatsapp"))]
+                let _ = by_phone;
+                Task::none()
+            }
+            Msg::WaPhone(s) => {
+                self.wa_phone = s.chars().filter(|c| c.is_ascii_digit() || *c == '+' || *c == ' ').take(20).collect();
+                Task::none()
+            }
+            Msg::Retry => {
+                self.phase = Phase::Connecting(0, tr("avvio…").into());
+                match self.env {
+                    Env::Telegram => net::start_telegram(),
+                    #[cfg(feature = "whatsapp")]
+                    Env::WhatsApp => net::start_whatsapp(None),
+                    #[cfg(not(feature = "whatsapp"))]
+                    Env::WhatsApp => {}
+                }
+                Task::none()
+            }
             Msg::Open(pid) => self.open_chat(pid),
             Msg::Filter(s) => {
                 self.filter = s;
@@ -534,7 +717,7 @@ impl Gui {
             Msg::Edit(id) => {
                 let text = self.app.open_history().and_then(|ring| {
                     ring.iter().find(|r| r.id == id).and_then(|r| match &r.kind {
-                        tg::RowKind::Text(t) => Some(t.clone()),
+                        model::RowKind::Text(t) => Some(t.clone()),
                         _ => None,
                     })
                 });
@@ -607,7 +790,7 @@ impl Gui {
             }
             Msg::Save(id) => {
                 let job = self.row_media(id, |k| match k {
-                    tg::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
+                    model::RowKind::Doc { media, name, .. } => Some((media.clone(), name.clone())),
                     _ => None,
                 });
                 if let (Some((media, name)), Some(req)) = (job, self.req()) {
@@ -618,18 +801,18 @@ impl Gui {
             }
             Msg::Play(id) => {
                 let job = self.row_media(id, |k| match k {
-                    tg::RowKind::Audio { media, name, voice, .. } => {
+                    model::RowKind::Audio { media, name, voice, .. } => {
                         let label = if *voice { "voce".to_string() } else { name.clone() };
                         let fname = if *voice {
-                            format!("voce-{}.ogg", tg::media_key(media))
+                            format!("voce-{}.ogg", media.key())
                         } else {
-                            tg::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
+                            paths::sanitize_file_name(name).unwrap_or_else(|| "brano".into())
                         };
                         Some((media.clone(), fname, label, false))
                     }
-                    tg::RowKind::Video { media, .. } => Some((
+                    model::RowKind::Video { media, .. } => Some((
                         media.clone(),
-                        format!("video-{}.mp4", tg::media_key(media)),
+                        format!("video-{}.mp4", media.key()),
                         "video".to_string(),
                         true,
                     )),
@@ -681,9 +864,11 @@ impl Gui {
                         let _ = req.send(Request::Sets);
                     }
                 }
-                // come Telegram: la prima volta si apre sui preferiti
+                // come Telegram: la prima volta si apre sui preferiti;
+                // WhatsApp non ha set né preferiti, solo i recenti
                 if self.app.show_sticker && self.app.open_set.is_none() {
-                    return self.handle(Msg::OpenSet(tg::FAVED_SET));
+                    let first = if self.env == Env::WhatsApp { model::RECENT_SET } else { model::FAVED_SET };
+                    return self.handle(Msg::OpenSet(first));
                 }
                 Task::none()
             }
@@ -733,7 +918,7 @@ impl Gui {
                 Task::none()
             }
             Msg::Link(url) => {
-                match tg::parse_link(&url).filter(|_| self.settings.links_in_app) {
+                match links::parse_link(&url).filter(|_| self.settings.links_in_app) {
                     Some(link) => self.follow(link),
                     None => {
                         let _ = std::process::Command::new("xdg-open")
@@ -966,7 +1151,7 @@ impl Gui {
             }
             Msg::ChatDo(pid, action) => {
                 self.chat_menu = None;
-                let target = self.app.contacts.iter().find(|c| tg::same_peer(c.peer_id, pid)).map(|c| c.peer_ref);
+                let target = self.app.contacts.iter().find(|c| model::same_peer(c.peer_id, pid)).map(|c| c.peer_ref);
                 let target = target.or_else(|| self.app.current_chat().filter(|c| c.peer_id == pid).map(|c| c.peer_ref));
                 if let (Some(peer_ref), Some(req)) = (target, self.req()) {
                     let _ = req.send(Request::ChatAction { peer_ref, peer: pid, action });
@@ -975,7 +1160,8 @@ impl Gui {
             }
             Msg::ToggleFavorite(pid) => {
                 self.chat_menu = None;
-                if let Some(id) = pid.bot_api_dialog_id() {
+                {
+                    let id = pid.0;
                     let favs = &mut self.settings.favorites;
                     if favs.contains(&id) {
                         favs.retain(|x| *x != id);
@@ -994,9 +1180,15 @@ impl Gui {
                 return open;
             }
             Msg::Star(id) => {
-                if let Some(peer) = self.app.open {
+                if let Some(chat) = self.app.current_chat() {
+                    let (peer, peer_ref) = (chat.peer_id, chat.peer_ref);
                     self.app.toggle_star(peer, id);
                     self.app.msg_cursor = None;
+                    // su WhatsApp la stella arriva anche al telefono
+                    let on = self.app.is_starred(peer, id);
+                    if let Some(req) = self.req() {
+                        let _ = req.send(Request::Star { peer_ref, id, on });
+                    }
                 }
                 Task::none()
             }
@@ -1009,8 +1201,17 @@ impl Gui {
                 Task::none()
             }
             Msg::OpenStarred(chat, id) => {
-                match PeerId::from_bot_api_dialog_id(chat)
-                    .filter(|p| self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, *p)))
+                // il messaggio può stare nell'altro ambiente: prima ci si va
+                let p = ChatId(chat);
+                let elsewhere = !self.app.contacts.iter().any(|c| model::same_peer(c.peer_id, p))
+                    && self.parked.as_ref().is_some_and(|k| k.app.contacts.iter().any(|c| model::same_peer(c.peer_id, p)));
+                let mut switch = Task::none();
+                if elsewhere {
+                    let other = if self.env == Env::Telegram { Env::WhatsApp } else { Env::Telegram };
+                    switch = self.switch_env(other);
+                }
+                match Some(ChatId(chat))
+                    .filter(|p| self.app.contacts.iter().any(|c| model::same_peer(c.peer_id, *p)))
                 {
                     Some(p) => {
                         self.show_starred = false;
@@ -1019,7 +1220,8 @@ impl Gui {
                     }
                     None => self.app.status = tr("la chat non è più fra le tue").into(),
                 }
-                Task::none()
+                // niente return: più sotto il link_open apre la chat
+                switch
             }
             Msg::Unstar(chat, id) => {
                 self.app.starred.retain(|s| !(s.chat == chat && s.id == id));
@@ -1037,6 +1239,11 @@ impl Gui {
             }
             Msg::Scale(f) => {
                 self.settings.scale = (f * 20.0).round() / 20.0;
+                self.settings.save();
+                Task::none()
+            }
+            Msg::EnvRail(on) => {
+                self.settings.env_rail = on;
                 self.settings.save();
                 Task::none()
             }
@@ -1124,18 +1331,23 @@ impl Gui {
                 }
                 Task::none()
             }
-            Msg::Key(keyboard::Event::KeyPressed { key, .. }) => {
+            Msg::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 if key == keyboard::Key::Named(keyboard::key::Named::Escape) {
                     self.cancel();
                 }
-                Task::none()
+                // Ctrl+1 / Ctrl+2: Telegram o WhatsApp, anche senza la barra
+                match key.as_ref() {
+                    keyboard::Key::Character("1") if modifiers.command() => self.switch_env(Env::Telegram),
+                    keyboard::Key::Character("2") if modifiers.command() => self.switch_env(Env::WhatsApp),
+                    _ => Task::none(),
+                }
             }
             Msg::Key(_) => Task::none(),
         };
         self.after_change();
         // un link risolto: la chat si apre appena è nella lista
         if let Some((pid, post)) = self.app.link_open {
-            if self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, pid)) {
+            if self.app.contacts.iter().any(|c| model::same_peer(c.peer_id, pid)) {
                 self.app.link_open = None;
                 self.show_settings = false;
                 let open = self.open_chat(pid);
@@ -1148,10 +1360,10 @@ impl Gui {
 
     /// Un link Telegram: le chat private si cercano fra le proprie, il
     /// resto lo risolve il worker (username, inviti).
-    fn follow(&mut self, link: tg::TgLink) {
-        if let tg::TgLink::Private { channel, post } = link {
-            let pid = PeerId::channel(channel);
-            match pid.filter(|p| self.app.contacts.iter().any(|c| tg::same_peer(c.peer_id, *p))) {
+    fn follow(&mut self, link: links::TgLink) {
+        if let links::TgLink::Private { channel, post } = link {
+            let pid = links::channel_chat(channel);
+            match pid.filter(|p| self.app.contacts.iter().any(|c| model::same_peer(c.peer_id, *p))) {
                 Some(p) => self.app.link_open = Some((p, post)),
                 None => self.app.status = tr("link a una chat privata che non è fra le tue").into(),
             }
@@ -1170,7 +1382,7 @@ impl Gui {
             self.pending_links.push(url);
             return;
         }
-        match tg::parse_link(&url) {
+        match links::parse_link(&url) {
             Some(link) => self.follow(link),
             None => self.app.status = trf!("link non riconosciuto: {}", url),
         }
@@ -1220,7 +1432,7 @@ impl Gui {
 
     /// La riga `id` della chat aperta: dalla cronologia o dai contenuti
     /// condivisi della scheda (media vecchi non ancora caricati).
-    fn row_media<T>(&self, id: i32, f: impl Fn(&tg::RowKind) -> Option<T>) -> Option<T> {
+    fn row_media<T>(&self, id: i32, f: impl Fn(&model::RowKind) -> Option<T>) -> Option<T> {
         let peer = self.app.open?;
         self.app
             .open_history()
@@ -1333,9 +1545,39 @@ impl Gui {
             }
             NetEvent::Failed(e) => {
                 self.phase = Phase::Failed(e);
+                if self.env == Env::WhatsApp {
+                    self.wa_since = None;
+                }
+                Task::none()
+            }
+            NetEvent::Login(l) => {
+                self.phase = Phase::Login(l);
+                operation::focus(LOGIN_FIELD)
+            }
+            NetEvent::Pair(p) => {
+                // WhatsApp ha risposto: niente avviso di attesa
+                self.wa_since = None;
+                match p {
+                    Pairing::Qr(qr) => {
+                        self.phase = Phase::Pairing { qr: iced::widget::qr_code::Data::new(qr).ok(), code: None }
+                    }
+                    Pairing::Code(code) => self.phase = Phase::Pairing { qr: None, code: Some(code) },
+                    Pairing::Paired => {
+                        self.phase = Phase::Connecting(1, tr("Abbinato! Scarico le chat dal telefono…").into())
+                    }
+                    // durante l'abbinamento resta il QR; prima, la riga di stato
+                    Pairing::Status(s) => {
+                        if !matches!(self.phase, Phase::Pairing { .. }) {
+                            self.phase = Phase::Connecting(0, s);
+                        }
+                    }
+                }
                 Task::none()
             }
             NetEvent::Ready { link, contacts, me } => {
+                if self.env == Env::WhatsApp {
+                    self.wa_since = None;
+                }
                 self.app.contacts = contacts;
                 self.app.me = me;
                 self.link = Some(link);
@@ -1350,35 +1592,22 @@ impl Gui {
                 Task::none()
             }
             NetEvent::OpenPeer(pid) => self.open_chat(pid),
-            NetEvent::UpdateErr(e) => {
-                self.app.status = trf!("rete: {}", e);
-                Task::none()
-            }
-            NetEvent::Update(u) => {
+            NetEvent::Response(rondine::send::Response::Live(u)) => {
                 let Some(link) = &self.link else {
                     return Task::none();
                 };
-                let client = link.client.clone();
-                // messaggio in arrivo: chi e da dove, prima che l'update sparisca
+                let req = link.req.clone();
+                // messaggio in arrivo: chi e da dove, prima che l'evento sparisca
                 let incoming = match &u {
-                    grammers_client::update::Update::NewMessage(m) if !m.outgoing() => {
-                        Some((m.peer_id(), tg::sender_name(m)))
-                    }
+                    model::Live::NewMessage { chat, row, .. } if !row.outgoing => Some((*chat, row.from.clone())),
                     _ => None,
                 };
                 // letta da un'altra sessione: la notifica non serve più
                 let read_elsewhere = match &u {
-                    grammers_client::update::Update::Raw(r) => match &r.raw {
-                        tl::enums::Update::ReadHistoryInbox(x) => Some(PeerId::from(x.peer.clone())),
-                        tl::enums::Update::ReadChannelInbox(x) => PeerId::channel(x.channel_id),
-                        _ => None,
-                    },
+                    model::Live::ReadInbox { chat, .. } => Some(*chat),
                     _ => None,
                 };
-                // handle_update aspetta la rete solo per una chat mai vista
-                // (dialog_from_message); il contesto tokio serve agli spawn
-                let _rt = net::RT.get().map(|rt| rt.enter());
-                iced::futures::executor::block_on(handle_update(&mut self.app, &client, u));
+                handle_live(&mut self.app, u, &req);
                 if let Some((peer, from)) = incoming {
                     self.notify(peer, from);
                 }
@@ -1387,7 +1616,7 @@ impl Gui {
                         .app
                         .contacts
                         .iter()
-                        .find(|d| tg::same_peer(d.peer_id, peer))
+                        .find(|d| model::same_peer(d.peer_id, peer))
                         .is_some_and(|d| d.unread == 0);
                     if read {
                         notify::dismiss(peer);
@@ -1399,7 +1628,7 @@ impl Gui {
                 let Some(link) = &self.link else {
                     return Task::none();
                 };
-                let (client, req) = (link.client.clone(), link.req.clone());
+                let req = link.req.clone();
                 if let rondine::send::Response::Clipboard(hit) = &r {
                     match (hit, self.paste_undo.take()) {
                         // il testo l'ha già messo iced nel campo
@@ -1413,8 +1642,15 @@ impl Gui {
                 }
                 let first_page = matches!(&r, rondine::send::Response::Hist { .. });
                 let profile = matches!(&r, rondine::send::Response::Profile(Ok(_)));
-                let _rt = net::RT.get().map(|rt| rt.enter());
-                iced::futures::executor::block_on(handle_response(&mut self.app, r, &client, &req));
+                // WhatsApp scollegato da qui: si torna alla pagina per collegarlo
+                if self.env == Env::WhatsApp && matches!(&r, rondine::send::Response::SessionEnded(Ok(_))) {
+                    self.app = new_app(&self.settings);
+                    self.link = None;
+                    self.phase = Phase::Linking;
+                    self.show_settings = false;
+                    return Task::none();
+                }
+                handle_response(&mut self.app, r, &req);
                 if profile {
                     if let Some(p) = &self.app.profile {
                         self.pf = p.clone();
@@ -1428,13 +1664,78 @@ impl Gui {
         }
     }
 
+    /// Due ambienti, insieme o in due istanze: il marchio e i temi dicono
+    /// di quale si tratta.
+    pub fn two_envs(&self) -> bool {
+        self.parked.is_some() || settings::solo().is_some()
+    }
+
+    /// Passa all'altro ambiente: ognuno tiene le sue chat, il suo stile e
+    /// il suo tema; la lista dei messaggi importanti è una sola e viene via.
+    fn switch_env(&mut self, to: Env) -> Task<Msg> {
+        if to == self.env {
+            return Task::none();
+        }
+        let Some(mut p) = self.parked.take() else {
+            return Task::none();
+        };
+        std::mem::swap(&mut self.app, &mut p.app);
+        std::mem::swap(&mut self.link, &mut p.link);
+        std::mem::swap(&mut self.phase, &mut p.phase);
+        self.app.starred = std::mem::take(&mut p.app.starred);
+        self.parked = Some(p);
+        self.env = to;
+        self.settings.style = to;
+        self.settings.save();
+        style::set_wa(to == Env::WhatsApp);
+        apply_theme(self.settings.active_theme());
+        self.theme_stamp = style::omarchy_stamp();
+        // quello che era aperto riguardava l'altro ambiente
+        self.show_info = false;
+        self.show_settings = false;
+        self.show_starred = false;
+        self.show_archived = false;
+        self.chat_menu = None;
+        self.confirm = None;
+        self.forwarding = None;
+        self.viewer = None;
+        self.filter.clear();
+        self.snap_bottom()
+    }
+
+    /// Esegue `f` sull'ambiente `env`: quello in vista direttamente, l'altro
+    /// scambiandolo per un attimo (i task di scorrimento e fuoco si buttano).
+    fn in_env(&mut self, env: Env, f: impl FnOnce(&mut Self) -> Task<Msg>) -> Task<Msg> {
+        if env == self.env {
+            return f(self);
+        }
+        let Some(mut p) = self.parked.take() else {
+            return Task::none();
+        };
+        std::mem::swap(&mut self.app, &mut p.app);
+        std::mem::swap(&mut self.link, &mut p.link);
+        std::mem::swap(&mut self.phase, &mut p.phase);
+        let (env_was, at_bottom) = (self.env, self.at_bottom);
+        self.env = env;
+        self.background = true;
+        let _ = f(self);
+        self.background = false;
+        self.env = env_was;
+        self.at_bottom = at_bottom;
+        std::mem::swap(&mut self.app, &mut p.app);
+        std::mem::swap(&mut self.link, &mut p.link);
+        std::mem::swap(&mut self.phase, &mut p.phase);
+        self.parked = Some(p);
+        Task::none()
+    }
+
     /// Notifica di un messaggio nuovo: non per le chat silenziate né per
     /// quella aperta mentre la finestra è a fuoco.
-    fn notify(&self, peer: PeerId, from: String) {
-        if !self.settings.notify || (self.focused && self.app.open == Some(peer)) {
+    fn notify(&self, peer: ChatId, from: String) {
+        if !self.settings.notify || (self.focused && !self.background && self.app.open == Some(peer)) {
             return;
         }
-        let Some(d) = self.app.contacts.iter().find(|d| tg::same_peer(d.peer_id, peer)) else {
+        let Some(d) = self.app.contacts.iter().find(|d| model::same_peer(d.peer_id, peer)) else {
             return;
         };
         if d.muted {
@@ -1450,12 +1751,12 @@ impl Gui {
             text
         };
         let icon = d.photo_id.and_then(|id| self.app.avatars.get(&id));
-        notify::show(peer, &d.name, &body, icon.map(|p| p.as_path()));
+        notify::show(self.env, peer, &d.name, &body, icon.map(|p| p.as_path()));
     }
 
-    fn open_chat(&mut self, pid: PeerId) -> Task<Msg> {
+    fn open_chat(&mut self, pid: ChatId) -> Task<Msg> {
         notify::dismiss(pid);
-        let Some(i) = self.app.contacts.iter().position(|c| tg::same_peer(c.peer_id, pid)) else {
+        let Some(i) = self.app.contacts.iter().position(|c| model::same_peer(c.peer_id, pid)) else {
             return Task::none();
         };
         self.app.contact_cursor = i;

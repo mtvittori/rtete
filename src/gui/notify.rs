@@ -6,24 +6,29 @@ use std::io::BufRead;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
-use grammers_client::session::types::PeerId;
+use rondine::model::ChatId;
 
 use crate::net;
 
 /// id della notifica aperta per chat: la successiva la rimpiazza
-static OPEN: Mutex<Option<HashMap<PeerId, u32>>> = Mutex::new(None);
+static OPEN: Mutex<Option<HashMap<ChatId, u32>>> = Mutex::new(None);
 
-pub fn show(peer: PeerId, title: &str, body: &str, icon: Option<&std::path::Path>) {
+pub fn show(env: net::Env, peer: ChatId, title: &str, body: &str, icon: Option<&std::path::Path>) {
     let replace = OPEN
         .lock()
         .ok()
         .and_then(|g| g.as_ref().and_then(|m| m.get(&peer).copied()));
     let mut cmd = Command::new("notify-send");
-    cmd.args(["-a", "Rondine", "-p", "-A"]);
+    // il nome dell'app dice da quale ambiente arriva
+    let app_name = match env {
+        net::Env::Telegram => "Rondine · Telegram",
+        net::Env::WhatsApp => "Rondine · WhatsApp",
+    };
+    cmd.args(["-a", app_name, "-p", "-A"]);
     cmd.arg(format!("default={}", rondine::tr("Apri")));
     match icon {
         Some(p) => cmd.arg("-i").arg(p),
-        None => cmd.args(["-i", "telegram"]),
+        None => cmd.args(["-i", if env == net::Env::WhatsApp { "whatsapp" } else { "telegram" }]),
     };
     if let Some(id) = replace {
         cmd.arg("-r").arg(id.to_string());
@@ -47,7 +52,7 @@ pub fn show(peer: PeerId, title: &str, body: &str, icon: Option<&std::path::Path
         }
         if let Some(Ok(action)) = lines.next() {
             if action.trim() == "default" {
-                net::open_peer(peer);
+                net::open_peer(env, peer);
                 focus_window();
             }
         }
@@ -61,7 +66,7 @@ pub fn show(peer: PeerId, title: &str, body: &str, icon: Option<&std::path::Path
 }
 
 /// Toglie la notifica della chat appena la si apre.
-pub fn dismiss(peer: PeerId) {
+pub fn dismiss(peer: ChatId) {
     let id = OPEN
         .lock()
         .ok()
@@ -83,5 +88,5 @@ pub fn dismiss(peer: PeerId) {
 }
 
 fn focus_window() {
-    crate::focus_existing();
+    crate::focus_existing(crate::app_id());
 }

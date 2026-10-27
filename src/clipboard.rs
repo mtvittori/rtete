@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::app::App;
 use crate::send::Response;
-use crate::tg;
+use crate::model;
 
 /// Esito del probe degli appunti (wl-clipboard gira a thread, fuori dal
 /// ciclo degli eventi): immagine con byte e mime, file copiati dal file
@@ -20,26 +20,26 @@ pub enum ClipboardHit {
 
 /// Testo "copiabile" di una riga: testo, caption (foto/doc/audio), emoji
 /// degli sticker, note di servizio. None se la riga non ha testo.
-pub fn copy_text(r: &tg::HistoryRow) -> Option<String> {
+pub fn copy_text(r: &model::HistoryRow) -> Option<String> {
     match &r.kind {
-        tg::RowKind::Text(t) => Some(t.clone()),
-        tg::RowKind::Note(t) | tg::RowKind::Service(t) | tg::RowKind::Video { note: t, .. } => {
+        model::RowKind::Text(t) => Some(t.clone()),
+        model::RowKind::Note(t) | model::RowKind::Service(t) | model::RowKind::Video { note: t, .. } => {
             let t = t.trim();
             (!t.is_empty()).then(|| t.to_string())
         }
-        tg::RowKind::Sticker { emoji, .. } => {
+        model::RowKind::Sticker { emoji, .. } => {
             let t = emoji.trim();
             (!t.is_empty()).then(|| t.to_string())
         }
-        tg::RowKind::Photo { caption, .. } => {
+        model::RowKind::Photo { caption, .. } => {
             let t = caption.trim();
             (!t.is_empty()).then(|| t.to_string())
         }
-        tg::RowKind::Doc { name, caption, .. } => {
+        model::RowKind::Doc { name, caption, .. } => {
             let t = pick_caption(caption, name);
             (!t.is_empty()).then(|| t.to_string())
         }
-        tg::RowKind::Audio { name, caption, .. } => {
+        model::RowKind::Audio { name, caption, .. } => {
             let t = pick_caption(caption, name);
             (!t.is_empty()).then(|| t.to_string())
         }
@@ -186,7 +186,7 @@ pub fn attach_file(app: &mut App, path: std::path::PathBuf) {
     app.discard_pending_photo();
     app.disarm_delete();
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    app.status = if tg::is_photo_file(&path) {
+    app.status = if crate::model::is_photo_file(&path) {
         crate::trf!("foto «{}» pronta — Invio invia, il testo del compose è la didascalia", name)
     } else {
         crate::trf!("file «{}» pronto — Invio invia, il testo del compose è la didascalia", name)
@@ -279,8 +279,8 @@ pub fn clipboard_png_file(bytes: &[u8], mime: &str) -> Option<(std::path::PathBu
     }
     // tmp sta dentro data_dir (0700): uno screenshot non resta leggibile
     // dagli altri utenti come farebbe un 644
-    let dir = tg::tmp_dir();
-    tg::ensure_private_dir(&dir).ok()?;
+    let dir = crate::paths::tmp_dir();
+    crate::paths::ensure_private_dir(&dir).ok()?;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())

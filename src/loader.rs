@@ -6,7 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::tg::media_dir;
+use crate::model::MediaRef;
+use crate::paths::media_dir;
 
 /// Spazio occupato dai file (non ricorsivo) di una cartella: (file, byte).
 pub fn dir_usage(dir: &Path) -> (usize, u64) {
@@ -36,7 +37,7 @@ pub fn cache_png(key: &str) -> PathBuf {
 }
 
 /// Cache path for the original raw bytes (convert once only).
-fn cache_raw(key: &str, ext: &str) -> PathBuf {
+pub fn cache_raw(key: &str, ext: &str) -> PathBuf {
     media_dir().join(format!("{key}.{ext}"))
 }
 
@@ -77,17 +78,17 @@ pub fn prune_cache_to(max_bytes: u64) {
     }
 }
 
-/// Scarica (se manca) e converte in PNG/APNG pronto per kitty.
+/// Converte in PNG/APNG pronto per kitty l'originale che `fetch` porta in
+/// cache (lo scarica il backend, se manca).
 pub async fn convert_to_png(
-    client: grammers_client::Client,
-    media: &grammers_client::media::Media,
-    key: String,
+    key: &str,
+    fetch: impl std::future::Future<Output = Result<PathBuf, String>>,
 ) -> Result<PathBuf, String> {
-    let png_path = cache_png(&key);
+    let png_path = cache_png(key);
     if png_path.exists() {
         return Ok(png_path);
     }
-    let raw_path = raw_source(&client, media).await?;
+    let raw_path = fetch.await?;
     let src = raw_path.clone();
     let dst = png_path.clone();
     let files = (src.clone(), dst.clone());
@@ -111,69 +112,15 @@ pub async fn convert_to_png(
     }
 }
 
-fn raw_ext(media: &grammers_client::media::Media) -> &'static str {
-    match media {
-        grammers_client::media::Media::Photo(_) => "jpg",
-        grammers_client::media::Media::Document(doc) => match doc.mime_type().unwrap_or("") {
-            "image/gif" => "gif",
-            "image/png" | "image/apng" => "png",
-            "image/webp" => "webp",
-            m if m.starts_with("image/jpeg") => "jpg",
-            _ => "bin",
-        },
-        _ => "bin",
-    }
-}
-
 /// L'originale in cache (foto a piena risoluzione per il visore), se c'è
 /// ed è un formato che si apre al volo (jpg/png).
-pub fn original(media: &grammers_client::media::Media) -> Option<PathBuf> {
-    let ext = raw_ext(media);
+pub fn original(media: &MediaRef) -> Option<PathBuf> {
+    let ext = media.ext();
     if !matches!(ext, "jpg" | "png") {
         return None;
     }
-    let path = cache_raw(&crate::tg::media_key(media), ext);
+    let path = cache_raw(media.key(), ext);
     path.exists().then_some(path)
-}
-
-/// Scarica l'originale nella cache (se assente) e preleva il percorso con
-/// l'estensione reale.
-async fn raw_source(
-    client: &grammers_client::Client,
-    media: &grammers_client::media::Media,
-) -> Result<PathBuf, String> {
-    let key = crate::tg::media_key(media);
-    let ext = raw_ext(media);
-    // video: basta la miniatura più grande, non il file intero
-    if let grammers_client::media::Media::Document(doc) = media {
-        if doc.mime_type().unwrap_or("").starts_with("video/") {
-            let raw_path = cache_raw(&key, "jpg");
-            if !raw_path.exists() {
-                let thumb = doc
-                    .thumbs()
-                    .into_iter()
-                    .max_by_key(|t| t.size())
-                    .ok_or("video senza miniatura")?;
-                crate::tg::ensure_private_dir(&media_dir())
-                    .map_err(|e| format!("cache dir: {e}"))?;
-                client
-                    .download_media(&thumb, raw_path.clone())
-                    .await
-                    .map_err(|e| format!("download: {e}"))?;
-            }
-            return Ok(raw_path);
-        }
-    }
-    let raw_path = cache_raw(&key, ext);
-    if !raw_path.exists() {
-        crate::tg::ensure_private_dir(&media_dir())
-            .map_err(|e| format!("cache dir: {e}"))?;
-        client
-            .download_media(media, raw_path.clone())
-            .await
-            .map_err(|e| format!("download: {e}"))?;
-    }
-    Ok(raw_path)
 }
 
 /// Rileva il formato dal magic header.
