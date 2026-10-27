@@ -14,7 +14,13 @@ if [[ ! -x $bin ]]; then
 cargo build --release --features gui --bin rondine-gui" 2>/dev/null
   exit 1
 fi
-if pgrep -x rondine >/dev/null; then
+# --whatsapp (-w) usa solo la sessione WhatsApp: la blocca la TUI WhatsApp;
+# --telegram (-t) o la finestra con tutti e due, la TUI Telegram
+tui='[^ ]*/rondine'
+for a in "$@"; do
+  [[ $a == --whatsapp || $a == -w ]] && tui='[^ ]*/rondine --whatsapp'
+done
+if pgrep -fx "$tui" >/dev/null; then
   notify-send -a Rondine "Rondine" "La versione da terminale è aperta: chiudila prima (usano la stessa sessione)." 2>/dev/null
   exit 1
 fi
