@@ -103,18 +103,20 @@ impl std::fmt::Debug for Carrier {
     }
 }
 
-fn sock_path() -> std::path::PathBuf {
+/// Il socket dell'istanza: `rondine-gui` con i due ambienti insieme,
+/// `rondine-telegram` o `rondine-whatsapp` per quelle a sé.
+fn sock_path(app_id: &str) -> std::path::PathBuf {
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    dir.join("rondine-gui.sock")
+    dir.join(format!("{app_id}.sock"))
 }
 
 /// Istanza unica: se Rondine è già aperta le passa il link (o niente, solo
 /// per farsi trovare) e ritorna true; il chiamante allora esce.
-pub fn hand_off(link: Option<&str>) -> bool {
+pub fn hand_off(app_id: &str, link: Option<&str>) -> bool {
     use std::io::Write;
-    let Ok(mut s) = std::os::unix::net::UnixStream::connect(sock_path()) else {
+    let Ok(mut s) = std::os::unix::net::UnixStream::connect(sock_path(app_id)) else {
         return false;
     };
     let _ = writeln!(s, "{}", link.unwrap_or(""));
@@ -122,9 +124,9 @@ pub fn hand_off(link: Option<&str>) -> bool {
 }
 
 /// Ascolta le istanze successive: ogni riga non vuota è un link da aprire.
-fn listen(tx: Tx) {
+fn listen(tx: Tx, app_id: &str) {
     use std::io::BufRead;
-    let path = sock_path();
+    let path = sock_path(app_id);
     // un socket rimasto da un'uscita brusca: nessuno risponde (hand_off è
     // già fallito), si può togliere
     let _ = std::fs::remove_file(&path);
@@ -143,9 +145,10 @@ fn listen(tx: Tx) {
     });
 }
 
-/// Avvia il runtime e Telegram; gli eventi aspettano la subscription.
-/// `cache_bytes`: tetto della cache degli asset, sfoltita prima di tutto.
-pub fn start(link: Option<String>, cache_bytes: u64) {
+/// Avvia il runtime e (se `telegram`) Telegram; gli eventi aspettano la
+/// subscription. `cache_bytes`: tetto della cache degli asset, sfoltita
+/// prima di tutto.
+pub fn start(app_id: &str, telegram: bool, link: Option<String>, cache_bytes: u64) {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -154,13 +157,15 @@ pub fn start(link: Option<String>, cache_bytes: u64) {
     let (tx, rx) = mpsc::unbounded_channel();
     *EVENTS.lock().unwrap() = Some(rx);
     let _ = SENDER.set(tx.clone());
-    listen(tx.clone());
+    listen(tx.clone(), app_id);
     if let Some(l) = link {
         let _ = tx.send((Env::Telegram, NetEvent::Link(l)));
     }
     let _ = RT.set(rt);
     loader::prune_cache_to(cache_bytes);
-    start_telegram();
+    if telegram {
+        start_telegram();
+    }
 }
 
 /// (Ri)avvia la connessione a Telegram.

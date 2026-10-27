@@ -61,6 +61,19 @@ API ID/hash (una volta), numero, codice e 2FA; per WhatsApp «Mostra il
 QR» e lo si inquadra dal telefono (Dispositivi collegati). WhatsApp è un
 collegamento non ufficiale: meglio un numero secondario per provare.
 
+La barra si nasconde da *Impostazioni → Aspetto* (restano Ctrl+1 per
+Telegram e Ctrl+2 per WhatsApp). Per averli come due app indipendenti:
+
+```sh
+rondine-gui --telegram   # o -t: finestra rondine-telegram
+rondine-gui --whatsapp   # o -w: finestra rondine-whatsapp
+```
+
+Ognuna ha la sua finestra (classe per Hyprland), la sua istanza unica e
+il suo tema; i link `tg://` vanno a quella con Telegram. Se è già aperta
+la finestra con tutti e due, si porta a fuoco quella (userebbero le
+stesse sessioni).
+
 ## Stile WhatsApp
 
 In Impostazioni → Aspetto si sceglie lo **stile**: Telegram (com'era) o

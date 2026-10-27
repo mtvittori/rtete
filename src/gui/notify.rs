@@ -88,5 +88,5 @@ pub fn dismiss(peer: ChatId) {
 }
 
 fn focus_window() {
-    crate::focus_existing();
+    crate::focus_existing(crate::app_id());
 }

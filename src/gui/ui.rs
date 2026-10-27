@@ -95,7 +95,7 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
         .into(),
     };
     // con WhatsApp: a sinistra la barra per passare da un ambiente all'altro
-    if g.parked.is_some() {
+    if g.parked.is_some() && g.settings.env_rail {
         row![env_rail(g), content].into()
     } else {
         content
@@ -404,7 +404,7 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
     }
     let card = container(steps).padding([14, 22]).style(style::pill(p.sidebar));
     // con due ambienti il marchio dice quale si sta collegando
-    let subtitle = if g.parked.is_some() { trf!("{} leggero per Linux", name) } else { tr("Telegram leggero per Linux").into() };
+    let subtitle = if g.two_envs() { trf!("{} leggero per Linux", name) } else { tr("Telegram leggero per Linux").into() };
     // WhatsApp che non risponde: lo si dice, invece di far girare la rotella
     let silent = g.env == Env::WhatsApp && g.wa_since.is_some_and(|t| t.elapsed().as_secs() >= 30);
     let hint: Element<'_, Msg> = if silent {
@@ -420,7 +420,7 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
         space().height(0).into()
     };
     centered(column![
-        logo(if g.parked.is_some() { color } else { p.accent }),
+        logo(if g.two_envs() { color } else { p.accent }),
         text("Rondine").size(30).font(BOLD),
         text(subtitle).size(13).color(p.muted),
         space().height(14),
@@ -1798,7 +1798,7 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         None => tr("Tema Omarchy").into(),
     };
     // con WhatsApp lo stile segue l'ambiente in vista; senza, si sceglie
-    let style_choice: Element<'_, Msg> = if g.parked.is_some() {
+    let style_choice: Element<'_, Msg> = if g.two_envs() {
         space().height(0).into()
     } else {
         column![
@@ -1827,7 +1827,7 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         .spacing(8)
         .wrap(),
         style_choice,
-        section(match (g.parked.is_some(), s.style) {
+        section(match (g.two_envs(), s.style) {
             (false, _) => tr("TEMA"),
             (true, UiStyle::Telegram) => tr("TEMA DI TELEGRAM"),
             (true, UiStyle::WhatsApp) => tr("TEMA DI WHATSAPP"),
@@ -1839,7 +1839,7 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         ]
         .spacing(8)
         .wrap(),
-        text(match (g.parked.is_some(), s.style) {
+        text(match (g.two_envs(), s.style) {
             (false, UiStyle::Telegram) => tr("Il tema scelto vale solo per lo stile Telegram."),
             (false, UiStyle::WhatsApp) => tr("Il tema scelto vale solo per lo stile WhatsApp."),
             (true, UiStyle::Telegram) => tr("Vale solo per Telegram: WhatsApp tiene il suo."),
@@ -1850,6 +1850,7 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         text(tr("Con il tema Omarchy i colori seguono `omarchy theme set` mentre Rondine è aperta."))
             .size(12)
             .color(p.muted),
+        env_rail_choice(g),
         section(tr("DIMENSIONE")),
         row![
             text(trf!("Interfaccia  {}%", format!("{:.0}", s.scale * 100.0))).width(170),
@@ -1861,6 +1862,25 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         iced::widget::toggler(s.gpu)
             .label(tr("Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)"))
             .on_toggle(Msg::Gpu),
+    ]
+    .spacing(14)
+    .into()
+}
+
+/// Con i due ambienti insieme: la barra per passare dall'uno all'altro
+/// si può nascondere (restano le scorciatoie), o si aprono separati.
+fn env_rail_choice(g: &Gui) -> Element<'_, Msg> {
+    if g.parked.is_none() {
+        return space().height(0).into();
+    }
+    column![
+        section(tr("TELEGRAM E WHATSAPP")),
+        iced::widget::toggler(g.settings.env_rail)
+            .label(tr("Barra a sinistra per passare da uno all'altro"))
+            .on_toggle(Msg::EnvRail),
+        text(tr("Senza barra: Ctrl+1 Telegram, Ctrl+2 WhatsApp. Per averli come due app separate: rondine-gui --telegram e rondine-gui --whatsapp."))
+            .size(12)
+            .color(style::p().muted),
     ]
     .spacing(14)
     .into()

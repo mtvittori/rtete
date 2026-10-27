@@ -117,6 +117,7 @@ pub enum Msg {
     Lang(Option<i18n::Lang>),
     /// passa a Telegram o a WhatsApp
     SwitchEnv(Env),
+    EnvRail(bool),
     /// collega WhatsApp: col QR (false) o col numero di telefono (true)
     LinkWhatsApp(bool),
     /// il numero per l'abbinamento col codice
@@ -323,20 +324,46 @@ fn main() -> iced::Result {
     if std::env::var_os("ICED_BACKEND").is_none() && !Settings::load().gpu {
         std::env::set_var("ICED_BACKEND", "tiny-skia");
     }
-    let link = std::env::args().skip(1).find(|a| !a.starts_with('-'));
-    // istanza unica: la finestra già aperta riceve il link e viene a fuoco
-    if net::hand_off(link.as_deref()) {
-        focus_existing();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // `--telegram` / `--whatsapp`: un ambiente solo, come due app separate
+    if args.iter().any(|a| a == "--telegram" || a == "-t") {
+        settings::set_solo(Env::Telegram);
+    } else if cfg!(feature = "whatsapp") && args.iter().any(|a| a == "--whatsapp" || a == "-w") {
+        settings::set_solo(Env::WhatsApp);
+    }
+    let solo = settings::solo();
+    let app_id = app_id();
+    // i link tg:// sono di Telegram: all'istanza con Telegram che è aperta
+    let link = args.into_iter().find(|a| !a.starts_with('-')).filter(|_| solo != Some(Env::WhatsApp));
+    // istanza unica: la finestra già aperta (questa o quella coi due
+    // ambienti, che userebbe le stesse sessioni) riceve il link e viene a fuoco
+    let others: &[&str] = match solo {
+        None => &["rondine-gui", "rondine-telegram", "rondine-whatsapp"],
+        Some(_) => &[app_id, "rondine-gui"],
+    };
+    let mut first = None;
+    for id in others {
+        let l = link.as_deref().filter(|_| *id != "rondine-whatsapp");
+        if net::hand_off(id, l) && first.is_none() {
+            first = Some(*id);
+        }
+    }
+    if let Some(id) = first {
+        focus_existing(id);
         return Ok(());
     }
-    net::start(link, Settings::load().cache_mb as u64 * 1024 * 1024);
+    net::start(app_id, solo != Some(Env::WhatsApp), link, Settings::load().cache_mb as u64 * 1024 * 1024);
     // WhatsApp già collegato: si connette insieme a Telegram
     #[cfg(feature = "whatsapp")]
-    if rondine::backend::wa::has_session() {
+    if solo != Some(Env::Telegram) && rondine::backend::wa::has_session() {
         net::start_whatsapp(None);
     }
     iced::application(boot, Gui::update, ui::view)
-        .title("Rondine")
+        .title(|_: &Gui| match settings::solo() {
+            Some(Env::Telegram) => "Rondine · Telegram".to_string(),
+            Some(Env::WhatsApp) => "Rondine · WhatsApp".to_string(),
+            None => "Rondine".to_string(),
+        })
         .theme(|_: &Gui| style::theme())
         .scale_factor(|g: &Gui| g.settings.scale)
         .subscription(Gui::subscription)
@@ -344,7 +371,7 @@ fn main() -> iced::Result {
             size: iced::Size::new(1100.0, 760.0),
             // la classe che Hyprland vede (regole finestra, scorciatoie)
             platform_specific: iced::window::settings::PlatformSpecific {
-                application_id: "rondine-gui".into(),
+                application_id: app_id.into(),
                 ..Default::default()
             },
             ..Default::default()
@@ -352,33 +379,53 @@ fn main() -> iced::Result {
         .run()
 }
 
+/// La classe della finestra (e il nome del socket): `rondine-gui`, o
+/// `rondine-telegram` / `rondine-whatsapp` per le istanze a sé.
+pub fn app_id() -> &'static str {
+    match settings::solo() {
+        Some(Env::Telegram) => "rondine-telegram",
+        Some(Env::WhatsApp) => "rondine-whatsapp",
+        None => "rondine-gui",
+    }
+}
+
 /// Porta a fuoco la finestra di Rondine già aperta (Hyprland).
-pub fn focus_existing() {
-    let lua = r#"hl.dsp.focus({ window = "class:rondine-gui" })"#;
+pub fn focus_existing(app_id: &str) {
+    let lua = format!(r#"hl.dsp.focus({{ window = "class:{app_id}" }})"#);
     let ok = std::process::Command::new("hyprctl")
-        .args(["dispatch", lua])
+        .args(["dispatch", &lua])
         .output()
         .is_ok_and(|o| o.status.success() && !String::from_utf8_lossy(&o.stdout).contains("rror"));
     if !ok {
         let _ = std::process::Command::new("hyprctl")
-            .args(["dispatch", "focuswindow", "class:rondine-gui"])
+            .args(["dispatch", "focuswindow", &format!("class:{app_id}")])
             .output();
     }
 }
 
 fn boot() -> Gui {
-    let settings = Settings::load();
-    // con WhatsApp l'ambiente dell'ultima volta; senza, lo stile scelto
+    let mut settings = Settings::load();
+    // da sola l'ambiente scelto all'avvio; con WhatsApp quello dell'ultima
+    // volta; senza, lo stile scelto
+    if let Some(env) = settings::solo() {
+        settings.style = env;
+    }
     let env = if cfg!(feature = "whatsapp") { settings.style } else { Env::Telegram };
     style::set_wa(settings.style == UiStyle::WhatsApp);
     apply_theme(settings.active_theme());
     let telegram = Parked { app: new_app(&settings), link: None, phase: Phase::Connecting(0, tr("avvio…").into()) };
     let whatsapp = whatsapp_slot(&settings);
     let (active, parked) = match (env, whatsapp) {
+        (Env::WhatsApp, Some(wa)) if settings::solo().is_some() => (wa, None),
         (Env::WhatsApp, Some(wa)) => (wa, Some(telegram)),
+        (_, _) if settings::solo().is_some() => (telegram, None),
         (_, wa) => (telegram, wa),
     };
-    let env = if parked.is_some() && env == Env::WhatsApp { Env::WhatsApp } else { Env::Telegram };
+    let env = if (parked.is_some() || settings::solo() == Some(Env::WhatsApp)) && env == Env::WhatsApp {
+        Env::WhatsApp
+    } else {
+        Env::Telegram
+    };
     Gui {
         env,
         parked,
@@ -1195,6 +1242,11 @@ impl Gui {
                 self.settings.save();
                 Task::none()
             }
+            Msg::EnvRail(on) => {
+                self.settings.env_rail = on;
+                self.settings.save();
+                Task::none()
+            }
             Msg::Gpu(on) => {
                 self.settings.gpu = on;
                 self.settings.save();
@@ -1279,11 +1331,16 @@ impl Gui {
                 }
                 Task::none()
             }
-            Msg::Key(keyboard::Event::KeyPressed { key, .. }) => {
+            Msg::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 if key == keyboard::Key::Named(keyboard::key::Named::Escape) {
                     self.cancel();
                 }
-                Task::none()
+                // Ctrl+1 / Ctrl+2: Telegram o WhatsApp, anche senza la barra
+                match key.as_ref() {
+                    keyboard::Key::Character("1") if modifiers.command() => self.switch_env(Env::Telegram),
+                    keyboard::Key::Character("2") if modifiers.command() => self.switch_env(Env::WhatsApp),
+                    _ => Task::none(),
+                }
             }
             Msg::Key(_) => Task::none(),
         };
@@ -1605,6 +1662,12 @@ impl Gui {
                 Task::none()
             }
         }
+    }
+
+    /// Due ambienti, insieme o in due istanze: il marchio e i temi dicono
+    /// di quale si tratta.
+    pub fn two_envs(&self) -> bool {
+        self.parked.is_some() || settings::solo().is_some()
     }
 
     /// Passa all'altro ambiente: ognuno tiene le sue chat, il suo stile e
