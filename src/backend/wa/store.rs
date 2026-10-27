@@ -18,6 +18,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::{ChatId, ChatRef, DialogInfo, LastMsg, Seen};
 
+/// La chat degli stati: tutti gli stati dei contatti, per 24 ore.
+pub const STATUS_JID: &str = "status@broadcast";
+
 /// Chat con i messaggi tenuti in RAM (le altre si rileggono dal disco).
 const HOT_CHATS: usize = 8;
 
@@ -381,6 +384,27 @@ impl Store {
         self.hot.get_mut(jid).expect("appena caricata")
     }
 
+    /// Toglie gli stati più vecchi di 24 ore. `true` se ne ha tolti.
+    pub fn prune_status(&mut self, now: i64) -> std::io::Result<bool> {
+        if !self.chats.contains_key(STATUS_JID) {
+            return Ok(false);
+        }
+        let msgs = self.messages(STATUS_JID);
+        let before = msgs.len();
+        msgs.retain(|m| m.ts >= now - 24 * 3600);
+        if msgs.len() == before {
+            return Ok(false);
+        }
+        let last = msgs.last().cloned();
+        let left = msgs.iter().filter(|m| !m.me).count();
+        if let Some(c) = self.chats.get_mut(STATUS_JID) {
+            c.last = last.map(|m| (m.id, summary(&m), m.me));
+            c.unread = c.unread.min(left);
+        }
+        self.rewrite(STATUS_JID)?;
+        Ok(true)
+    }
+
     fn rewrite(&mut self, jid: &str) -> std::io::Result<()> {
         let path = self.msgs_path(jid);
         let mut body = Vec::new();
@@ -527,11 +551,12 @@ impl Store {
             .filter(|c| c.ts > 0 || c.last.is_some() || !c.name.is_empty())
             .map(|c| {
                 let id = chat_id_of(&c.jid);
+                let status = c.jid == STATUS_JID;
                 let info = DialogInfo {
-                    name: self.display_name(&c.jid),
+                    name: if status { crate::i18n::tr("Stati").to_string() } else { self.display_name(&c.jid) },
                     peer_ref: ChatRef { id, auth: 0 },
                     peer_id: id,
-                    is_group: c.group,
+                    is_group: c.group || status,
                     unread: c.unread,
                     pinned: c.pinned,
                     last: c.last.as_ref().map(|(id, text, me)| LastMsg {
@@ -623,6 +648,23 @@ mod tests {
         assert_ne!(a, chat_id_of("393331234568@s.whatsapp.net"));
         assert!(a.0 > 1 << 40, "sopra gli utenti Telegram");
         assert!(!a.own_msg_ids());
+    }
+
+    #[test]
+    fn id_degli_stati_come_nel_modello() {
+        assert_eq!(chat_id_of(STATUS_JID), crate::model::WA_STATUS);
+    }
+
+    #[test]
+    fn stati_vecchi_via_dopo_24_ore() {
+        let (dir, mut s) = tmp_store("stati");
+        let now = 100_000;
+        s.insert(STATUS_JID, true, vec![msg("a", now - 90_000, "ieri"), msg("b", now - 60, "ora")]).unwrap();
+        assert!(s.prune_status(now).unwrap());
+        let texts: Vec<_> = s.last(STATUS_JID, 10).into_iter().map(|m| m.text).collect();
+        assert_eq!(texts, ["ora"]);
+        assert!(!s.prune_status(now).unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

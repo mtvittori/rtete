@@ -350,7 +350,8 @@ impl Wa {
         // nei gruppi le ricevute vanno per mittente
         let mut by_sender: Vec<(String, Vec<String>)> = Vec::new();
         for m in tail {
-            let who = if jid.ends_with("@g.us") { m.sender } else { String::new() };
+            // anche gli stati: la ricevuta va a chi l'ha pubblicato
+            let who = if jid.ends_with("@g.us") || jid == super::store::STATUS_JID { m.sender } else { String::new() };
             match by_sender.iter_mut().find(|(s, _)| *s == who) {
                 Some((_, ids)) => ids.push(m.wa),
                 None => by_sender.push((who, vec![m.wa])),

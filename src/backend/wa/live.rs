@@ -187,6 +187,13 @@ impl Shared {
     pub fn handle(&self, event: &Event, client: &Arc<Client>) {
         match event {
             Event::Connected(_) => {
+                {
+                    let mut store = self.store();
+                    if let Ok(true) = store.prune_status(super::now_secs()) {
+                        drop(store);
+                        self.refresh_soon();
+                    }
+                }
                 // «disponibile»: senza, niente online né «sta scrivendo»
                 let c = Arc::clone(client);
                 tokio::spawn(async move {
@@ -355,7 +362,12 @@ impl Shared {
             store.set_name(&sender, &info.push_name);
         }
         let fresh_chat = store.chat(&jid).is_none();
-        let fresh = match store.insert(&jid, info.source.is_group, vec![stored]) {
+        // gli stati: una chat a parte, con chi li ha pubblicati, per 24 ore
+        let status = jid == super::store::STATUS_JID;
+        if status {
+            let _ = store.prune_status(super::now_secs());
+        }
+        let fresh = match store.insert(&jid, info.source.is_group || status, vec![stored]) {
             Ok(f) => f,
             Err(e) => {
                 let _ = self.0.out.send(Response::LiveErr(crate::trf!("archivio: {}", e)));
