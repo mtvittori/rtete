@@ -84,6 +84,11 @@ pub struct Settings {
     pub lang: LangChoice,
     /// la barra a sinistra per passare tra Telegram e WhatsApp
     pub env_rail: bool,
+    /// feed unico: le chat dei due ambienti in una lista sola, con uno
+    /// stile e un tema soli (i suoi)
+    pub unified: bool,
+    pub style_mix: UiStyle,
+    pub theme_mix: ThemeChoice,
 }
 
 /// Avviata con `--telegram` o `--whatsapp`: un solo ambiente, come
@@ -122,6 +127,9 @@ impl Default for Settings {
             cache_mb: 32,
             lang: LangChoice(None),
             env_rail: true,
+            unified: false,
+            style_mix: UiStyle::Telegram,
+            theme_mix: ThemeChoice::Omarchy,
         }
     }
 }
@@ -134,8 +142,26 @@ fn path() -> PathBuf {
 }
 
 impl Settings {
+    /// Il feed unico vale con i due ambienti nella stessa finestra.
+    pub fn mixed(&self) -> bool {
+        self.unified && solo().is_none() && cfg!(feature = "whatsapp")
+    }
+
+    /// la disposizione dell'interfaccia: quella del feed unico o
+    /// dell'ambiente in vista
+    pub fn layout(&self) -> UiStyle {
+        if self.mixed() {
+            self.style_mix
+        } else {
+            self.style
+        }
+    }
+
     /// il tema dello stile in uso
     pub fn active_theme(&self) -> ThemeChoice {
+        if self.mixed() {
+            return self.theme_mix;
+        }
         match self.style {
             UiStyle::Telegram => self.theme,
             UiStyle::WhatsApp => self.theme_wa,
@@ -144,6 +170,9 @@ impl Settings {
 
     /// il tema dello stile in uso, da cambiare
     pub fn active_theme_mut(&mut self) -> &mut ThemeChoice {
+        if self.mixed() {
+            return &mut self.theme_mix;
+        }
         match self.style {
             UiStyle::Telegram => &mut self.theme,
             UiStyle::WhatsApp => &mut self.theme_wa,
@@ -188,6 +217,9 @@ impl Settings {
                     }
                 }
                 ("barra_ambienti", v) => s.env_rail = v != "false",
+                ("feed_unico", v) => s.unified = v == "true",
+                ("stile_feed", v) => s.style_mix = if v == "whatsapp" { UiStyle::WhatsApp } else { UiStyle::Telegram },
+                ("tema_feed", v) => s.theme_mix = ThemeChoice::from_code(v).unwrap_or(s.theme_mix),
                 ("lingua", v) => s.lang = LangChoice(Lang::from_code(v)),
                 ("cache_mb", v) => {
                     if let Ok(n) = v.parse::<u32>() {
@@ -232,7 +264,8 @@ impl Settings {
             format!(
                 "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n\
                  foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n\
-                 stile = {style}\ntema_whatsapp = {}\npreferite = {}\nbarra_ambienti = {}\n",
+                 stile = {style}\ntema_whatsapp = {}\npreferite = {}\nbarra_ambienti = {}\n\
+                 feed_unico = {}\nstile_feed = {}\ntema_feed = {}\n",
                 self.scale,
                 self.links_in_app,
                 self.gpu,
@@ -246,7 +279,10 @@ impl Settings {
                 self.lang.0.map_or("auto", |l| l.code()),
                 self.theme_wa.code(),
                 favorites.join(","),
-                self.env_rail
+                self.env_rail,
+                self.unified,
+                if self.style_mix == UiStyle::WhatsApp { "whatsapp" } else { "telegram" },
+                self.theme_mix.code(),
             ),
         );
     }

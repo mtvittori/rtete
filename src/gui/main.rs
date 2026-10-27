@@ -118,6 +118,9 @@ pub enum Msg {
     /// passa a Telegram o a WhatsApp
     SwitchEnv(Env),
     EnvRail(bool),
+    Unified(bool),
+    /// un messaggio per una chat dell'altro ambiente (feed unico)
+    InEnv(Env, Box<Msg>),
     /// collega WhatsApp: col QR (false) o col numero di telefono (true)
     LinkWhatsApp(bool),
     /// il numero per l'abbinamento col codice
@@ -411,7 +414,7 @@ fn boot() -> Gui {
         settings.style = env;
     }
     let env = if cfg!(feature = "whatsapp") { settings.style } else { Env::Telegram };
-    style::set_wa(settings.style == UiStyle::WhatsApp);
+    style::set_wa(settings.layout() == UiStyle::WhatsApp);
     apply_theme(settings.active_theme());
     let telegram = Parked { app: new_app(&settings), link: None, phase: Phase::Connecting(0, tr("avvio…").into()) };
     let whatsapp = whatsapp_slot(&settings);
@@ -1128,7 +1131,11 @@ impl Gui {
                 Task::none()
             }
             Msg::SetStyle(s) => {
-                self.settings.style = s;
+                if self.settings.mixed() {
+                    self.settings.style_mix = s;
+                } else {
+                    self.settings.style = s;
+                }
                 style::set_wa(s == UiStyle::WhatsApp);
                 apply_theme(self.settings.active_theme());
                 self.theme_stamp = style::omarchy_stamp();
@@ -1247,6 +1254,29 @@ impl Gui {
                 self.settings.save();
                 Task::none()
             }
+            Msg::Unified(on) => {
+                // si parte dallo stile e dal tema che si stanno guardando
+                if on {
+                    self.settings.style_mix = self.settings.layout();
+                    self.settings.theme_mix = self.settings.active_theme();
+                }
+                self.settings.unified = on;
+                self.settings.save();
+                style::set_wa(self.settings.layout() == UiStyle::WhatsApp);
+                apply_theme(self.settings.active_theme());
+                self.theme_stamp = style::omarchy_stamp();
+                Task::none()
+            }
+            Msg::InEnv(env, m) => match *m {
+                // aprire una chat (o eliminarla, con la conferma) porta
+                // nel suo ambiente; il resto si fa dietro le quinte
+                m @ (Msg::Open(_) | Msg::MenuDelete(_)) => {
+                    let switch = self.switch_env(env);
+                    let then = self.update(m);
+                    Task::batch([switch, then])
+                }
+                m => self.in_env(env, |g| g.update(m)),
+            },
             Msg::Gpu(on) => {
                 self.settings.gpu = on;
                 self.settings.save();
@@ -1666,6 +1696,15 @@ impl Gui {
 
     /// Due ambienti, insieme o in due istanze: il marchio e i temi dicono
     /// di quale si tratta.
+    /// Il feed unico è attivo: una lista sola con le chat dei due ambienti.
+    pub fn feed(&self) -> bool {
+        self.settings.mixed() && self.parked.is_some()
+    }
+
+    pub fn other_env(&self) -> Env {
+        if self.env == Env::Telegram { Env::WhatsApp } else { Env::Telegram }
+    }
+
     pub fn two_envs(&self) -> bool {
         self.parked.is_some() || settings::solo().is_some()
     }
@@ -1687,19 +1726,23 @@ impl Gui {
         self.env = to;
         self.settings.style = to;
         self.settings.save();
-        style::set_wa(to == Env::WhatsApp);
+        style::set_wa(self.settings.layout() == Env::WhatsApp);
         apply_theme(self.settings.active_theme());
         self.theme_stamp = style::omarchy_stamp();
+        let mixed = self.settings.mixed();
         // quello che era aperto riguardava l'altro ambiente
         self.show_info = false;
         self.show_settings = false;
         self.show_starred = false;
-        self.show_archived = false;
         self.chat_menu = None;
         self.confirm = None;
         self.forwarding = None;
         self.viewer = None;
-        self.filter.clear();
+        // col feed unico la lista (ricerca, archivio) è la stessa
+        if !mixed {
+            self.show_archived = false;
+            self.filter.clear();
+        }
         self.snap_bottom()
     }
 
