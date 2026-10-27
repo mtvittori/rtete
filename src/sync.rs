@@ -177,6 +177,33 @@ pub async fn handle_update(
                 tl::enums::Update::ReadChannelInbox(u) => {
                     read_inbox(app, PeerId::channel(u.channel_id), u.still_unread_count)
                 }
+                // archivio, fissate, silenziate e «da leggere» cambiati altrove
+                tl::enums::Update::DialogUnreadMark(u) => {
+                    if let tl::enums::DialogPeer::Peer(p) = u.peer {
+                        app.apply_chat_action(PeerId::from(p.peer), tg::ChatAction::MarkUnread(u.unread));
+                    }
+                }
+                tl::enums::Update::DialogPinned(u) => {
+                    if let tl::enums::DialogPeer::Peer(p) = u.peer {
+                        app.apply_chat_action(PeerId::from(p.peer), tg::ChatAction::Pin(u.pinned));
+                    }
+                }
+                tl::enums::Update::FolderPeers(u) => {
+                    for f in u.folder_peers {
+                        let tl::enums::FolderPeer::Peer(f) = f;
+                        app.apply_chat_action(PeerId::from(f.peer), tg::ChatAction::Archive(f.folder_id == 1));
+                    }
+                }
+                tl::enums::Update::NotifySettings(u) => {
+                    if let tl::enums::NotifyPeer::Peer(p) = u.peer {
+                        let tl::enums::PeerNotifySettings::Settings(n) = u.notify_settings;
+                        let muted = n.mute_until.is_some_and(|t| t as i64 > jiff::Timestamp::now().as_second());
+                        app.apply_chat_action(PeerId::from(p.peer), tg::ChatAction::Mute(muted));
+                    }
+                }
+                tl::enums::Update::PeerHistoryTtl(u) => {
+                    app.apply_chat_action(PeerId::from(u.peer), tg::ChatAction::Ttl(u.ttl_period.unwrap_or(0)));
+                }
                 tl::enums::Update::PeerBlocked(u) => {
                     if let Some(info) = app.peer_info.get_mut(&PeerId::from(u.peer_id)) {
                         info.blocked = u.blocked;
@@ -236,10 +263,14 @@ pub async fn handle_response(
             if is_open {
                 app.status = String::new();
                 // la storia è arrivata e la chat è a fuoco: il badge
-                // unread della barra sparisce
+                // unread della barra sparisce, e anche il segno «da leggere»
                 for d in app.contacts.iter_mut() {
                     if tg::same_peer(d.peer_id, peer) {
                         d.unread = 0;
+                        if std::mem::take(&mut d.unread_mark) {
+                            let action = tg::ChatAction::MarkUnread(false);
+                            let _ = req.send(Request::ChatAction { peer_ref: d.peer_ref, peer, action });
+                        }
                         break;
                     }
                 }
@@ -509,6 +540,24 @@ pub async fn handle_response(
                     app.translate.set_auto(peer, false);
                 }
             }
+        },
+        Response::ChatActionDone { peer, action, res } => match res {
+            Ok(()) => {
+                app.apply_chat_action(peer, action);
+                app.status = match action {
+                    tg::ChatAction::Archive(true) => tr("chat archiviata"),
+                    tg::ChatAction::Archive(false) => tr("chat tolta dall'archivio"),
+                    tg::ChatAction::Pin(true) => tr("chat fissata in alto"),
+                    tg::ChatAction::Pin(false) => tr("chat non più fissata"),
+                    tg::ChatAction::Mute(true) => tr("notifiche silenziate"),
+                    tg::ChatAction::Mute(false) => tr("notifiche riattivate"),
+                    tg::ChatAction::MarkUnread(_) => "",
+                    tg::ChatAction::Ttl(0) => tr("messaggi effimeri disattivati"),
+                    tg::ChatAction::Ttl(_) => tr("messaggi effimeri attivati"),
+                }
+                .into();
+            }
+            Err(err) => app.status = trf!("azione sulla chat: {}", err),
         },
         Response::TranslateTest(res) => {
             app.tr_test = Some(res.map(|t| match t.source {

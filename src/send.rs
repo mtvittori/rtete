@@ -153,6 +153,12 @@ pub enum Request {
     },
     /// traduce una frase di prova (Impostazioni → Traduzione)
     TranslateTest(Box<crate::translate::Config>),
+    /// archivia, fissa, silenzia, segna da leggere, timer effimero
+    ChatAction {
+        peer_ref: PeerRefT,
+        peer: PeerId,
+        action: tg::ChatAction,
+    },
 }
 
 /// Risposte dei worker: un solo canale verso il ciclo; ogni variante ha
@@ -220,6 +226,11 @@ pub enum Response {
         res: Result<crate::translate::Translated, String>,
     },
     TranslateTest(Result<crate::translate::Translated, String>),
+    ChatActionDone {
+        peer: PeerId,
+        action: tg::ChatAction,
+        res: Result<(), String>,
+    },
     /// il probe wl-clipboard ha girato a thread fuori dal ciclo eventi
     Clipboard(ClipboardHit),
 }

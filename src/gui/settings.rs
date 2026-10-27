@@ -21,11 +21,45 @@ pub enum ThemeChoice {
     Omarchy,
     /// la palette scura di Rondine
     Rondine,
+    /// il verde di WhatsApp
+    WhatsApp,
+}
+
+impl ThemeChoice {
+    fn code(self) -> &'static str {
+        match self {
+            ThemeChoice::Omarchy => "omarchy",
+            ThemeChoice::Rondine => "rondine",
+            ThemeChoice::WhatsApp => "whatsapp",
+        }
+    }
+
+    fn from_code(v: &str) -> Option<Self> {
+        match v {
+            "omarchy" => Some(ThemeChoice::Omarchy),
+            "rondine" | "rtete" => Some(ThemeChoice::Rondine),
+            "whatsapp" => Some(ThemeChoice::WhatsApp),
+            _ => None,
+        }
+    }
+}
+
+/// La disposizione dell'interfaccia; ognuna ricorda il suo tema.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum UiStyle {
+    Telegram,
+    WhatsApp,
 }
 
 #[derive(Clone, Debug)]
 pub struct Settings {
+    pub style: UiStyle,
+    /// il tema dello stile Telegram
     pub theme: ThemeChoice,
+    /// il tema dello stile WhatsApp
+    pub theme_wa: ThemeChoice,
+    /// chat preferite (id Bot API), per il filtro «Preferite»
+    pub favorites: Vec<i64>,
     /// scala dell'interfaccia (testo e spazi)
     pub scale: f32,
     /// i link t.me / tg:// si aprono in Rondine invece che nel browser
@@ -57,7 +91,10 @@ pub const CACHE_LIMITS: [u32; 4] = [32, 128, 512, 2048];
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            style: UiStyle::Telegram,
             theme: ThemeChoice::Omarchy,
+            theme_wa: ThemeChoice::WhatsApp,
+            favorites: Vec::new(),
             scale: 1.0,
             links_in_app: true,
             gpu: true,
@@ -81,6 +118,22 @@ fn path() -> PathBuf {
 }
 
 impl Settings {
+    /// il tema dello stile in uso
+    pub fn active_theme(&self) -> ThemeChoice {
+        match self.style {
+            UiStyle::Telegram => self.theme,
+            UiStyle::WhatsApp => self.theme_wa,
+        }
+    }
+
+    /// il tema dello stile in uso, da cambiare
+    pub fn active_theme_mut(&mut self) -> &mut ThemeChoice {
+        match self.style {
+            UiStyle::Telegram => &mut self.theme,
+            UiStyle::WhatsApp => &mut self.theme_wa,
+        }
+    }
+
     /// cosa scaricare da solo, per lo stato condiviso
     pub fn media_prefs(&self) -> rondine::app::MediaPrefs {
         rondine::app::MediaPrefs {
@@ -97,8 +150,10 @@ impl Settings {
         };
         for (k, v) in raw.lines().filter_map(|l| l.split_once('=')) {
             match (k.trim(), v.trim()) {
-                ("tema", "omarchy") => s.theme = ThemeChoice::Omarchy,
-                ("tema", "rondine" | "rtete") => s.theme = ThemeChoice::Rondine,
+                ("tema", v) => s.theme = ThemeChoice::from_code(v).unwrap_or(s.theme),
+                ("tema_whatsapp", v) => s.theme_wa = ThemeChoice::from_code(v).unwrap_or(s.theme_wa),
+                ("stile", v) => s.style = if v == "whatsapp" { UiStyle::WhatsApp } else { UiStyle::Telegram },
+                ("preferite", v) => s.favorites = v.split(',').filter_map(|x| x.trim().parse().ok()).collect(),
                 ("scala", v) => {
                     if let Ok(f) = v.parse::<f32>() {
                         s.scale = f.clamp(0.7, 1.6);
@@ -133,15 +188,18 @@ impl Settings {
         if let Some(dir) = p.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let theme = match self.theme {
-            ThemeChoice::Omarchy => "omarchy",
-            ThemeChoice::Rondine => "rondine",
+        let theme = self.theme.code();
+        let style = match self.style {
+            UiStyle::Telegram => "telegram",
+            UiStyle::WhatsApp => "whatsapp",
         };
+        let favorites: Vec<String> = self.favorites.iter().map(|i| i.to_string()).collect();
         let _ = std::fs::write(
             p,
             format!(
                 "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n\
-                 foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n",
+                 foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n\
+                 stile = {style}\ntema_whatsapp = {}\npreferite = {}\n",
                 self.scale,
                 self.links_in_app,
                 self.gpu,
@@ -152,7 +210,9 @@ impl Settings {
                 self.avatars,
                 self.photo_px,
                 self.cache_mb,
-                self.lang.0.map_or("auto", |l| l.code())
+                self.lang.0.map_or("auto", |l| l.code()),
+                self.theme_wa.code(),
+                favorites.join(",")
             ),
         );
     }

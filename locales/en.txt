@@ -1306,3 +1306,135 @@ PRIVACY
 
 I messaggi da tradurre vengono inviati al servizio scelto, solo quando premi «🌐 Traduci» o nelle chat a traduzione automatica (si attiva dalla scheda della chat). La chiave resta in ~/.config/rondine/translate.conf, leggibile solo da te.
 Messages to translate are sent to the chosen service, only when you press “🌐 Translate” or in chats with automatic translation (enabled from the chat profile). The key stays in ~/.config/rondine/translate.conf, readable only by you.
+
+chat archiviata
+chat archived
+
+chat tolta dall'archivio
+chat unarchived
+
+chat fissata in alto
+chat pinned
+
+chat non più fissata
+chat unpinned
+
+notifiche silenziate
+notifications muted
+
+notifiche riattivate
+notifications unmuted
+
+messaggi effimeri disattivati
+disappearing messages off
+
+messaggi effimeri attivati
+disappearing messages on
+
+azione sulla chat: {}
+chat action: {}
+
+la chat non è più fra le tue
+the chat is no longer in your list
+
+Archiviate
+Archived
+
+Tutte
+All
+
+Non lette
+Unread
+
+Preferite
+Favorites
+
+Gruppi
+Groups
+
+Chat
+Chats
+
+Nessuna chat archiviata
+No archived chats
+
+Nessuna chat qui
+No chats here
+
+Togli dall'archivio
+Unarchive
+
+Archivia
+Archive
+
+Non fissare
+Unpin
+
+Fissa in alto
+Pin to top
+
+Riattiva le notifiche
+Unmute notifications
+
+Silenzia le notifiche
+Mute notifications
+
+Segna come letta
+Mark as read
+
+Segna come da leggere
+Mark as unread
+
+Togli dalle preferite
+Remove from favorites
+
+Aggiungi alle preferite
+Add to favorites
+
+Esci ed elimina
+Leave and delete
+
+☆ Non importante
+☆ Unstar
+
+⭐ Importante
+⭐ Star
+
+STILE
+STYLE
+
+Verde WhatsApp
+WhatsApp green
+
+Il tema scelto vale solo per lo stile Telegram.
+The chosen theme applies only to the Telegram style.
+
+Il tema scelto vale solo per lo stile WhatsApp.
+The chosen theme applies only to the WhatsApp style.
+
+⏱ Messaggi effimeri
+⏱ Disappearing messages
+
+Spenti
+Off
+
+24 ore
+24 hours
+
+7 giorni
+7 days
+
+90 giorni
+90 days
+
+I nuovi messaggi spariscono per tutti dopo il tempo scelto.
+New messages disappear for everyone after the chosen time.
+
+⭐ Messaggi importanti
+⭐ Starred messages
+
+Nessun messaggio importante: aprine uno e premi «⭐ Importante» nelle sue azioni.
+No starred messages: open one and press “⭐ Star” in its actions.
+
+Elimina chat
+Delete chat

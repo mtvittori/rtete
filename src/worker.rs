@@ -362,6 +362,10 @@ pub fn run_worker(
                         let _ = out.send(Response::Translated { peer, id, auto, target, res });
                     })
                 }
+                Request::ChatAction { peer_ref, peer, action } => tokio::spawn(async move {
+                    let res = tg::chat_action(&cl, peer_ref, action).await.map_err(|e| e.to_string());
+                    let _ = out.send(Response::ChatActionDone { peer, action, res });
+                }),
                 Request::TranslateTest(cfg) => tokio::spawn(async move {
                     let res = tokio::task::spawn_blocking(move || {
                         let sample = "Hello! This is a test message from Rondine 🙂";
