@@ -1659,3 +1659,6 @@ Sidebar on the left to switch between them
 
 Senza barra: Ctrl+1 Telegram, Ctrl+2 WhatsApp. Per averli come due app separate: rondine-gui --telegram e rondine-gui --whatsapp.
 Without the sidebar: Ctrl+1 Telegram, Ctrl+2 WhatsApp. To run them as two separate apps: rondine-gui --telegram and rondine-gui --whatsapp.
+
+nessuna foto
+no photo

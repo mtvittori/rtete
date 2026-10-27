@@ -114,6 +114,9 @@ pub struct ChatMeta {
     /// segnata come «da leggere»
     #[serde(default)]
     pub unread_mark: bool,
+    /// la foto profilo: "" da chiedere, "-" nessuna, altrimenti l'id di WhatsApp
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pic: String,
 }
 
 fn first_id() -> i32 {
@@ -128,6 +131,12 @@ struct Meta {
     /// JID anonimo (`…@lid`) → JID col numero, per lo stesso contatto
     #[serde(default)]
     alias: HashMap<String, String>,
+    /// i nomi della rubrica del telefono
+    #[serde(default)]
+    contacts: HashMap<String, String>,
+    /// la rubrica è già stata chiesta per intero (una volta sola)
+    #[serde(default)]
+    state_synced: bool,
 }
 
 pub struct Store {
@@ -136,6 +145,8 @@ pub struct Store {
     ids: HashMap<ChatId, String>,
     names: HashMap<String, String>,
     alias: HashMap<String, String>,
+    contacts: HashMap<String, String>,
+    pub state_synced: bool,
     /// messaggi in RAM per chat (ordinati per data), le più recenti in coda
     hot: HashMap<String, Vec<StoredMsg>>,
     order: VecDeque<String>,
@@ -155,6 +166,8 @@ impl Store {
             ids: HashMap::new(),
             names: meta.names,
             alias: meta.alias,
+            contacts: meta.contacts,
+            state_synced: meta.state_synced,
             hot: HashMap::new(),
             order: VecDeque::new(),
         };
@@ -178,6 +191,8 @@ impl Store {
             chats: self.chats.values().cloned().collect(),
             names: self.names.clone(),
             alias: self.alias.clone(),
+            contacts: self.contacts.clone(),
+            state_synced: self.state_synced,
         };
         let body = serde_json::to_vec(&meta).map_err(std::io::Error::other)?;
         write_atomic(&self.dir.join("chats.json"), &body)
@@ -260,6 +275,22 @@ impl Store {
         self.save_meta()
     }
 
+    /// Il nome di un contatto nella rubrica del telefono (vince sul push
+    /// name). `true` se è cambiato.
+    pub fn set_contact(&mut self, jid: &str, name: &str) -> bool {
+        let name = name.trim();
+        if name.is_empty() || self.contacts.get(jid).is_some_and(|n| n == name) {
+            return false;
+        }
+        self.contacts.insert(jid.to_string(), name.to_string());
+        true
+    }
+
+    /// Le chat col JID anonimo di cui non si conosce ancora il numero.
+    pub fn unlinked_lids(&self) -> Vec<String> {
+        self.chats.keys().filter(|j| j.ends_with("@lid")).cloned().collect()
+    }
+
     /// Il nome che un contatto si è dato (push name).
     pub fn set_name(&mut self, jid: &str, name: &str) {
         if !name.trim().is_empty() {
@@ -272,6 +303,13 @@ impl Store {
     pub fn display_name(&self, jid: &str) -> String {
         if let Some(c) = self.chats.get(jid).filter(|c| !c.name.is_empty()) {
             return c.name.clone();
+        }
+        let pn = self.alias.get(jid).map(String::as_str);
+        let lid = self.alias.iter().find(|(_, p)| *p == jid).map(|(l, _)| l.as_str());
+        for j in [Some(jid), pn, lid].into_iter().flatten() {
+            if let Some(n) = self.contacts.get(j) {
+                return n.clone();
+            }
         }
         if let Some(n) = self.names.get(jid).or_else(|| self.alias.get(jid).and_then(|p| self.names.get(p))) {
             return n.clone();
@@ -501,7 +539,7 @@ impl Store {
                     muted: c.muted_until < 0 || c.muted_until > now,
                     archived: c.archived,
                     unread_mark: c.unread_mark,
-                    photo_id: None,
+                    photo_id: avatar_id(&c.jid, &c.pic),
                     seen: Seen::Unknown,
                 };
                 (c, info)
@@ -510,6 +548,12 @@ impl Store {
         out.sort_by_key(|(c, _)| (!c.pinned, std::cmp::Reverse(c.ts)));
         out.into_iter().map(|(_, d)| d).collect()
     }
+}
+
+/// L'id della foto profilo nella cache: cambia con la foto (una foto
+/// ancora da chiedere ha il suo, che non finisce mai su disco).
+pub fn avatar_id(jid: &str, pic: &str) -> Option<i64> {
+    (pic != "-").then(|| chat_id_of(&format!("{jid}#{pic}")).0)
 }
 
 /// Una riga che descrive il messaggio (anteprima nella lista chat).
@@ -592,6 +636,12 @@ mod tests {
         let texts: Vec<_> = s.last(pn, 10).into_iter().map(|m| m.text).collect();
         assert_eq!(texts, ["vecchio", "nuovo"]);
         assert_eq!(s.chat(pn).unwrap().unread, 2);
+
+        // il nome della rubrica vale anche col JID anonimo
+        assert_eq!(s.display_name(pn), "+393331234567");
+        assert!(s.set_contact(lid, "Mauro"));
+        assert_eq!(s.display_name(pn), "Mauro");
+        assert_eq!(s.display_name(lid), "Mauro");
 
         // il legame resta dopo la riapertura
         s.save_meta().unwrap();
