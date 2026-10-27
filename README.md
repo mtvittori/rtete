@@ -62,7 +62,10 @@ QR» e lo si inquadra dal telefono (Dispositivi collegati). WhatsApp è un
 collegamento non ufficiale: meglio un numero secondario per provare.
 
 La barra si nasconde da *Impostazioni → Aspetto* (restano Ctrl+1 per
-Telegram e Ctrl+2 per WhatsApp). Per averli come due app indipendenti:
+Telegram e Ctrl+2 per WhatsApp). Lì c'è anche il **feed unico**: le chat
+di tutti e due in una lista sola, per data, con l'icona del servizio
+sulla foto e accanto al nome della chat aperta; stile e tema sono uno
+solo per tutte. Per averli come due app indipendenti:
 
 ```sh
 rondine-gui --telegram   # o -t: finestra rondine-telegram

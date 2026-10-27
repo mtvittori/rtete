@@ -1662,3 +1662,12 @@ Without the sidebar: Ctrl+1 Telegram, Ctrl+2 WhatsApp. To run them as two separa
 
 nessuna foto
 no photo
+
+Feed unico: stile e tema valgono per tutte le chat.
+Single feed: style and theme apply to every chat.
+
+Feed unico: le chat di tutti e due in una lista sola
+Single feed: chats from both in one list
+
+Il servizio si vede dall'icona sulla foto e accanto al nome della chat aperta. Account e dispositivi in queste impostazioni sono quelli dell'ultima chat aperta (Ctrl+1 Telegram, Ctrl+2 WhatsApp).
+The service shows as an icon on the photo and next to the open chat's name. Account and devices in these settings belong to the last chat you opened (Ctrl+1 Telegram, Ctrl+2 WhatsApp).
