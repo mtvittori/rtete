@@ -152,6 +152,8 @@ pub fn run_worker(
                         let _ = cl.mark_as_read(to_peer_ref(peer_ref)).await;
                     });
                 }
+                // lo stato online su Telegram lo tiene il server
+                Request::Presence(_) => {}
                 Request::Sets => {
                     tokio::spawn(async move {
                         // se fallisce resta None: riaprire con Tab ritenta,

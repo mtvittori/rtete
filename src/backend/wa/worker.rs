@@ -446,7 +446,22 @@ pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mps
             let wa = wa.clone();
             let out = out.clone();
             match req {
+                Request::Presence(on) => {
+                    tokio::spawn(async move {
+                        let p = wa.client.presence();
+                        let _ = if on { p.set_available().await } else { p.set_unavailable().await };
+                    });
+                }
                 Request::Hist { peer_ref, peer } => {
+                    // chat privata aperta: online e ultimo accesso dell'altro
+                    if let Some(jid) = wa.jid(peer_ref).ok().filter(|j| !j.ends_with("@g.us")) {
+                        let wa = wa.clone();
+                        tokio::spawn(async move {
+                            if let Ok(jid) = jid.parse::<Jid>() {
+                                let _ = wa.client.presence().subscribe(jid).await;
+                            }
+                        });
+                    }
                     let rows = wa.jid(peer_ref).map(|jid| {
                         let msgs = wa.store().last(&jid, MAX_HISTORY);
                         wa.rows(&jid, msgs)

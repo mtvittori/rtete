@@ -576,6 +576,12 @@ impl Gui {
             }
             Msg::Focus(on) => {
                 self.focused = on;
+                // WhatsApp: disponibile solo con la finestra davanti, come
+                // WhatsApp Web; via di qui il telefono torna a suonare
+                let wa = if self.env == Env::WhatsApp { self.link.as_ref() } else { self.parked.as_ref().and_then(|p| p.link.as_ref()) };
+                if let Some(l) = wa.filter(|_| cfg!(feature = "whatsapp")) {
+                    let _ = l.req.send(Request::Presence(on));
+                }
                 if let (true, Some(p)) = (on, self.app.open) {
                     notify::dismiss(p);
                 }
