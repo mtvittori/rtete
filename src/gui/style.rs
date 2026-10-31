@@ -89,6 +89,20 @@ pub fn wa() -> bool {
     WA.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// col feed unico e le bolle colorate: il colore delle mie bolle, quello
+/// del servizio della chat aperta
+static OUT_TINT: RwLock<Option<Color>> = RwLock::new(None);
+
+pub fn set_out_tint(c: Option<Color>) {
+    if let Ok(mut g) = OUT_TINT.write() {
+        *g = c;
+    }
+}
+
+fn bubble_out(p: &Pal) -> Color {
+    OUT_TINT.read().ok().and_then(|g| *g).unwrap_or(p.bubble_out)
+}
+
 /// la palette in uso
 pub fn p() -> Pal {
     PAL.read().map(|g| *g).unwrap_or(RONDINE)
@@ -235,7 +249,7 @@ pub fn bubble(outgoing: bool, selected: bool, tail: bool) -> impl Fn(&Theme) -> 
             border::radius(12)
         };
         container::Style {
-            background: Some(Background::Color(if outgoing { p.bubble_out } else { p.bubble_in })),
+            background: Some(Background::Color(if outgoing { bubble_out(&p) } else { p.bubble_in })),
             text_color: Some(p.text),
             border: Border {
                 radius,
@@ -383,7 +397,7 @@ pub fn input(_: &Theme, status: text_input::Status) -> text_input::Style {
 pub fn quote_box(outgoing: bool) -> impl Fn(&Theme) -> container::Style {
     move |_| {
         let p = p();
-        let base = if outgoing { p.bubble_out } else { p.bubble_in };
+        let base = if outgoing { bubble_out(&p) } else { p.bubble_in };
         container::Style {
             background: Some(Background::Color(mix(base, Color::BLACK, 0.28))),
             text_color: Some(p.text),

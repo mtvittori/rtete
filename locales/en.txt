@@ -1672,8 +1672,8 @@ Single feed: style and theme apply to every chat.
 Feed unico: le chat di tutti e due in una lista sola
 Single feed: chats from both in one list
 
-Il servizio si vede dall'icona sulla foto e accanto al nome della chat aperta. Account e dispositivi in queste impostazioni sono quelli dell'ultima chat aperta (Ctrl+1 Telegram, Ctrl+2 WhatsApp).
-The service shows as an icon on the photo and next to the open chat's name. Account and devices in these settings belong to the last chat you opened (Ctrl+1 Telegram, Ctrl+2 WhatsApp).
+Nella lista il servizio si vede dal logo sulla foto; nella chat aperta dai segni accesi qui sopra (celeste Telegram, verde WhatsApp). Account e dispositivi in queste impostazioni sono quelli dell'ultima chat aperta (Ctrl+1 Telegram, Ctrl+2 WhatsApp).
+In the list the service shows as a logo on the photo; in the open chat, by the marks turned on above (light blue Telegram, green WhatsApp). Account and devices in these settings belong to the last chat you opened (Ctrl+1 Telegram, Ctrl+2 WhatsApp).
 
 PRIVACY
 PRIVACY
@@ -1692,3 +1692,30 @@ Status
 
 gli stati dei contatti, per 24 ore
 your contacts' status updates, for 24 hours
+
+Etichetta col logo
+Label with logo
+
+Barra colorata
+Coloured bar
+
+Bolle colorate
+Coloured bubbles
+
+Di che servizio è la chat aperta
+Which service the open chat belongs to
+
+Colori del servizio (ognuno il suo tema, come separati)
+Service colours (each its own theme, as when separate)
+
+Disposizione degli elementi
+Layout
+
+Come il servizio
+Same as the service
+
+Sempre Telegram
+Always Telegram
+
+Sempre WhatsApp
+Always WhatsApp

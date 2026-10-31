@@ -119,6 +119,8 @@ pub enum Msg {
     SwitchEnv(Env),
     EnvRail(bool),
     Unified(bool),
+    EnvMark(crate::settings::EnvMark, bool),
+    LayoutFixed(Option<UiStyle>),
     ShowOnline(bool),
     ShowTyping(bool),
     /// un messaggio per una chat dell'altro ambiente (feed unico)
@@ -1146,7 +1148,7 @@ impl Gui {
                 Task::none()
             }
             Msg::SetStyle(s) => {
-                if self.settings.mixed() {
+                if !self.settings.per_env() {
                     self.settings.style_mix = s;
                 } else {
                     self.settings.style = s;
@@ -1281,6 +1283,21 @@ impl Gui {
                 if !on {
                     self.stop_typing();
                 }
+                Task::none()
+            }
+            Msg::EnvMark(m, on) => {
+                self.settings.set_mark(m, on);
+                self.settings.save();
+                // il segno «tema» cambia stile e tema subito
+                style::set_wa(self.settings.layout() == UiStyle::WhatsApp);
+                apply_theme(self.settings.active_theme());
+                self.theme_stamp = style::omarchy_stamp();
+                Task::none()
+            }
+            Msg::LayoutFixed(l) => {
+                self.settings.layout_fixed = l;
+                self.settings.save();
+                style::set_wa(self.settings.layout() == UiStyle::WhatsApp);
                 Task::none()
             }
             Msg::Unified(on) => {

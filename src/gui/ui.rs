@@ -17,6 +17,7 @@ use rondine::model::{self, HistoryRow, RowKind};
 use rondine::{tr, trf};
 
 use crate::net::Env;
+use crate::settings::EnvMark;
 use crate::style;
 use crate::settings::{ThemeChoice, UiStyle};
 use crate::{CacheKind, ChatFilter, Confirm, Gui, Msg, Phase, SettingsPage, COMPOSE, FWD_SEARCH, HISTORY};
@@ -51,6 +52,7 @@ fn ellipsize(s: &str, max: usize) -> String {
 }
 
 pub fn view(g: &Gui) -> Element<'_, Msg> {
+    style::set_out_tint(out_tint(g));
     let content: Element<'_, Msg> = match &g.phase {
         Phase::Connecting(step, s) => loading(g, *step, s),
         Phase::Failed(e) => failed(g, e),
@@ -106,11 +108,35 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
 const TELEGRAM_BLUE: iced::Color = iced::color!(0x2aabee);
 const WHATSAPP_GREEN: iced::Color = iced::color!(0x25d366);
 
-fn brand(env: Env) -> (iced::Color, &'static str, &'static str) {
+fn brand(env: Env) -> (iced::Color, &'static str) {
     match env {
-        Env::Telegram => (TELEGRAM_BLUE, "✈", "Telegram"),
-        Env::WhatsApp => (WHATSAPP_GREEN, "✆", "WhatsApp"),
+        Env::Telegram => (TELEGRAM_BLUE, "Telegram"),
+        Env::WhatsApp => (WHATSAPP_GREEN, "WhatsApp"),
     }
+}
+
+/// Il logo vero del servizio (Simple Icons, CC0): `color` è quello a
+/// tutto tondo, altrimenti il segno bianco da mettere sul suo colore.
+fn service_logo<'a>(env: Env, size: f32, color: bool) -> Element<'a, Msg> {
+    use iced::widget::svg;
+    static HANDLES: std::sync::OnceLock<[svg::Handle; 4]> = std::sync::OnceLock::new();
+    let handles = HANDLES.get_or_init(|| {
+        let tg = include_str!("icons/telegram.path").trim();
+        let wa = include_str!("icons/whatsapp.path").trim();
+        let doc = |body: String| {
+            svg::Handle::from_memory(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">{body}</svg>"#).into_bytes())
+        };
+        [
+            doc(format!(r##"<path fill="#fff" d="{tg}"/>"##)),
+            doc(format!(r##"<circle cx="12" cy="12" r="11" fill="#fff"/><path fill="#2aabee" d="{tg}"/>"##)),
+            doc(format!(r##"<path fill="#fff" d="{wa}"/>"##)),
+            doc(format!(
+                r##"<circle cx="12" cy="12" r="12" fill="#25d366"/><path fill="#fff" transform="translate(4.2 4.2) scale(.65)" d="{wa}"/>"##
+            )),
+        ]
+    });
+    let i = if env == Env::Telegram { 0 } else { 2 } + color as usize;
+    svg(handles[i].clone()).width(size).height(size).into()
 }
 
 /// La barra a sinistra con i due ambienti: icona del servizio, nome e le
@@ -125,13 +151,9 @@ fn env_rail(g: &Gui) -> Element<'_, Msg> {
     };
     let other = g.parked.as_ref().map_or(0, |p| unread(&p.app));
     let item = |env: Env| -> Element<'_, Msg> {
-        let (color, glyph, name) = brand(env);
+        let (color, name) = brand(env);
         let n = if env == g.env { unread(&g.app) } else { other };
-        let mut face = iced::widget::Stack::new().push(
-            container(text(glyph).size(22).color(iced::Color::WHITE))
-                .center(44)
-                .style(style::avatar(color)),
-        );
+        let mut face = iced::widget::Stack::new().push(container(service_logo(env, 44.0, true)).center(44));
         if n > 0 {
             face = face.push(
                 container(
@@ -207,7 +229,7 @@ fn tg_login<'a>(g: &'a Gui, l: &'a crate::net::Login) -> Element<'a, Msg> {
         ),
     };
     let mut col = column![
-        container(text("✈").size(40).color(iced::Color::WHITE)).center(84).style(style::avatar(TELEGRAM_BLUE)),
+        container(service_logo(Env::Telegram, 84.0, true)).center(84),
         text(title).size(24).font(BOLD),
         container(text(help).size(13).color(p.muted).align_x(Center)).max_width(440),
         container(fields).width(360),
@@ -238,7 +260,7 @@ fn wa_linking(g: &Gui) -> Element<'_, Msg> {
         .into()
     };
     centered(column![
-        container(text("✆").size(46).color(iced::Color::WHITE)).center(92).style(style::avatar(WHATSAPP_GREEN)),
+        container(service_logo(Env::WhatsApp, 92.0, true)).center(92),
         text(tr("Collega WhatsApp")).size(26).font(BOLD),
         text(tr("Rondine si collega come dispositivo, come WhatsApp Web.")).color(p.muted),
         space().height(6),
@@ -388,7 +410,7 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
         Env::Telegram => [tr("Connessione a Telegram"), tr("Verifica dell'account"), tr("Caricamento delle chat")],
         Env::WhatsApp => [tr("Connessione a WhatsApp"), tr("Sincronizzazione col telefono"), tr("Caricamento delle chat")],
     };
-    let (color, _, name) = brand(g.env);
+    let (color, name) = brand(g.env);
     let mut steps = Column::new().spacing(8);
     for (i, label) in steps_l.iter().enumerate() {
         let (mark, color) = match (i as u8).cmp(&step) {
@@ -706,10 +728,8 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
 
 /// Col feed unico: il servizio della chat nell'angolo della foto.
 fn env_badge<'a>(face: Element<'a, Msg>, env: Env, size: f32) -> Element<'a, Msg> {
-    let (color, glyph, _) = brand(env);
-    let dot = container(text(glyph).size(9).color(iced::Color::WHITE))
-        .center(16)
-        .style(style::avatar(color));
+    // un filo del colore della lista intorno, per staccarlo dalla foto
+    let dot = container(service_logo(env, 16.0, true)).center(18).style(style::avatar(style::p().sidebar));
     iced::widget::Stack::new()
         .push(face)
         .push(container(dot).width(size).height(size).align_x(iced::Right).align_y(iced::Bottom))
@@ -812,16 +832,57 @@ fn avatar<'a>(app: &App, d: &model::DialogInfo, size: f32) -> Element<'a, Msg> {
     .into()
 }
 
+/// col feed unico, se il segno `m` del servizio della chat aperta è acceso
+fn env_mark(g: &Gui, m: EnvMark) -> bool {
+    g.feed() && g.settings.has_mark(m)
+}
+
 /// Col feed unico, accanto al nome della chat aperta: di che servizio è.
 fn env_chip<'a>(g: &Gui, name: Element<'a, Msg>) -> Element<'a, Msg> {
-    if !g.feed() {
+    if !env_mark(g, EnvMark::Chip) {
         return name;
     }
-    let (color, glyph, label) = brand(g.env);
-    let chip = container(text(format!("{glyph} {label}")).size(11).color(iced::Color::WHITE))
-        .padding([1, 7])
-        .style(style::pill(color));
+    let (color, label) = brand(g.env);
+    let chip = container(
+        row![service_logo(g.env, 11.0, false), text(label).size(11).color(iced::Color::WHITE)]
+            .spacing(4)
+            .align_y(Center),
+    )
+    .padding([1, 7])
+    .style(style::pill(color));
     row![name, chip].spacing(8).align_y(Center).into()
+}
+
+/// la barra in alto della chat: col segno «barra» ha il colore del servizio
+fn header_style(g: &Gui) -> impl Fn(&iced::Theme) -> container::Style {
+    let bar = env_mark(g, EnvMark::Bar).then(|| match g.env {
+        Env::Telegram => iced::color!(0x229ed9),
+        Env::WhatsApp => iced::color!(0x008069),
+    });
+    move |t| match bar {
+        Some(c) => container::Style {
+            background: Some(iced::Background::Color(c)),
+            text_color: Some(iced::Color::WHITE),
+            ..Default::default()
+        },
+        None => style::fill(style::p().header)(t),
+    }
+}
+
+/// col segno «bolle», il colore delle mie bolle per il servizio della chat
+/// aperta: quelli veri delle due app, scuri o chiari come il tema
+fn out_tint(g: &Gui) -> Option<iced::Color> {
+    if !env_mark(g, EnvMark::Bubbles) {
+        return None;
+    }
+    let bg = style::p().bg;
+    let light = 0.299 * bg.r + 0.587 * bg.g + 0.114 * bg.b > 0.5;
+    Some(match (g.env, light) {
+        (Env::Telegram, false) => iced::color!(0x2b5278),
+        (Env::Telegram, true) => iced::color!(0xcfe7fb),
+        (Env::WhatsApp, false) => iced::color!(0x005c4b),
+        (Env::WhatsApp, true) => iced::color!(0xd9fdd3),
+    })
 }
 
 fn initial<'a>(name: &str, size: f32) -> Element<'a, Msg> {
@@ -875,7 +936,7 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
     )
     .padding([10, 16])
     .width(Fill)
-    .style(style::fill(style::p().header));
+    .style(header_style(g));
 
     let mut body = column![header, history(g)];
     // il pannello sale e scende: resta nel layout finché l'animazione corre
@@ -902,7 +963,12 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
 
 /// sotto il nome della chat: sta scrivendo, online, ultimo accesso
 fn subtitle<'a>(g: &Gui, chat: &model::DialogInfo) -> Element<'a, Msg> {
-    let p = style::p();
+    let mut p = style::p();
+    // sulla barra colorata il bianco si legge, i colori del tema no
+    if env_mark(g, EnvMark::Bar) {
+        p.link = iced::Color::WHITE;
+        p.muted = iced::Color { a: 0.8, ..iced::Color::WHITE };
+    }
     if let Some(t) = g.app.typing_in(chat.peer_id) {
         return text(format!("{t}{}", dots(g))).size(12).color(p.link).into();
     }
@@ -1859,7 +1925,7 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         None => tr("Tema Omarchy").into(),
     };
     // con WhatsApp lo stile segue l'ambiente in vista; senza, si sceglie
-    let separate = g.two_envs() && !s.mixed();
+    let separate = g.two_envs() && s.per_env();
     let style_choice: Element<'_, Msg> = if separate {
         space().height(0).into()
     } else {
@@ -1902,7 +1968,7 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
         .spacing(8)
         .wrap(),
         text(match (separate, s.layout()) {
-            _ if s.mixed() => tr("Feed unico: stile e tema valgono per tutte le chat."),
+            _ if !s.per_env() => tr("Feed unico: stile e tema valgono per tutte le chat."),
             (false, UiStyle::Telegram) => tr("Il tema scelto vale solo per lo stile Telegram."),
             (false, UiStyle::WhatsApp) => tr("Il tema scelto vale solo per lo stile WhatsApp."),
             (true, UiStyle::Telegram) => tr("Vale solo per Telegram: WhatsApp tiene il suo."),
@@ -1944,7 +2010,41 @@ fn env_rail_choice(g: &Gui) -> Element<'_, Msg> {
             .on_toggle(Msg::Unified),
     ]
     .spacing(14);
-    if !mixed {
+    if mixed {
+        col = col.push(text(tr("Di che servizio è la chat aperta")).size(14));
+        for m in EnvMark::ALL {
+            let label = match m {
+                EnvMark::Chip => tr("Etichetta col logo"),
+                EnvMark::Bar => tr("Barra colorata"),
+                EnvMark::Bubbles => tr("Bolle colorate"),
+                EnvMark::Theme => tr("Colori del servizio (ognuno il suo tema, come separati)"),
+            };
+            col = col.push(
+                iced::widget::toggler(g.settings.has_mark(m)).label(label).on_toggle(move |on| Msg::EnvMark(m, on)),
+            );
+        }
+        // con i colori del servizio, la disposizione si sceglie a parte
+        if g.settings.has_mark(EnvMark::Theme) {
+            let fixed = g.settings.layout_fixed;
+            col = col.push(text(tr("Disposizione degli elementi")).size(14)).push(
+                row![
+                    choice(tr("Come il servizio").into(), fixed.is_none(), Msg::LayoutFixed(None)),
+                    choice(
+                        tr("Sempre Telegram").into(),
+                        fixed == Some(UiStyle::Telegram),
+                        Msg::LayoutFixed(Some(UiStyle::Telegram)),
+                    ),
+                    choice(
+                        tr("Sempre WhatsApp").into(),
+                        fixed == Some(UiStyle::WhatsApp),
+                        Msg::LayoutFixed(Some(UiStyle::WhatsApp)),
+                    ),
+                ]
+                .spacing(8)
+                .wrap(),
+            );
+        }
+    } else {
         col = col.push(
             iced::widget::toggler(g.settings.env_rail)
                 .label(tr("Barra a sinistra per passare da uno all'altro"))
@@ -1952,7 +2052,7 @@ fn env_rail_choice(g: &Gui) -> Element<'_, Msg> {
         );
     }
     let hint = if mixed {
-        tr("Il servizio si vede dall'icona sulla foto e accanto al nome della chat aperta. Account e dispositivi in queste impostazioni sono quelli dell'ultima chat aperta (Ctrl+1 Telegram, Ctrl+2 WhatsApp).")
+        tr("Nella lista il servizio si vede dal logo sulla foto; nella chat aperta dai segni accesi qui sopra (celeste Telegram, verde WhatsApp). Account e dispositivi in queste impostazioni sono quelli dell'ultima chat aperta (Ctrl+1 Telegram, Ctrl+2 WhatsApp).")
     } else {
         tr("Senza barra: Ctrl+1 Telegram, Ctrl+2 WhatsApp. Per averli come due app separate: rondine-gui --telegram e rondine-gui --whatsapp.")
     };

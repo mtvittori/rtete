@@ -52,6 +52,40 @@ pub enum UiStyle {
     WhatsApp,
 }
 
+/// Col feed unico: come si vede di che servizio è la chat aperta.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum EnvMark {
+    /// l'etichetta col logo accanto al nome
+    Chip,
+    /// la barra in alto col colore del servizio
+    Bar,
+    /// le mie bolle col colore del servizio
+    Bubbles,
+    /// i colori (il tema) del servizio, come con gli ambienti separati
+    Theme,
+}
+
+impl EnvMark {
+    pub const ALL: [EnvMark; 4] = [EnvMark::Chip, EnvMark::Bar, EnvMark::Bubbles, EnvMark::Theme];
+
+    fn bit(self) -> u8 {
+        1 << self as u8
+    }
+
+    fn code(self) -> &'static str {
+        match self {
+            EnvMark::Chip => "etichetta",
+            EnvMark::Bar => "barra",
+            EnvMark::Bubbles => "bolle",
+            EnvMark::Theme => "tema",
+        }
+    }
+
+    fn from_code(v: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|m| m.code() == v)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Settings {
     pub style: UiStyle,
@@ -87,6 +121,12 @@ pub struct Settings {
     /// feed unico: le chat dei due ambienti in una lista sola, con uno
     /// stile e un tema soli (i suoi)
     pub unified: bool,
+    /// col feed unico, i segni del servizio della chat aperta (uno o più
+    /// insieme, un bit per `EnvMark`)
+    env_marks: u8,
+    /// col feed unico e i colori del servizio: la disposizione fissa
+    /// (sempre Telegram o sempre WhatsApp), o `None` se segue il servizio
+    pub layout_fixed: Option<UiStyle>,
     /// gli altri mi vedono online quando Rondine è davanti
     pub show_online: bool,
     /// gli altri vedono «sta scrivendo» mentre scrivo
@@ -132,6 +172,8 @@ impl Default for Settings {
             lang: LangChoice(None),
             env_rail: true,
             unified: false,
+            env_marks: EnvMark::Chip.bit(),
+            layout_fixed: None,
             show_online: true,
             show_typing: true,
             style_mix: UiStyle::Telegram,
@@ -151,11 +193,31 @@ impl Settings {
         self.unified && solo().is_none() && cfg!(feature = "whatsapp")
     }
 
+    pub fn has_mark(&self, m: EnvMark) -> bool {
+        self.env_marks & m.bit() != 0
+    }
+
+    pub fn set_mark(&mut self, m: EnvMark, on: bool) {
+        if on {
+            self.env_marks |= m.bit();
+        } else {
+            self.env_marks &= !m.bit();
+        }
+    }
+
+    /// Stile e tema seguono l'ambiente in vista: con gli ambienti separati,
+    /// o col feed unico e il segno «tema» (vale quello della chat aperta).
+    pub fn per_env(&self) -> bool {
+        !self.mixed() || self.has_mark(EnvMark::Theme)
+    }
+
     /// la disposizione dell'interfaccia: quella del feed unico o
     /// dell'ambiente in vista
     pub fn layout(&self) -> UiStyle {
-        if self.mixed() {
+        if !self.per_env() {
             self.style_mix
+        } else if let Some(fixed) = self.layout_fixed.filter(|_| self.mixed()) {
+            fixed
         } else {
             self.style
         }
@@ -163,7 +225,7 @@ impl Settings {
 
     /// il tema dello stile in uso
     pub fn active_theme(&self) -> ThemeChoice {
-        if self.mixed() {
+        if !self.per_env() {
             return self.theme_mix;
         }
         match self.style {
@@ -174,7 +236,7 @@ impl Settings {
 
     /// il tema dello stile in uso, da cambiare
     pub fn active_theme_mut(&mut self) -> &mut ThemeChoice {
-        if self.mixed() {
+        if !self.per_env() {
             return &mut self.theme_mix;
         }
         match self.style {
@@ -222,8 +284,18 @@ impl Settings {
                 }
                 ("barra_ambienti", v) => s.env_rail = v != "false",
                 ("feed_unico", v) => s.unified = v == "true",
+                ("segno_feed", v) => {
+                    s.env_marks = v.split(',').filter_map(|x| EnvMark::from_code(x.trim())).fold(0, |a, m| a | m.bit())
+                }
                 ("mostra_online", v) => s.show_online = v != "false",
                 ("mostra_scrivo", v) => s.show_typing = v != "false",
+                ("disposizione_feed", v) => {
+                    s.layout_fixed = match v {
+                        "telegram" => Some(UiStyle::Telegram),
+                        "whatsapp" => Some(UiStyle::WhatsApp),
+                        _ => None,
+                    }
+                }
                 ("stile_feed", v) => s.style_mix = if v == "whatsapp" { UiStyle::WhatsApp } else { UiStyle::Telegram },
                 ("tema_feed", v) => s.theme_mix = ThemeChoice::from_code(v).unwrap_or(s.theme_mix),
                 ("lingua", v) => s.lang = LangChoice(Lang::from_code(v)),
@@ -271,7 +343,7 @@ impl Settings {
                 "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n\
                  foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n\
                  stile = {style}\ntema_whatsapp = {}\npreferite = {}\nbarra_ambienti = {}\n\
-                 feed_unico = {}\nstile_feed = {}\ntema_feed = {}\n\
+                 feed_unico = {}\nstile_feed = {}\ntema_feed = {}\nsegno_feed = {}\ndisposizione_feed = {}\n\
                  mostra_online = {}\nmostra_scrivo = {}\n",
                 self.scale,
                 self.links_in_app,
@@ -290,6 +362,12 @@ impl Settings {
                 self.unified,
                 if self.style_mix == UiStyle::WhatsApp { "whatsapp" } else { "telegram" },
                 self.theme_mix.code(),
+                EnvMark::ALL.into_iter().filter(|&m| self.has_mark(m)).map(EnvMark::code).collect::<Vec<_>>().join(","),
+                match self.layout_fixed {
+                    None => "servizio",
+                    Some(UiStyle::Telegram) => "telegram",
+                    Some(UiStyle::WhatsApp) => "whatsapp",
+                },
                 self.show_online,
                 self.show_typing,
             ),
