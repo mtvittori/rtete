@@ -153,6 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         app.request_older(&req_tx);
         app.request_quoted(&req_tx);
         app.flush_translations(&req_tx);
+        app.flush_read_mark(&req_tx);
 
         // immagini. Kitty: a=p a ogni frame; il dato entra UNA volta sola per
         // path (t=f: il terminale legge il file da solo) e a fine frame le
@@ -184,6 +185,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(resp) => handle_response(&mut app, resp, &req_tx),
                 None => break,
             },
+            // una lettura rimandata dalla soglia parte anche senza eventi
+            _ = tokio::time::sleep(std::time::Duration::from_millis(500)), if app.read_mark_pending => {}
         }
     }
 

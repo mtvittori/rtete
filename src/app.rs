@@ -180,6 +180,12 @@ pub struct App {
     /// ultimo mark_as_read mandato: soglia anti-tempesta sui burst di
     /// messaggi nuovi nella chat aperta.
     pub read_mark: Option<Instant>,
+    /// lettura saltata dalla soglia: va mandata appena scade, sennò quei
+    /// messaggi restano non letti sul server e il contatore torna
+    pub read_mark_pending: bool,
+    /// ambiente nascosto dietro l'altro (GUI con due ambienti): la sua chat
+    /// aperta non si vede, quindi i nuovi arrivati restano da leggere
+    pub away: bool,
     /// chat con una richiesta di messaggi più vecchi in volo
     pub older_busy: HashSet<ChatId>,
     /// chat senza altro da caricare (inizio raggiunto o RING_CAP)
@@ -649,6 +655,17 @@ impl App {
             .filter(|id| !self.translations.contains_key(&(peer, *id)))
             .collect();
         self.tr_queue.extend(ids.into_iter().map(|id| (peer, id, true)));
+    }
+
+    /// Manda la lettura rimandata dalla soglia di `read_mark_due`.
+    pub fn flush_read_mark(&mut self, req: &mpsc::UnboundedSender<Request>) {
+        if !self.read_mark_pending || self.away || !self.read_mark_due() {
+            return;
+        }
+        self.read_mark_pending = false;
+        if let Some(chat) = self.current_chat() {
+            crate::sync::mark_read(req, chat.peer_ref);
+        }
     }
 
     /// Manda al worker le traduzioni in coda.

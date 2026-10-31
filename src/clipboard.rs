@@ -21,6 +21,7 @@ pub enum ClipboardHit {
 pub fn copy_text(r: &model::HistoryRow) -> Option<String> {
     match &r.kind {
         model::RowKind::Text(t) => Some(t.clone()),
+        model::RowKind::Video { caption, .. } if !caption.trim().is_empty() => Some(caption.trim().to_string()),
         model::RowKind::Note(t) | model::RowKind::Service(t) | model::RowKind::Video { note: t, .. } => {
             let t = t.trim();
             (!t.is_empty()).then(|| t.to_string())

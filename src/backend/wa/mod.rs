@@ -198,7 +198,7 @@ fn row_kind(jid: &str, m: &StoredMsg) -> RowKind {
     if m.deleted {
         return RowKind::Note(tr("🚫 messaggio eliminato").into());
     }
-    let caption = crate::model::caption(&m.text);
+    let caption = m.text.trim().to_string();
     let media = media_ref(jid, m);
     match (m.kind.as_str(), media) {
         ("image", Some(media)) => RowKind::Photo { media, caption, gif: m.mime == "image/gif" },

@@ -222,11 +222,11 @@ pub fn collect_reactions(raw: &tl::enums::Message) -> Vec<ReactionItem> {
     }
 }
 
-/// Etichetta breve per i media che non renderizziamo (video, vocale…).
-fn media_note(doc: &grammers_client::media::Document, text: &str) -> String {
+/// Etichetta breve per i media che non renderizziamo (video, vocale…);
+/// la didascalia sta a parte, in `caption`.
+fn media_note(doc: &grammers_client::media::Document) -> String {
     let mime = doc.mime_type().unwrap_or("");
     let secs = doc.duration().map(|d| d as i64).unwrap_or(0);
-    let caption = caption(text);
     let base = if mime.starts_with("video/") {
         "video"
     } else if secs > 0 && doc.name().is_none() && mime.contains("ogg") {
@@ -241,12 +241,7 @@ fn media_note(doc: &grammers_client::media::Document, text: &str) -> String {
     } else {
         String::new()
     };
-    let extra = if caption.is_empty() {
-        String::new()
-    } else {
-        format!(" — “{caption}”")
-    };
-    format!("{base}{time}{extra}")
+    format!("{base}{time}")
 }
 
 // ---------------- accesso ----------------------------------------------
@@ -644,7 +639,8 @@ pub async fn dialog_from_message(
 
 /// Parse into a projected row: sticker / foto / gif / file / nota / testo.
 pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
-    let cap = caption(&text);
+    // intera: le viste la mandano a capo, i riassunti la tagliano
+    let cap = text.trim().to_string();
     match media.clone() {
         Some(Media::Sticker(sticker)) => {
             let emoji = sticker.emoji().to_string();
@@ -689,7 +685,7 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
                     seconds: doc.duration().unwrap_or(0.0) as u32,
                     caption: cap,
                     round,
-                    note: media_note(&doc, &text),
+                    note: media_note(&doc),
                     media: to_media_ref(media.unwrap()),
                 };
             }

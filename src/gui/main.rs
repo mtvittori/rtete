@@ -537,7 +537,7 @@ impl Gui {
         let every = if matches!(self.phase, Phase::Connecting(..)) {
             // la rotella della schermata di avvio
             Some(80)
-        } else if !self.app.typing.is_empty() || self.typing_sent.is_some() {
+        } else if !self.app.typing.is_empty() || self.typing_sent.is_some() || self.app.read_mark_pending {
             Some(400)
         } else if self.settings.active_theme() == ThemeChoice::Omarchy {
             Some(2000)
@@ -948,6 +948,9 @@ impl Gui {
                     self.stop_typing();
                 }
                 self.app.typing.retain(|_, (until, _)| *until > now);
+                if let Some(req) = self.req() {
+                    self.app.flush_read_mark(&req);
+                }
                 let stamp = style::omarchy_stamp();
                 if stamp != self.theme_stamp {
                     self.theme_stamp = stamp;
@@ -1755,8 +1758,19 @@ impl Gui {
         std::mem::swap(&mut self.link, &mut p.link);
         std::mem::swap(&mut self.phase, &mut p.phase);
         self.app.starred = std::mem::take(&mut p.app.starred);
+        // la chat aperta di là non si vede più: i nuovi arrivati contano
+        p.app.away = true;
+        self.app.away = false;
         self.parked = Some(p);
         self.env = to;
+        // e quella di qua torna in vista: quanto arrivato intanto è letto
+        let back = self.app.current_chat().filter(|d| d.unread > 0).map(|d| d.peer_ref);
+        if let (Some(chat), Some(req)) = (back, self.req()) {
+            rondine::sync::mark_read(&req, chat);
+            if let Some(d) = self.app.contacts.iter_mut().find(|d| model::same_peer(d.peer_id, chat.id)) {
+                d.unread = 0;
+            }
+        }
         self.settings.style = to;
         self.settings.save();
         style::set_wa(self.settings.layout() == Env::WhatsApp);

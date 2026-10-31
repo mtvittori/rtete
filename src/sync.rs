@@ -84,11 +84,19 @@ pub fn handle_live(app: &mut App, live: Live, req: &mpsc::UnboundedSender<Reques
             }
             if Some(peer_id) == open_id {
                 app.push_row(peer_id, row);
-                if !outgoing && app.read_mark_due() {
+            }
+            if Some(peer_id) == open_id && !app.away {
+                if !outgoing {
                     // la chat aperta è a fuoco: i nuovi arrivati sono letti
-                    // (prima mark_as_read partiva solo al load della storia)
-                    if let Some(chat) = app.current_chat() {
-                        mark_read(req, chat.peer_ref);
+                    // (prima mark_as_read partiva solo al load della storia);
+                    // dentro la soglia la lettura si rimanda, non si perde
+                    if app.read_mark_due() {
+                        app.read_mark_pending = false;
+                        if let Some(chat) = app.current_chat() {
+                            mark_read(req, chat.peer_ref);
+                        }
+                    } else {
+                        app.read_mark_pending = true;
                     }
                 }
             } else if !outgoing {
@@ -177,7 +185,7 @@ pub fn handle_response(app: &mut App, resp: Response, req: &mpsc::UnboundedSende
             };
             app.push_rows(peer, rows);
             app.auto_translate(peer, crate::app::AUTO_TRANSLATE_LAST);
-            if is_open {
+            if is_open && !app.away {
                 app.status = String::new();
                 // la storia è arrivata e la chat è a fuoco: il badge
                 // unread della barra sparisce, e anche il segno «da leggere»

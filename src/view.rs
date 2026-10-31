@@ -173,6 +173,7 @@ fn row_summary(row: &model::HistoryRow) -> String {
                 format!("🎧 {name}")
             }
         }
+        model::RowKind::Video { caption, .. } if !caption.is_empty() => format!("🎥 {caption}"),
         model::RowKind::Note(t) | model::RowKind::Service(t) | model::RowKind::Video { note: t, .. } => {
             t.clone()
         }
@@ -276,6 +277,33 @@ pub fn react_bar(idx: usize) -> String {
         })
         .collect::<Vec<String>>()
         .join(" ")
+}
+
+/// Didascalia di un media sotto la sua riga, a capo entro `width` e rientrata
+/// nella colonna del testo; i link restano cliccabili.
+fn caption_lines(lines: &mut Vec<HistoryLine>, caption: &str, width: usize, color: Color, id: i32) {
+    if caption.trim().is_empty() {
+        return;
+    }
+    let (pieces, span_lines) = wrap_links(caption, width.saturating_sub(LABEL_W + 3));
+    let shift = (LABEL_W + 3) as u16;
+    for (i, piece) in pieces.iter().enumerate() {
+        let links = span_lines
+            .get(i)
+            .map(|v| {
+                v.iter()
+                    .map(|(a, b, u)| (a + shift, b + shift, u.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        lines.push(HistoryLine {
+            text: format!("{} │ {}", " ".repeat(LABEL_W), piece),
+            color,
+            id,
+            links,
+            ..HistoryLine::sep()
+        });
+    }
 }
 
 /// Word wrapping lineare, senza dipendenze. Le parole più larghe della riga
@@ -1422,15 +1450,9 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                 caption,
                 gif,
             } => {
-                let cap_txt = if caption.is_empty() {
-                    String::new()
-                } else {
-                    format!(" — “{caption}”")
-                };
                 let line_text = format!(
-                    "{label}{}{}",
+                    "{label}{}",
                     if *gif { "🎞 gif" } else { tr("📷 foto") },
-                    cap_txt
                 );
                 lines.push(HistoryLine {
                     text: line_text.clone(),
@@ -1443,6 +1465,8 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     id: row.id,
                     links: scan_links(&line_text),
                 });
+                // didascalia intera sotto l'immagine, a capo come il testo
+                caption_lines(&mut lines, caption, width, name_style, row.id);
             }
             model::RowKind::Doc {
                 media: _,
@@ -1453,13 +1477,8 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                 let size_txt = size
                     .map(|s| format!(" ({})", model::fmt_size(s as f64)))
                     .unwrap_or_default();
-                let cap_txt = if caption.is_empty() {
-                    String::new()
-                } else {
-                    format!(" — “{caption}”")
-                };
                 lines.push(HistoryLine {
-                    text: format!("{label}📄 {name}{size_txt}{cap_txt}{}", tr(" · Ctrl-O salva")),
+                    text: format!("{label}📄 {name}{size_txt}{}", tr(" · Ctrl-O salva")),
                     color: ACCENT_DIM,
                     ..HistoryLine::sep()
                 });
@@ -1467,6 +1486,7 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                     last.id = row.id;
                     last.links = scan_links(&last.text);
                 }
+                caption_lines(&mut lines, caption, width, name_style, row.id);
             }
             model::RowKind::Audio {
                 name,
@@ -1480,19 +1500,15 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                 } else {
                     format!("🎧 {}", name)
                 };
-                let cap_txt = if caption.is_empty() {
-                    String::new()
-                } else {
-                    format!(" — “{caption}”")
-                };
                 lines.push(HistoryLine {
-                    text: format!("{label}{main}{cap_txt}{}", tr(" · Ctrl-P riproduce")),
+                    text: format!("{label}{main}{}", tr(" · Ctrl-P riproduce")),
                     color: ACCENT_DIM,
                     ..HistoryLine::sep()
                 });
                 if let Some(last) = lines.last_mut() {
                     last.links = scan_links(&last.text);
                 }
+                caption_lines(&mut lines, caption, width, name_style, row.id);
             }
             model::RowKind::Note(text) | model::RowKind::Video { note: text, .. } => {
                 lines.push(HistoryLine {
@@ -1503,6 +1519,9 @@ pub fn history_lines(app: &App, width: usize) -> Vec<HistoryLine> {
                 if let Some(last) = lines.last_mut() {
                     last.id = row.id;
                     last.links = scan_links(&last.text);
+                }
+                if let model::RowKind::Video { caption, .. } = &row.kind {
+                    caption_lines(&mut lines, caption, width, name_style, row.id);
                 }
             }
             model::RowKind::Service(text) => {

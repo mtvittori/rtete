@@ -242,14 +242,16 @@ impl RowKind {
                 if caption.is_empty() {
                     what.into()
                 } else {
-                    format!("{what} {caption}")
+                    format!("{what} {}", self::caption(caption))
                 }
             }
             RowKind::Doc { name, .. } => format!("📄 {name}"),
             RowKind::Audio { voice: true, .. } => tr("🎤 messaggio vocale").into(),
             RowKind::Audio { name, .. } => format!("🎵 {name}"),
             RowKind::Video { round: true, .. } => tr("📹 videomessaggio").into(),
-            RowKind::Video { caption, .. } if !caption.is_empty() => format!("🎥 {caption}"),
+            RowKind::Video { caption, .. } if !caption.is_empty() => {
+                format!("🎥 {}", self::caption(caption))
+            }
             RowKind::Video { .. } => "🎥 video".into(),
             RowKind::Note(s) | RowKind::Service(s) => s.clone(),
         }
