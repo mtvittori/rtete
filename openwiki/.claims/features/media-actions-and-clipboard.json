@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:c394f52f6e5ce0260cfd9defae9936c892a969cda4f597a7a11c93f28fec167c",
+  "claims": [
+    {
+      "id": "claim_ba7621578ab9400fb0a17038011a62b0",
+      "statement": "Playback uses an external player: RONDINE_PLAYER if set, otherwise mpv or ffplay found on PATH, with audio-only or video arguments per player.",
+      "evidence": [
+        {
+          "resource": "repo://src/worker.rs#L120-L141",
+          "version": "repo-lines-v1:sha256:0dcf8843e819169b3fc08c3306ccc910a43e1b40ba992f5556134dddeb4d6594:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQwOTJlM2JlODJjMThmYjYwYjE4YjM0YWQ2NDk5ZDAxNjg4NTczMTU5ZTFkYjMzMzlhNjRkZjhmNTBlNDFkMGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1MGVhNTMzNDMzMTdlODI2Y2MxMWRmOTk2NTM5M2NmMzRiNTkwY2RmNzEwYmMyN2ExMjIyNjBkZTkzYWU0NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg3N2EyY2NjYzVjMDkzMWU0YmZhZDFlYWI1N2NhMzNiOWM0MjBlYTliODY5NDA3Yjc1ZGI4MjkwMmNmZGI4MmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE4YjUzZjZiNjQ1YTg0MjBhMTQ4YzMyZDZmOGM2N2ZkYmU4ZWNlOGExZmZlMGIzNmQyNjdhM2UwMmY1MDk4NWMifQ"
+        },
+        {
+          "resource": "repo://src/worker.rs#L19-L25",
+          "version": "repo-lines-v1:sha256:f212f03b1b08796ff9cabd79a025ff1a92f8d11ef86215a755aa57f750a4cc5d:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTk4Yzg3YmVhZWI2ZWVkMzBlMjhhYTQzYTI1NzFjNDg3YjM4MjE0MzFlM2RjMzVlZGQ0MDlkNDUzMzZlY2QzYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWNjZGM2NzJhMjQyMTI5YTJlMTViMzRkYmZiZTYzNjJhMGIzNzUzZDNkOWU3ZjQ3ZjAxNWZjYzQyNTE0MDBhYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDU4ZmZlY2U4MzY1YWFjMWJmYjU5OThiMjg3NmQyMjFjOWM1MTg3ZGQ3NDMyY2RjMjkyZTQ3OTllMWIzODJhOCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_75a5a79d5d644c3bada103af7b3d146e",
+      "statement": "Only one playback runs at a time: a new play advances a generation on a watch channel, and the previous job kills its child, deletes its temp file and suppresses its late completion status.",
+      "evidence": [
+        {
+          "resource": "repo://src/worker.rs#L59-L162",
+          "version": "repo-lines-v1:sha256:626dc9480ecbb250a06a2044c217ae15ba74b0c3afca159d793b58e200b217a3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTA0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIzNDg1YjBhYjM2Yzg1NjI1MTM4ZGEzNWMzMjVjZjQ4OTAzMWM5MjI4NTI5NzdkZWE2OTMyNWVmMTQ0NGY3OGJmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIwMmIxZTRjZmEyZTFlZTlmMjFjYzRlNTQ3YTUwYjQ4MzZmNDM2ZjM5MDlmMDFkMTIxNWNmNmMwNzU1ZWExN2ZmIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwNGVmNTdhYTQ4YTE4ZTg3N2EwMTk2MGMxNWFjNWZiMDZjZjk0ZmM3N2ZlNDk2MWFkMjZkN2FhZDdlM2ZiYTI3In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_e532487c373249db81dedcbe8ccf17dc",
+      "statement": "On Linux the clipboard uses wl-copy (text on stdin to avoid option parsing) and wl-paste; on other systems it uses arboard, which cannot read files copied from a file manager.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L33-L35",
+          "version": "repo-lines-v1:sha256:86c866c728d0560c593a77f9ef0eaaa288087b1ea2d042e74a30362307c0c547:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzNjNTU3ZWQwZjY4OGUyZjdlZWMwMWRkZDQxNzk1MGI4NTJhZTgzNTczMGVmM2E3YTk3MTQ1ZDA3MjYwODI5YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2RhZWI4ZmM3YzI3ZmE5MDhjNmE3YTlmYjMxNmE0YmZiNTNhM2RlN2NjMWY0NWM0NWNmNWFkZDY2N2Q1ZDM3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2U4ZmI2Y2U0MGFmYjdkYTY2N2RkZDM4NWVlMjRlNDgwZjczZjZjN2VkYzIyZjk5NDQ3YWY1ZWNhZmNhZjI1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmZlODZlYjZkZmFhODY5NzJmMTUyNmE2ZmVkMzM2NGU1ZGI2NzU5YTgyOWFjMjhkY2I4NzUzYWUwNDk5MjBhNiJ9"
+        },
+        {
+          "resource": "repo://src/clipboard.rs#L244-L308",
+          "version": "repo-lines-v1:sha256:da865d2e115453aec9c369420a56c806a13e0b8a7e007486a3bbbd087f56f03d:eyJzZWxlY3RlZExpbmVDb3VudCI6NjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiZWM5MTM3ZTdmODY5ZDcxMmQ5YWI0MDcwZWJhN2ExNWJkZGM3ODBlNTUyMjIzOWY5Njg3MzQxMzhkNzMxMjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZmMjdhYTFkMjI2OGYzMDJiMDZhMGZhOGYwMzdlMjgyNzIwNjEyOTE5OWViMmQ0ODgzZGI0MmI5MTgwZWUwODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI3ZTg2YTJkNGYyNzczNTlkZDhkMTA4NTUyZDk0NDczOGE3OWU2NzkwYTk3Y2FhNjZiYWU0NWRmMTM5NTllNjkifQ"
+        },
+        {
+          "resource": "repo://src/clipboard.rs#L84-L113",
+          "version": "repo-lines-v1:sha256:6d922bc000db92b99e743597821598e52e4a66d286ce0d9efb1d133aca65f7ad:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2NjczOTgyOTJjMmUzYTYyNDVkNTI3NzY5ZDc4MTA5OTRkNzhlMWYxZTAyN2ZmZmQxNDU2Nzc5ZWM0YzExODQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkNDE3OTFiY2U3ODg3YTA0MTg1YmQwMGZhMDM5MzJiNWNjMDczNDViMjhhOGM1ODcyYTFmMTM2ZDkxMTM3NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwNTlmYTRkMmUzYmZlMzA3MjZmYjU5NGZjNDZhNDExNjk3NjdlOTUyMzQxMTcwYjc1MWI0ZWJjODUyMjZjNmMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_292d651717ee4328ab7837eaa9d82926",
+      "statement": "The paste probe runs on a separate thread and returns Response::Clipboard; the Linux probe prefers copied files, then PNG/JPEG images, then text.",
+      "evidence": [
+        {
+          "resource": "repo://src/clipboard.rs#L262-L290",
+          "version": "repo-lines-v1:sha256:f9f9098fab5653903f72b8de35780089abc82a63d7286b06e5d2642c66627a16:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzMTMxZjQ2YWZjMmRjMjUzYWMzMGQ3MTJjOGE1YjgxMDc5OWZkYzM5OTgwYTJjMmY1NWUzOTBlYzUzNGEwN2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyM2ZkOTcyOTc2NTMxNWFiNjlmZjEwZjUzNDE0ZTU3ZTI4OTU4OTIzYTFlY2I5YWYwOWI3OTNlNTY0Njg3ZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk4NzU4ZTVjYTI0ZTY4MGQ3YWM3MGU3OTkxZTc5ZmMyZTgwMjk4NjZhNDNjODg1ZTQ3NDJlMTljNWIyNzc1ZTUifQ"
+        },
+        {
+          "resource": "repo://src/clipboard.rs#L346-L360",
+          "version": "repo-lines-v1:sha256:e876f60a1bea727c1aece94da18f7bb9d254c82796fd951d299b37f8a738bb1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjMDU2ZTQ3OWJiNTQ3OGNiZGIyZmM2ODhjYjlkYWEwYTRlZGMwYWQzZDdkNGM1MjJlMmNiYmMyYzk5NjkyZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE2ZWMwMWEwODI1ZDA5MGMyYzZiYTY3YTU2OTU5MTliMjQwMjA1NzhlZmVjNTJkNTQyOTlmODRiMmFiNDUwMjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_55249fde30564694911a7d3577b84dbe",
+      "statement": "Clipboard images are written to the private tmp directory as 0600 files and become the pending photo whose caption is the compose text.",
+      "evidence": [
+        {
+          "resource": "repo://src/clipboard.rs#L143-L158",
+          "version": "repo-lines-v1:sha256:3af006a8016eb2e66d6c68a96a478dc1975e3fc8a5ec6bdcab35bae8a9d1430f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5NzRjNzM5MzVlY2Y1MTIwNTFkZjczNzhiZjhlMjYxM2E2NmY0MmIyOTg1NWQxMjgxYWYxMGI0OTlmNzJmNGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNjczYWJkNDU3YTk3ZWVhMTdhNjAwNjJlYjBmYWVhNmJkZjA5NDg2OGNjNmI4ZjhjMGViZGEyZjYxZWQ0MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk1MWYyNmE1NWNlOWE4ZGQzMjQ4OWU2YjU0ZTllMTlkM2MyYjNjZDQwNGQyMzgyZjY5NmM2YjZjODhmNzJlYzQifQ"
+        },
+        {
+          "resource": "repo://src/clipboard.rs#L319-L344",
+          "version": "repo-lines-v1:sha256:1f4f673fc70823daf67ac342ac98bd1c31355c769c83ac253bd044d6dbafd77a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhZDVhMjUzYjA1N2YyZDdkZGI3NWY4YmZlM2RiOTg0YWIxNDg1Zjk3NzQ3MzNmOGE1ZmRiM2YzMWJiZTg2NjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlkYjQ3YmM1YzMzZTc1Mzk0ZjZjNTZhZGY1NGI2MmRiZDE5NDUzYWRhZjE3Y2RiNzE1NzkzMGRlNDJhNDMwMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI3NjYxZGFlODExZjdjMWJmYThjMDAyMzUzODMyNThkYzQwMzRlZDZiMzdmOGQ1ZTU2MzUzMzcyY2JjYjY3NjYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a00ef2ac7e00409385c5c30ac627ecfa",
+      "statement": "Pasted text keeps newlines in the compose box capped to the remaining character limit and turns newlines into spaces (max 200 chars) in search.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L235-L243",
+          "version": "repo-lines-v1:sha256:f46dc86fcd156ad0da3ab5467abb4c164352c0bde2e4daa32ff89b2b3beca7eb:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjg4MzVhMzhiMmRlNTQwMDE5Zjg2MDI0NTIzNDM4YzJkNGI1NTE5MTVhMDZjNzYyNzhjMTI0N2FmOTIyOTVlOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2E2ZDc5YTNmOGRmZjU5MGQyYmQwMzQ2Mjc3ZWE4MTY5MjUwZTIwYWZmOWNmNGM1MGJjNzYwMjUxOTU3NDQ2NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjNiZWNjMDNmY2FiYzQwOTg3NzQ0YTBmMGNlMTg5N2M1ZjRmNjI4YmM5YjA4MjZmMTFiYzI0YWM3NjM0OTYyZiJ9"
+        },
+        {
+          "resource": "repo://src/clipboard.rs#L115-L141",
+          "version": "repo-lines-v1:sha256:93f6a7676122babcaaccfdaeffbac289563ebe090e2f4e7b7d9d98b6b115190f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM4YzI4NDhmZmY5N2YwMDhhOWQ1NjdjYzRjN2U3NmEyMjE1NjVmZDNkYTYxZGQxOWQ3OTZlMjUwZDk0OWQwZWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFjZmVjZTQ2OTQwYTBiMjYzNTJmMDZiODZlNmYxZDlkZWY3Y2I1ZTkwNGZhYzA2Mzc1NTUxZGJlYzE4OTVhNTUifQ"
+        },
+        {
+          "resource": "repo://src/clipboard.rs#L168-L183",
+          "version": "repo-lines-v1:sha256:62f2081bad76fbf611d5a144e061c03a456193042039e10873104527a07378d0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0YjhlYWE4ZjMwNjI1NWU5MTllYjM1NjcxNzNkYjNlNTdiYTE2Y2Y1M2Q1NDM0Zjk3ZmVhNzNkZTQ2Y2NlYjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZjZThkMTM3ZmE0NGFjNjY0OGIzYTRhNmY1NmY1MGJhYmE2NzczNDE0NWQwNDc0YTRlNTU1Njk3ZmQyNmJlYzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhMWQyZGRlM2JkM2VjNThhMjY1Mjk5ZWQzMmJjYzNiZDQ5ZmNjYjc0ZTg1ZmYwYWQxOWM5MTlkYmNiYjlmYWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_230bf4dddbd54813bddb282252f7fa3a",
+      "statement": "parse_link recognises t.me, telegram.me and tg:// links as public chats, invites or private channel posts, and returns None for service paths and non-Telegram URLs.",
+      "evidence": [
+        {
+          "resource": "repo://src/links.rs#L104-L122",
+          "version": "repo-lines-v1:sha256:724d584927ab0ba12892aa94a3d1956ec86e8dbe59f2e39ea95ff57bd3ff72b0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjllNGIzY2NiYWNhNmNmMzZkMjNjOGMyZmQ1NTBjYmMyNmNhNmRlOGI5MzBiYzQ1NGEwNjY5MThmMjc2ODA2OTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ5ZWMzYjNmYzljZWRmMDgyMDRiY2M0YWUwYTVmMTMwYzhkODEzYjgxNTQ0ZWQ0NGVhYWJjYTA4ODEzOTg2MzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiZGM0ZWQ0ODJhN2QxZGNlZjdiYjhhNjJmZTExODkwMmRjNzlmYjI3ZjUyNWNmMWU5MWE5NjE1OTA0MGI5YjQifQ"
+        },
+        {
+          "resource": "repo://src/links.rs#L26-L80",
+          "version": "repo-lines-v1:sha256:e7b1ae694396a50b2b48888eb3da2a31e3bff3db19e2567a312c5ac2f3d0ffca:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA4NmY1MGMzNzcxZDgyMzRiMmY5MzYwMmEzYTBiZjdhZjJkNmQwYjc5Y2VkMzFkMzUwYjEwMGVhMTI1Mjk5ZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0ZjM1MmI5M2VlMzMxNWQ3ZDQ0YjFhNGMxN2JiMWRiYjAxMDg5NGRjOWYxODYwYWQ1Y2VjYzRkYzVhY2QyNTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU3MjZiZjNkNmRlNjlhNzk2YzNiNWM3OTg3Mjc1MzhjZDRmNmNiYjEwMGU0ZDU0ZmM4NzUwMzBmM2MyMDlhNDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_286d424168964b73baf9744bea32a53c",
+      "statement": "Private-link channel ids map to Bot-API chat ids -(10^12 + id), matching the Telegram backend's ids.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L1589-L1604",
+          "version": "repo-lines-v1:sha256:80e2a334476e85094b6a85885cc04403cc90228acdf3a306ff5aecbe1b56e165:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyYjVlZGY1OTQ5Y2ZlYTY3ODIyY2Y2OTExMzIzNjNkNjhkNmYxZTE2OWY1ZTBkNGY3YzE0ZTVmYTFlNmQ0ZTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlhZmY1ZDhiOTYxMzU4NGE2NjAxMWY4NTk2YjYzZjYwYTA1MzVjMDgzZmU4NDM4ZjgwODE1MWNlZTQ4Y2ZkOTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUyNTk4MTIxZGJjYzJhMjQwMmEyM2RkM2MyMDhhNDk1YzdkZTM2YjI0NTk5MTE3OTFjZTNjNWZlOTc1ZmYxOGYifQ"
+        },
+        {
+          "resource": "repo://src/links.rs#L18-L24",
+          "version": "repo-lines-v1:sha256:af4c421e46c60df00034878ecb499d5e2599e88c7d7e865dc97d6681bf6c9ad1:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTc4ZmYyNjc2ODY0YjdmMTc3N2ZjNDViMmEyOGIyZDE3ZGI1NWE0ZDk5MmMwYjFhYTJmYjQxYmJiYzQyNmJkZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjU2MzFmMTlhN2FhMmY5OGFkZmY4OTkzZjg1N2VlZWFlNTE2MGU5NGIwMDg2ZThmNTc1MTJjNDA5MzgzNjEyNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2RhMzg5ZWYxNGQxY2FlZjgwZTE0ZGZhOTkwYWViNDQwNTNjZDM5MDBiNTVjZDIyNTY0OWQyNWRkNTMzYzk2OCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3839535a3aac455a820d187bfba8f5c6",
+      "statement": "External URLs open with xdg-open, open on macOS, or rundll32 url.dll,FileProtocolHandler on Windows to avoid cmd splitting on '&'.",
+      "evidence": [
+        {
+          "resource": "repo://src/links.rs#L82-L98",
+          "version": "repo-lines-v1:sha256:8a244299741b0f32488c101ee73b29e2b278c2f1da76d06b2c8919bbe73b4eb3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2NGFmMmVjNzU5N2JhNGFhMzkwZGRlOWM5Y2E1ODQzMmY1YzcyNWZlODI2OGMwMmQ0ZmNhOGNkMjQzMzNmNGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8234ed586d4945aca82638f34f31d7ba",
+      "statement": "Telegram link resolution returns a ready dialog for usernames, an invite preview with title and members for unjoined invites, and joins via ImportChatInvite; private links to unknown chats fail.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L1509-L1582",
+          "version": "repo-lines-v1:sha256:4ea37063507f1cf1332344f01791165864240b4c01580298a2b66f48f5f5a1e3:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4ZjU4NzZmOGYwYjJlZmQ1MjU3MTJhNWUyZTY0OWMyYTc5YmVkZGVhZWI4NTQ5NDkwOTkzMGQ4ZmQ4MjQyMzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRjZjdiMGQ1ZGQyNTI5YWZlOGU2YTYwZWE0NmRkMzQ4ZmM0OWZiYzcwNGRjZjAwMmMyZDJjY2I0MWFlMTBkZjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9a7980896aab440fa5657616f0b5ace5",
+      "statement": "Starring a message stores the chat, id, date, author and a copy of the text locally and saves the list on every change.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L681-L704",
+          "version": "repo-lines-v1:sha256:8add58c12506a9fa0e9f6e5128e84cb9acdd2969979cdadf4519407b642c04cc:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ZGQ4NTE1MTUwMWNhZmU1M2YwNzMxZTlkNTg4YWU3YjY5MzhkNjY1MmVkYTlhOTkwZjUyZjZmODg5NjZiNzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY1ZmVhZGFhMjJmYmY0NDU5ZDFkNDAwOTMyZTM5M2ViNzY4ZGZiMmZhYTcwZGYxMTcyYzExZWYxMmNmM2ZhOGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1NGJhMDMyMDUxYTZjNDA5Y2YwZmZlNjhiODc0MDljMzE4Zjk3MTg2ZTEzODc5YWU0YzdhMjhlYzZjMjE4YzUifQ"
+        },
+        {
+          "resource": "repo://src/starred.rs#L45-L58",
+          "version": "repo-lines-v1:sha256:e1cfe4f4a4f274d4c99eb70c53436db9b24fa1f0adaeffaaffb3394345cf2126:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhMmQ3MzM3M2E4NWI1Y2Y5NzQzOGRlNWI4NzlmMGNlYmJiZDBlYmNjNWQzODBhY2ZlNGUyYmI2ODUxNGY2MGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4ODU5MjEwZWJjYjEyY2Y2OGM2MTYyMjJmYzU2MGMxZjY4ZTJmYTMxZjYzMDQ5M2RmODA5NTg4ODdkNTdhZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

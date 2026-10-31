@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:de0e11a59c50848b33146f23e085f6aa4724537e3edc2c4a9e192633b7a3883d",
+  "claims": [
+    {
+      "id": "claim_425583f02c2b4edc97685add3bf07926",
+      "statement": "Config and data roots resolve from XDG variables only when absolute, then %APPDATA%/%LOCALAPPDATA% on Windows, then ~/.config and ~/.local/share, with the app directory 'rondine' appended.",
+      "evidence": [
+        {
+          "resource": "repo://src/paths.rs#L7-L76",
+          "version": "repo-lines-v1:sha256:b28dd7acddeb563febf1c3cfbaa83729e9e41cf1f6e62b336f7669cff5edd283:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwZWRmODFlYzJkYWFhMmY2MjdmMjJhMTUzMDg2ZTZlN2IyZWViNzAyMjc4M2JjMjMzZmY3ZTQ5NTYzOGJkMDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVlZWYyZDcyYmIwM2Y3ZjllY2ZmMzg5NTdhNzYwZjBhYTkxMmI2YmFjNGQ0MTczZDU5NzczY2M5YjI0NjA2OTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM1Zjc3NGIzM2I1MGY3Y2E3YzMzNWJlNTAxYjFlODZlYWVjMzYwMGY5M2M4MzY2YzU4OTM0MTgxMWY2NDYwZjMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7d4e908b46b74d57bb3d356d827f119c",
+      "statement": "The downloads directory honours XDG_DOWNLOAD_DIR (quotes stripped, $HOME expanded, absolute only) and otherwise uses <home>/Downloads.",
+      "evidence": [
+        {
+          "resource": "repo://src/paths.rs#L92-L106",
+          "version": "repo-lines-v1:sha256:ed2b8b3c33595a21d36ffa41147d206a92b33f40fb914701323072fce2203a4a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmMzMyZDY2MTg4YzFiYWM3ZGRmYTVlZjk3YjkyNDA2ZTlkY2EwOWY2Mzk2NWRiODFmNTRhNzEyOTY4NWQ4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI5NGVkODRhNDFlYzE2MzMwZGU5MDUyYTYwYWNkODc3ZGNkZGU4MTlhOGQ4ZTAwZjU2MDI3ZDU3OGFjNjIzZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmODkwNDlmNWExNTQ2ZjIzZDJlY2U1MDkyNGI0MmNiZmM2NDEzMmNkNjhkZjhiZmU4NDFiYWRmYjRlYTRhYzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d633d6ff8fef444ca0826dfc165ce94e",
+      "statement": "On first run, rtete/ config and data directories and the rtete.db session files are renamed to their rondine equivalents if the new ones do not exist.",
+      "evidence": [
+        {
+          "resource": "repo://src/gui/main.rs#L327-L329",
+          "version": "repo-lines-v1:sha256:488ff170ac4db8fe64537c06d1351f8d88215319b692d9b558624d97dd73876d:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2Y2YWZkNmVjNmI0NTkxMzE4ZGRmYjZjNjgxMTMwZTcyNGY5NTJjNjgxNTAzNGZjNDU3Y2Y2OWQ5MmQ4NzllZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg4Mjk5MzRjZjA2YTEwOGMwYzc2YjI3OGIxMTA5NGQ3YmFmMzZiMGQxMTdmOTEzNmYzMDVmM2U0MTE4YTVhZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWUwN2ZiZjY4M2E3YjJkZmNjODIzYzNiMzc3MDQxNmQ3Y2MzZjBlZWU0MzhhNmMzMTE1MzQwM2M2Njc5NzEzZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmQ5MzZlYmNhN2E5NDM4Y2Q1ZThjZjJjNjYyOGVlMmFmMTg4N2FmNTgyNmNkMGNhZGQ0ZTUyNzgyNjFlMzQ5NiJ9"
+        },
+        {
+          "resource": "repo://src/main.rs#L72-L72",
+          "version": "repo-lines-v1:sha256:28829934cf06a108c0c76b278b11094d7baf36b0d117f9136f305f3e4118a5ae:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg4Mjk5MzRjZjA2YTEwOGMwYzc2YjI3OGIxMTA5NGQ3YmFmMzZiMGQxMTdmOTEzNmYzMDVmM2U0MTE4YTVhZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg4Mjk5MzRjZjA2YTEwOGMwYzc2YjI3OGIxMTA5NGQ3YmFmMzZiMGQxMTdmOTEzNmYzMDVmM2U0MTE4YTVhZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2IzYTI5YWY3ZDMwODYwOGQ5ZmEwMTIwYjVhMmFhY2I5ZGU5Y2Y0OTIyMjRiYjhlMTU5ZmI2N2M2Y2VhY2EzMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTE1NmU2OGMxMTNkMTdkYzg2ZDQyMjYxNjIxZTI1MDliNGVjZTQ5YTAwOTQ1Y2U1OTM5OTgxYmY3YTM2MWYyZSJ9"
+        },
+        {
+          "resource": "repo://src/paths.rs#L37-L64",
+          "version": "repo-lines-v1:sha256:8b66a5289c111bf61db998356895b55236d64ab079a20193b187bd0ca6b34b6e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA5MjliODk1N2MxNTE0MzA2ZjIxNjZhZmU1MzMzMDBjNzE1MTUwMDNiOGFiNTA4MjViYTQwZjkyMDQwYTFlZmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcyNWUyMjNhZmZlYWQzYTk3MTcwZTlkYjAzMjA5ZDYyZDMxOGFjM2ViOGU4Nzk4ZTdmMmYzZjliODM0MGJmY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNiZGE4ZDVhOTBhYzk4YmMyMTNhODYxZGJlYjIyZGZhZDgzZTljNzUzNDg4ZDU4ZWJkOTJhN2Q5MDRlNjUxOGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7823496510234d37a67e00851e6b5700",
+      "statement": "ensure_private_dir always chmods directories to 0700 (repairing old installs) and private_file opens files with mode 0600 on Unix.",
+      "evidence": [
+        {
+          "resource": "repo://src/paths.rs#L145-L169",
+          "version": "repo-lines-v1:sha256:db0c694549d3249454399cdd349a320efd0734d6158f6bf472edec656f388e3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1NTkwMzE2ZWZiMWFhNjBlNDA3Njc5ZTg2ZGJiNjU2MDA2MTcwM2RkNjIxMzBhZTgwOWI4OGQ5YzQ5OTgxYjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIxMWI1YzI4MWYzYjVjOWQyMGYyY2QwNTRjMGM2ZGJlYzMwY2RlNGU4Njk3YThmZGM0ODA5ZDg1YjI4MjEwMzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_505a80f714a64e03b40ddf486ae8fd01",
+      "statement": "translate.conf lives in the config directory and is written through private_file in a private directory because it contains API keys.",
+      "evidence": [
+        {
+          "resource": "repo://src/translate.rs#L1-L6",
+          "version": "repo-lines-v1:sha256:3f0440ef2e5502ecfa426c2ce80ee884edd092ff3398a8156edea3e93f4d3013:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmFmYzk1MjY0YjBjMzBhNTZiZGI5YjUxZWMzMDlmMDZhNDM3ZTBmYWI1NGMwZDM3YTc1Yjg1MzhmNWExZjA0ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDhjODUyYWM2OTA3ZTE0M2Q1MWM4YjI4ZjNlMTVmZTQ1YzQxZDQ5Mjc4Mzg3Y2UzZTk5ZDg5OTM3NjNjNTM2YSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmZiNDEwYTI4ZWRjNDM2N2JmMDZhMDMxNGYwMDlmZTI5NzEzZmMxYTc0YzFiMTM3NmY5NTUyMGJkNmE3OWRlYiJ9"
+        },
+        {
+          "resource": "repo://src/translate.rs#L104-L121",
+          "version": "repo-lines-v1:sha256:a43d8c3918e22295e2aa5281b056c795b7a823fe68d78204f76f0716e31515dd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhYzU2YWY1MzY0YzNiNTNmMmI3NmMwMjFjMzQzZTU5MDhkZGQ3YmE4OTgzYzQwMjUwMDcwODVhZDViY2ViNzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5Nzc3NmEzNmZkNGRiZDYxODhhYWE2YTY3YTkwMTM2YTJiNjVmMzZlNDZjNzJlYjY5MjJiZDFlNTRjNGVjNGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkNjdhNmIyY2QzMmZkNWY3ZmRiYWExNWQ5YzQ4ODM5ZjlkOGM4NzVlOWRkNjEwNjk0ZWFjMTU1ZGI3YWJkZTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4YzE0NzVkZjFhOGJlODNjN2I5OGVhYTNmNzczZTI2M2NkNjZmOWQ1ZTI3ZjYxMzRmZjE0NGVlOTQxN2NmMGUifQ"
+        },
+        {
+          "resource": "repo://src/translate.rs#L77-L78",
+          "version": "repo-lines-v1:sha256:2736b8b2ee715dce9a4ca8f5b868bdadb200089afb6fb97e40ece345fb5f0b6c:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTEwZGRiNDAzYjIzZjg2OTgzNDc2NTQ2NDA2YTIyMTMzNzJiNmZmNzQxM2Q2MTA4N2VkYmUzMDJkN2JiYjA0NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODRhYzE2ZjM3ODUwODc5MzNjMTQyN2IxYjlhMzJjN2VlZjllNjUyZmQyMzdmM2I3MThhMzBmMjU5NDJkNTlmYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjhiYmFhMTE4OGNhMjBjN2M5ZjdlOWFiZDNjNzJiMzE0NzU4OTlmMDU1ODZmZWViZDc2YTIwZGY4MTM2ZTc3MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4c642ca4027745b182bf9f9564d1d9a9",
+      "statement": "Starred messages are stored in <data>/rondine/starred.json with a copy of the text so the list is readable offline.",
+      "evidence": [
+        {
+          "resource": "repo://src/starred.rs#L1-L58",
+          "version": "repo-lines-v1:sha256:2771d99a583ed2d4fc9d5cb5187840e11bf6838516f03f96669fb12c00bcb51b:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlMjJlZTQzNTVkMjg1OTY5MzZlNDc0MmNlOTdjYmRhNmZiMWY0NzIyYTZmODE3N2Y3Njc0MjdlZmRkNmEyYjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_02f47a72609840c6898ea6c10d7b6ac0",
+      "statement": "GUI settings are saved as 'key = value' lines in <config>/rondine/gui.conf.",
+      "evidence": [
+        {
+          "resource": "repo://src/gui/settings.rs#L143-L146",
+          "version": "repo-lines-v1:sha256:79f513f99b3b76bcd5aee5f12938acea75197913f46f4bfe55b0365af15cf04e:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTEwZGRiNDAzYjIzZjg2OTgzNDc2NTQ2NDA2YTIyMTMzNzJiNmZmNzQxM2Q2MTA4N2VkYmUzMDJkN2JiYjA0NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzU3OTY2Y2FlNWEzY2NiNDIzZDEzZDE4ZDI1MTkzNTU5ZTBhZmE2NWU4ZWM5OWQ2OWQ1ZjVjMWIwZDUyY2M0MyJ9"
+        },
+        {
+          "resource": "repo://src/gui/settings.rs#L257-L297",
+          "version": "repo-lines-v1:sha256:cbfeea4f311fd7bf972d2a081e6014e9ffc26c44c717fc3b4163cbd7e8a3789e:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyMDNhMzNiYjRkN2VkOGRiMmJjYWQ3YjI3NWQxYWY3NzliZWIxOTQzNDY1NzczN2I3MzU5NzQwZjA1NzBmOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1YTlhN2ViNzFlNTk4MmE5ZTMwMGNiOWE4ZDZmYjlkNDc0YWI5OWYzYzM1MTBkZjg3OTY5ODc3NmYyOGY1NjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyMDU5MWZlOTJkYjUzNGYzODNhNmQ1YzU2OTMyYTE1ODYxNTQ5N2Y2M2VkNzcxY2RkN2IwNTkwZmExY2RhOTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_83debaaee9e54b608679dcf5952df8e6",
+      "statement": "Saved file names are sanitised and never overwrite existing files, trying ' (n)' suffixes up to 999 before a timestamp suffix.",
+      "evidence": [
+        {
+          "resource": "repo://src/paths.rs#L108-L143",
+          "version": "repo-lines-v1:sha256:34b6ccc062a8d1bb335818537307c99500441cdea7bd07e4edb5926375696644:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkZWIxMDY3MGRhZjdmYTk3NzU0YjE0OTQ0OGRlMmJmYWFiYjczZDcxODc5MjdmOTU3NzhiYjFhYzQ5YWU2NGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0ODExYTVmOTBjMWQ3NDNhYzMzYzkwNTZlYjRhNTNkOTNiNWM0ZDFkMjA0NGQ0ZWJlMzYxYjE4MWVkZGIwNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZhMzYxODVkMjM1YTgzZGEwMjExZmVjZjA5YThhNTA2YzE3NTBmNzk3ZjdmNTkzMDIyYzc2MTBlY2IwOWFjN2EifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ae384eda525345ddadb95ce1185b6dbf",
+      "statement": "Downloads are written to a .part file and only renamed to the final unique name after a complete download, the .part being removed in all cases.",
+      "evidence": [
+        {
+          "resource": "repo://src/worker.rs#L27-L57",
+          "version": "repo-lines-v1:sha256:7fb91bd8b79f51090e386172594156733b55a2aaf5fca3ab9cc4bd06fb96c94f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJlMDJlNDU3MjgwYWYxZDk4ZmRiNjRjOGExNjY5MTcxNjg4MjIzMGUzMzI4MGIzMThjNzY3M2ExMWMxZTBlMTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQyZjJhODc2ZDRiMjc4ZTdiYjU1ZjY4YmQ1MjAzYmEzMzVmNTJmODYzNmY0MWE2ZmZlODljOGUwYzE5NjM1ZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhMmNmNzdmZWI2NzQ2NTg1MTMyOTNjNTc1NTA1ZDcxYWNkZWRhYTVjYjZlM2Q1MzllNzAxOTJkZWUxNjBjZDIifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

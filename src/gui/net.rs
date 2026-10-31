@@ -105,6 +105,7 @@ impl std::fmt::Debug for Carrier {
 
 /// Il socket dell'istanza: `rondine-gui` con i due ambienti insieme,
 /// `rondine-telegram` o `rondine-whatsapp` per quelle a sé.
+#[cfg(unix)]
 fn sock_path(app_id: &str) -> std::path::PathBuf {
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
@@ -114,6 +115,7 @@ fn sock_path(app_id: &str) -> std::path::PathBuf {
 
 /// Istanza unica: se Rondine è già aperta le passa il link (o niente, solo
 /// per farsi trovare) e ritorna true; il chiamante allora esce.
+#[cfg(unix)]
 pub fn hand_off(app_id: &str, link: Option<&str>) -> bool {
     use std::io::Write;
     let Ok(mut s) = std::os::unix::net::UnixStream::connect(sock_path(app_id)) else {
@@ -124,6 +126,7 @@ pub fn hand_off(app_id: &str, link: Option<&str>) -> bool {
 }
 
 /// Ascolta le istanze successive: ogni riga non vuota è un link da aprire.
+#[cfg(unix)]
 fn listen(tx: Tx, app_id: &str) {
     use std::io::BufRead;
     let path = sock_path(app_id);
@@ -144,6 +147,16 @@ fn listen(tx: Tx, app_id: &str) {
         }
     });
 }
+
+/// Su Windows niente socket Unix: l'istanza unica è spenta, ogni avvio apre
+/// la sua finestra.
+#[cfg(not(unix))]
+pub fn hand_off(_app_id: &str, _link: Option<&str>) -> bool {
+    false
+}
+
+#[cfg(not(unix))]
+fn listen(_tx: Tx, _app_id: &str) {}
 
 /// Avvia il runtime e (se `telegram`) Telegram; gli eventi aspettano la
 /// subscription. `cache_bytes`: tetto della cache degli asset, sfoltita

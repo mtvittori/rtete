@@ -16,12 +16,12 @@ use crate::send::Response;
 /// generazione progressiva del player audio (niente pid esterni)
 pub static NEXT_PLAY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Individua un comando nel PATH senza dipendenze esterne.
+/// Individua un comando nel PATH senza dipendenze esterne (separatore e
+/// `.exe` giusti per ogni sistema).
 pub fn which(cmd: &str) -> bool {
-    std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|d| std::path::Path::new(d).join(cmd).exists())
+    let exe = format!("{cmd}{}", std::env::consts::EXE_SUFFIX);
+    std::env::var_os("PATH")
+        .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(&exe).is_file()))
 }
 
 /// Un salvataggio: scarica in .part e sposta col nome libero (mai
@@ -124,7 +124,7 @@ pub async fn play_job(
         return;
     };
     let is_mpv = std::path::Path::new(&p)
-        .file_name()
+        .file_stem()
         .map(|f| f == std::ffi::OsStr::new("mpv"))
         .unwrap_or(false);
     let mut cmd = tokio::process::Command::new(&p);

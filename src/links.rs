@@ -79,6 +79,24 @@ pub fn parse_link(url: &str) -> Option<TgLink> {
     }
 }
 
+/// Apre un URL col programma predefinito del sistema (il browser per
+/// http/https): xdg-open su Linux, open su macOS, il gestore dei protocolli
+/// su Windows. Non aspetta il processo e ignora gli errori.
+pub fn open_external(url: &str) {
+    use std::process::{Command, Stdio};
+    let mut cmd = if cfg!(windows) {
+        // niente `cmd /c start`: la shell spezzerebbe gli URL con `&`
+        let mut c = Command::new("rundll32");
+        c.args(["url.dll,FileProtocolHandler", url]);
+        c
+    } else {
+        let mut c = Command::new(if cfg!(target_os = "macos") { "open" } else { "xdg-open" });
+        c.arg(url);
+        c
+    };
+    let _ = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

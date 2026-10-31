@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:93645b1362281cbc51e740d39be68804fa262b28757c1367122291d665a8713c",
+  "claims": [
+    {
+      "id": "claim_89b6ef0798d74fd4977dfe50588ddb7c",
+      "statement": "Italian strings in the source are the translation keys; tr() returns the English translation from locales/en.txt when English is active and otherwise the Italian original.",
+      "evidence": [
+        {
+          "resource": "repo://src/i18n.rs#L1-L8",
+          "version": "repo-lines-v1:sha256:de313b051e5e5a4487c00125cd0957912b67ef315bdf2192663f90cc7988d32e:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTQ5NThiZGExZmUwN2QwZDc4NTk5MThlMzNkNzA3N2RiMjE0NDNjYjQyNmY3N2Q1NTEyZjczMjA1ZDA2MjIwMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmY5YTVlNzE2ZTVmZGIyMmZmMDUwOTlkODRhMDE1ZGRlZTQ5MTM1MDA2ODExYjA2YzhhN2Q4NzhjMWY4Yzg3ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjZiNzE0NmY0NzIxN2Y0MTE1Yjg3MWRhYWExOTYxMWY2ODBhNzIyZTFiYWUyYTRiN2IyMjgwZjk3MzI3MzU5ZiJ9"
+        },
+        {
+          "resource": "repo://src/i18n.rs#L80-L94",
+          "version": "repo-lines-v1:sha256:0f6b043ca722c58a14a191eea7d064d601e59b4905c66b40393a2eb824a4908f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2MWZmMzE0ZjU4YmQ0NDgzMzIyMDc5MjdhZTNkYzhlNmNmY2MzMGE3YWU3ZDY2MWE5NDIxOWVkYjRjOGJiYWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4ODU5MjEwZWJjYjEyY2Y2OGM2MTYyMjJmYzU2MGMxZjY4ZTJmYTMxZjYzMDQ5M2RmODA5NTg4ODdkNTdhZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ1MzYwYmVkZDYwMGY4MmEzYjUyMTI4ZWI4Y2FlNDg5ZWE5NGE2MTQ1NGE4YmIxYmM2OTYyODBlYjg4OGY0NzUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d1b65a1b06394d6c98bce8d470c43ed6",
+      "statement": "trf! translates a template then fills each {} placeholder in order.",
+      "evidence": [
+        {
+          "resource": "repo://src/i18n.rs#L96-L118",
+          "version": "repo-lines-v1:sha256:7238b12a8d8f6e4c2ae6af6310885320d8cd20022ce676d6ae89a3c049966f28:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI0MWRjOTczYTk0NDliOTU0ZjgyZGNlMTkzNTE1NTQ4NzE3Y2IzZGFmNWY1Mzg2OTVhYjMzYzFmZWJkOGYwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE1ZDY5NDU1ODQ1MWU3MWI1ZDBmYjFlNmQxNmY5ZTU1YzM5ODM5N2VjYTFlMjdkMTE4NjgxOWY4ZDk3NWViZTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2eed52f5c4874b2692189d4ccc176d4c",
+      "statement": "System language detection checks LC_ALL, LC_MESSAGES and LANG and selects Italian only when the value starts with 'it', defaulting to English.",
+      "evidence": [
+        {
+          "resource": "repo://src/i18n.rs#L56-L65",
+          "version": "repo-lines-v1:sha256:f4456959ce63538b0a7af1530ba8b7abe9fce07094192e7c880f8a5f9965d7fa:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2YTUzNmYxOWRjMzE0NzgwZmJlMGMyYTZjZGMyNzllMjM3MGM3OTFhODA5MmRjNjYwOTk3MGU2NWY3ZDU5MmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZhNWVhZDU0ZDNkYTRjODEwMTA5MGE5MDBkODI2YzMxYjUwNzJlMzBkZWY3NWNlYzQ0NmNiYjJjNWEyZTEyNWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d377389133e64c4094b6a1905f1a12b5",
+      "statement": "Locale files are two-line blocks (Italian key, translation) separated by blank lines, with '#' comments and \\n escapes, embedded at compile time via include_str!.",
+      "evidence": [
+        {
+          "resource": "repo://locales/en.txt#L1-L6",
+          "version": "repo-lines-v1:sha256:f95aadfa23c47229b63e6fed687959a747ecfe7a1e78e27d22630ee1ed38f5a2:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODY2MWE1NDg0YmE3MDAyNmQxNDc2NDcwZWE4NGIzYWRhMmVjNWI1ZGYyNTZkZjNlNmNlYmRiYmJkMDFmYjlhMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGM2YTJkZWNjY2Q2NmY5Y2JjOTQ5ODIwZGFjZmVjMTA1OTJhNDJiNTljNjBkZWFkZjNlMmJjMWRjZmQ0ZTMxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGQxN2UwOTVmYzdiNTY3YTAxZDI3YTRiNTMzZTg2ZGFmOTMyMmZjN2NjZDA4YThkOGRjMWVkNDY1ZjAzZjY3NiJ9"
+        },
+        {
+          "resource": "repo://src/i18n.rs#L67-L78",
+          "version": "repo-lines-v1:sha256:24a95694dc76b3b53af03fd5f91e9996ce725e871e610da078183e71abef9953:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3NmU3OGUyMGZkZGM4NWFmMGQ2OWY1ZWM5YWQwYTdjOWY5NWNjZDVkNDljYWM2MzIxNzM1YTUzZGM2ZGYyN2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcwYWQwMzIwY2NhMjkwMmM3NTZlZDQ3MTMwNTcyNWU3NTI2OGIzNWNmN2EwMmJkZDYwOTVkYjM3Yzc3M2VlYzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZlZThiNzc1N2IyNTZiNDU1NzdhNjc2ODRjMjdjMzYzMTcxY2ZkYTE2NzY4ZDEzZWM4ZWE1OWQ4NDNhMTFhNjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_62489672a6ff44e89f898ec9b229d48f",
+      "statement": "A unit test scans all source files for tr(/trf!( literals and fails on missing translations, mismatched {} counts, or unused translations.",
+      "evidence": [
+        {
+          "resource": "repo://src/i18n.rs#L150-L227",
+          "version": "repo-lines-v1:sha256:16fdf791d67c05a4f077f7099e208743b40a6043228099febf0945795b288927:eyJzZWxlY3RlZExpbmVDb3VudCI6NzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI1Y2Y1ZmMyM2YyYTZkMjNjM2VhNTFlNzJmNWU4OTZjNzU1NWZiYWEwNWNkNWIxZWExODJiZjk2MThhOGU4MWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxZjM2MDNjNDUzY2E2N2I4OGQ1OWM4ZDcyNzcwMzNjNmZkYmYwMDYwNWI1Yzk3MTJjOTY1MDFiNjQ1NDBlYmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6abc301bf0f84de2aa3608e202b092db",
+      "statement": "The GUI language comes from the 'lingua' setting, with 'auto' resolving to system detection.",
+      "evidence": [
+        {
+          "resource": "repo://src/gui/main.rs#L330-L330",
+          "version": "repo-lines-v1:sha256:eb3fd0ea21c29a4123d6d52c83db96fe200f689f3af2fd1b67bcfa385cc8d522:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWIzZmQwZWEyMWMyOWE0MTIzZDZkNTJjODNkYjk2ZmUyMDBmNjg5ZjNhZjJmZDFiNjdiY2ZhMzg1Y2M4ZDUyMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWIzZmQwZWEyMWMyOWE0MTIzZDZkNTJjODNkYjk2ZmUyMDBmNjg5ZjNhZjJmZDFiNjdiY2ZhMzg1Y2M4ZDUyMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDg4ZmYxNzBhYzRkYjhmZTY0NTM3YzA2ZDEzNTFmOGQ4ODIxNTMxOWI2OTJkOWI1NTg2MjRkOTdkZDczODc2ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWQyNGMxNzUxY2JlZDZlMTEwMzJhYmMyYWU5NjlhNzJmZDIyNTc3ZmJlOGRmMGMzMDEwY2FhMjk0N2NkZGQ2OCJ9"
+        },
+        {
+          "resource": "repo://src/gui/settings.rs#L286-L286",
+          "version": "repo-lines-v1:sha256:686f490a0b335c3f2076f63dd52876c8e5ec8ba0b19e201f0c6874db77c2929c:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjg2ZjQ5MGEwYjMzNWMzZjIwNzZmNjNkZDUyODc2YzhlNWVjOGJhMGIxOWUyMDFmMGM2ODc0ZGI3N2MyOTI5YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjg2ZjQ5MGEwYjMzNWMzZjIwNzZmNjNkZDUyODc2YzhlNWVjOGJhMGIxOWUyMDFmMGM2ODc0ZGI3N2MyOTI5YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTAyNjM0ZTFjYTdkNGQ3MTVjNjY1YjZjNTc2Y2IyMTk0OTc4ODc3YzVmYmJlOGFmMzUxMDhiOTBkODg4YjI0NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTBjOWUyZGY5YjQxZTg4NzI3NTg0MzMzZTIzYTQzYjhjZjAzYTUwMDIxNDlkNzZjOGRlYzA2MTdkMWJmZGRhMSJ9"
+        },
+        {
+          "resource": "repo://src/gui/settings.rs#L8-L16",
+          "version": "repo-lines-v1:sha256:9b059f43efeb6b9f78356653093c02b05baf8d46fc1eef3fb58cd3246cb6db98:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGJmZGQzOTQ1MDJjN2Y4OTk5OGRhZGIxMjk2ZjhlNWI0MTkxNmFkMzY2YjVjYTE2ODM0Y2U3OGMyMmRjY2NmMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjA1NTJjZmNlMzhmYTY3ZmViMDU4OGJjZmI4Y2Q4YjNjZTY1YTJjMTA5NTU2NGZiNTVmNjU4NDFhYmVhYWI5YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGMwN2JkMzFmMzBlOTM5ZDQ1Mzk3Y2MwZjZkMmEzMTY0NTM5MDJlMmMyZmJhYzkzNGI3MDI1Y2FhNDI5ODRjZSJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

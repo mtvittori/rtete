@@ -469,7 +469,7 @@ pub(crate) fn click_select(app: &mut App, m: crossterm::event::MouseEvent) {
     if m.column < view::side_w(term_w) {
         return; // colonna contatti: lì non seleziono messaggi
     }
-    // click su un link? apri il browser di default (xdg-open) e basta
+    // click su un link? apri il browser di default e basta
     if let Some((_, _, _, url)) = app
         .link_map
         .iter()
@@ -477,15 +477,7 @@ pub(crate) fn click_select(app: &mut App, m: crossterm::event::MouseEvent) {
     {
         let url = url.clone();
         app.status = trf!("apro {}…", url);
-        std::thread::spawn(move || {
-            use std::process::{Command, Stdio};
-            let _ = Command::new("xdg-open")
-                .arg(&url)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn();
-        });
+        rondine::links::open_external(&url);
         return;
     }
     let hit = app

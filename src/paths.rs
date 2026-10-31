@@ -1,23 +1,33 @@
-//! Cartelle e file dell'app (XDG), uguali per ogni backend: config, dati,
-//! cache degli asset, temporanei e salvataggi.
+//! Cartelle e file dell'app (XDG su Linux/macOS, %APPDATA%/%LOCALAPPDATA% su
+//! Windows), uguali per ogni backend: config, dati, cache degli asset,
+//! temporanei e salvataggi.
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
+/// La home dell'utente: HOME, su Windows USERPROFILE.
+fn home() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .filter(|h| !h.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Il valore di una variabile d'ambiente, solo se è un percorso assoluto.
+fn abs_env(key: &str) -> Option<PathBuf> {
+    std::env::var_os(key).map(PathBuf::from).filter(|p| p.is_absolute())
+}
+
+/// Una variabile di Windows (APPDATA, LOCALAPPDATA); altrove None.
+fn windows_env(key: &str) -> Option<PathBuf> {
+    if cfg!(windows) { abs_env(key) } else { None }
+}
+
 fn config_base() -> PathBuf {
-    // specifica XDG: la dir specifica dell'app è base + "/rondine".
-    // Le var XDG contano solo se assolute, altrimenti si riparte da HOME.
-    let base = match std::env::var("XDG_CONFIG_HOME")
-        .ok()
-        .filter(|p| std::path::Path::new(p).is_absolute())
-    {
-        Some(p) if !p.is_empty() => PathBuf::from(p),
-        _ => std::env::var("HOME")
-            .ok()
-            .map(|h| PathBuf::from(h).join(".config"))
-            .unwrap_or_else(|| PathBuf::from(".")),
-    };
-    base
+    // XDG (solo se assoluta), su Windows %APPDATA%, altrimenti ~/.config
+    abs_env("XDG_CONFIG_HOME")
+        .or_else(|| windows_env("APPDATA"))
+        .or_else(|| home().map(|h| h.join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 pub fn config_dir() -> PathBuf {
@@ -54,17 +64,11 @@ pub fn migrate_old_dirs() {
 }
 
 fn data_base() -> PathBuf {
-    let base = match std::env::var("XDG_DATA_HOME")
-        .ok()
-        .filter(|p| std::path::Path::new(p).is_absolute())
-    {
-        Some(p) if !p.is_empty() => PathBuf::from(p),
-        _ => std::env::var("HOME")
-            .ok()
-            .map(|h| PathBuf::from(h).join(".local/share"))
-            .unwrap_or_else(|| PathBuf::from(".")),
-    };
-    base
+    // XDG (solo se assoluta), su Windows %LOCALAPPDATA%, altrimenti ~/.local/share
+    abs_env("XDG_DATA_HOME")
+        .or_else(|| windows_env("LOCALAPPDATA"))
+        .or_else(|| home().map(|h| h.join(".local").join("share")))
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 pub fn data_dir() -> PathBuf {
@@ -86,19 +90,19 @@ pub fn avatar_path(photo_id: i64) -> PathBuf {
 }
 
 /// Cartella dei salvataggi: XDG_DOWNLOAD_DIR (shell-quoted in user-dirs.dirs,
-/// tipicamente "$HOME/Scaricati") altrimenti ~/Downloads.
+/// tipicamente "$HOME/Scaricati") altrimenti ~/Downloads (su Windows %USERPROFILE%\Downloads).
 pub fn downloads_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let home = home().unwrap_or_else(|| PathBuf::from("."));
     if let Ok(v) = std::env::var("XDG_DOWNLOAD_DIR") {
         let v = v.trim().replace(['"', '\''], "");
         if !v.is_empty() {
-            let v = v.replace("$HOME", &home);
+            let v = v.replace("$HOME", &home.to_string_lossy());
             if std::path::Path::new(&v).is_absolute() {
                 return PathBuf::from(v);
             }
         }
     }
-    PathBuf::from(home).join("Downloads")
+    home.join("Downloads")
 }
 
 /// Nome file sanity per i salvataggi: via slash, punti elusivi e vuoto.
@@ -143,9 +147,25 @@ pub fn unique_save_path(dir: &Path, name: &str) -> PathBuf {
 /// umask corrente (755), e i file dentro restavano leggibili dagli altri.
 pub fn ensure_private_dir(path: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(path)?;
-    let mut perms = std::fs::metadata(path)?.permissions();
-    perms.set_mode(0o700);
-    std::fs::set_permissions(path, perms)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(path)?.permissions();
+        perms.set_mode(0o700);
+        std::fs::set_permissions(path, perms)?;
+    }
+    Ok(())
+}
+
+/// `OpenOptions` per i file privati: su Unix nascono 0600 (mai scritti con
+/// la umask e poi sistemati); su Windows valgono i permessi ereditati dalla
+/// cartella del profilo utente.
+pub fn private_file() -> std::fs::OpenOptions {
+    #[cfg_attr(not(unix), allow(unused_mut))] // mut serve solo per la mode su Unix
+    let mut opts = std::fs::OpenOptions::new();
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
+    opts
 }
 
 #[cfg(test)]

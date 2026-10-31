@@ -1,6 +1,4 @@
-//! Appunti (wl-clipboard): probe a thread fuori dal ciclo eventi, incolla testo e foto.
-
-use std::os::unix::fs::OpenOptionsExt;
+//! Appunti (wl-clipboard su Linux, arboard altrove): probe a thread fuori dal ciclo eventi, incolla testo e foto.
 
 use tokio::sync::mpsc;
 
@@ -8,7 +6,7 @@ use crate::app::App;
 use crate::send::Response;
 use crate::model;
 
-/// Esito del probe degli appunti (wl-clipboard gira a thread, fuori dal
+/// Esito del probe degli appunti (il probe gira a thread, fuori dal
 /// ciclo degli eventi): immagine con byte e mime, file copiati dal file
 /// manager, testo, oppure vuoto.
 pub enum ClipboardHit {
@@ -57,8 +55,8 @@ pub fn pick_caption<'a>(caption: &'a str, name: &'a str) -> &'a str {
 }
 
 /// Super/Ctrl-Y: copia negli appunti il messaggio selezionato (o senza
-/// selezione, l'ultimo messaggio con testo della chat). wl-copy si serve
-/// da sé in background: nessuna libreria in-process.
+/// selezione, l'ultimo messaggio con testo della chat). Su Linux wl-copy si serve
+/// da sé in background; altrove arboard.
 pub fn ctrl_copy(app: &mut App) {
     app.status.clear();
     if app.show_search || app.show_sticker {
@@ -80,27 +78,38 @@ pub fn ctrl_copy(app: &mut App) {
     };
     let head: String = text.chars().take(24).collect();
     app.status = crate::trf!("copiato negli appunti: «{}…»", head);
-    std::thread::spawn(move || {
-        // il testo va su stdin: come argomento, un messaggio che inizia
-        // per "-" ("Adesso -n ciao") veniva preso per una opzione wl-copy
-        use std::io::Write;
-        use std::process::{Command, Stdio};
-        let spawned = Command::new("wl-copy")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn();
-        match spawned {
-            Ok(mut ch) => {
-                if let Some(mut si) = ch.stdin.take() {
-                    let _ = si.write_all(text.as_bytes());
-                } // drop → EOF: wl-copy legge il contenuto e resta a servire
-                  // i paste finché il clipboard non viene rimpiazzato
-                let _ = ch.wait();
-            }
-            Err(_) => eprintln!("[rondine] wl-copy non trovato (installa wl-clipboard)"),
+    std::thread::spawn(move || copy_to_clipboard(text));
+}
+
+#[cfg(target_os = "linux")]
+fn copy_to_clipboard(text: String) {
+    // il testo va su stdin: come argomento, un messaggio che inizia
+    // per "-" ("Adesso -n ciao") veniva preso per una opzione wl-copy
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let spawned = Command::new("wl-copy")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    match spawned {
+        Ok(mut ch) => {
+            if let Some(mut si) = ch.stdin.take() {
+                let _ = si.write_all(text.as_bytes());
+            } // drop → EOF: wl-copy legge il contenuto e resta a servire
+              // i paste finché il clipboard non viene rimpiazzato
+            let _ = ch.wait();
         }
-    });
+        Err(_) => eprintln!("[rondine] wl-copy non trovato (installa wl-clipboard)"),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn copy_to_clipboard(text: String) {
+    // Windows/macOS: gli appunti li tiene il sistema anche dopo il drop
+    if let Err(e) = arboard::Clipboard::new().and_then(|mut c| c.set_text(text)) {
+        eprintln!("[rondine] appunti: {e}");
+    }
 }
 
 /// Pulisce il testo incollato: via i caratteri di controllo, le nuove
@@ -172,7 +181,14 @@ pub fn handle_clipboard(app: &mut App, hit: ClipboardHit) {
                 app.status = crate::tr("apri prima una chat").into();
             }
         }
-        ClipboardHit::Empty => app.status = crate::tr("appunti vuoti (serve wl-clipboard)").into(),
+        ClipboardHit::Empty => {
+            app.status = if cfg!(target_os = "linux") {
+                crate::tr("appunti vuoti (serve wl-clipboard)")
+            } else {
+                crate::tr("appunti vuoti")
+            }
+            .into()
+        }
     }
 }
 
@@ -225,11 +241,12 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-// ---------------- appunti (wl-clipboard) ------------------------------
+// ---------------- appunti (wl-clipboard su Linux, arboard altrove) ---
 // Ctrl-V non blocca più il ciclo: il probe gira a thread e la conseguenza
 // arriva come Response::Clipboard, con lo stato della UI rilegto allora.
 
 /// wl-paste con argomenti extra: `None` se il processo manca o fallisce.
+#[cfg(target_os = "linux")]
 pub fn wl_paste_bytes(extra: &[&str]) -> Option<Vec<u8>> {
     let mut cmd = std::process::Command::new("wl-paste");
     for a in extra {
@@ -244,6 +261,7 @@ pub fn wl_paste_bytes(extra: &[&str]) -> Option<Vec<u8>> {
 
 /// Tipi e byte degli appunti: prima i file copiati, poi l'immagine
 /// (png/jpeg), poi il testo.
+#[cfg(target_os = "linux")]
 pub fn probe_clipboard() -> ClipboardHit {
     let types = String::from_utf8_lossy(&wl_paste_bytes(&["--list-types"]).unwrap_or_default())
         .into_owned();
@@ -271,6 +289,33 @@ pub fn probe_clipboard() -> ClipboardHit {
     }
 }
 
+/// Fuori da Linux (arboard): prima l'immagine (convertita in PNG), poi il
+/// testo. I file copiati dal file manager non si leggono.
+#[cfg(not(target_os = "linux"))]
+pub fn probe_clipboard() -> ClipboardHit {
+    let Ok(mut cb) = arboard::Clipboard::new() else {
+        return ClipboardHit::Empty;
+    };
+    if let Ok(img) = cb.get_image() {
+        if let Some(png) = rgba_to_png(img.width, img.height, &img.bytes) {
+            return ClipboardHit::Image(png, "image/png");
+        }
+    }
+    match cb.get_text() {
+        Ok(t) if !t.is_empty() => ClipboardHit::Text(t),
+        _ => ClipboardHit::Empty,
+    }
+}
+
+/// I pixel RGBA degli appunti in un PNG (come quelli di wl-paste).
+#[cfg(not(target_os = "linux"))]
+fn rgba_to_png(width: usize, height: usize, rgba: &[u8]) -> Option<Vec<u8>> {
+    let img = image::RgbaImage::from_raw(width as u32, height as u32, rgba.to_vec())?;
+    let mut out = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut out, image::ImageFormat::Png).ok()?;
+    Some(out.into_inner())
+}
+
 /// L'immagine degli appunti in file in tmp (0600): (percorso, KB).
 pub fn clipboard_png_file(bytes: &[u8], mime: &str) -> Option<(std::path::PathBuf, usize)> {
     use std::io::Write as _;
@@ -288,18 +333,17 @@ pub fn clipboard_png_file(bytes: &[u8], mime: &str) -> Option<(std::path::PathBu
     let ext = if mime == "image/jpeg" { "jpg" } else { "png" };
     let path = dir.join(format!("appunti-{ts}.{ext}"));
     // 0600 sin dalla creazione, non scritto con la umask e poi sistemato
-    std::fs::OpenOptions::new()
+    crate::paths::private_file()
         .write(true)
         .create(true)
         .truncate(true)
-        .mode(0o600)
         .open(&path)
         .and_then(|mut f| f.write_all(bytes))
         .ok()?;
     Some((path, bytes.len() / 1024))
 }
 
-/// Ctrl-V non blocca la UI: il probe wl-paste gira a thread fuori dal
+/// Ctrl-V non blocca la UI: il probe gira a thread fuori dal
 /// ciclo; il risultato torna come Response::Clipboard mentre l'utente
 /// continua a usare il client (luce a volte i processi si inceppano).
 pub fn ctrl_paste(app: &mut App, res: &mpsc::UnboundedSender<Response>) {

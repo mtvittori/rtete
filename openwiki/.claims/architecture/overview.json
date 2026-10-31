@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:050b037309bb2afeaaac1ac0fd49f3dfbef2dfff1f2a72b402de895a2abd484a",
+  "claims": [
+    {
+      "id": "claim_cde845f4e215457caf0772513cc48847",
+      "statement": "The package builds a shared library plus two binaries: `rondine` (TUI, always) and `rondine-gui` (requires the `gui` feature).",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L37-L52",
+          "version": "repo-lines-v1:sha256:9d7383762c391cb90295e8c70f3883fbfde5a6750f85c52b15138cf286e197ac:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2ZjZjMWM3M2U0Njg1YjZmNTU3OTJhZTUzOTI1NTNmZjc5ZDNjYzA2N2IwYjc0ZTA2ODY5OGY2YjJjNzZiODIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxMGI4MTBiZGY5OTczMmQzNWYxOGU1YmYzYjUyMTkzZWNjOGFhNmNmNmEzYTQxYjc5YzJiMjdlMDQxZmU4MmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcwMGU3OWY0YjgzMGYwZDEzYThkNDExNzhhMGZjYmI5M2EzNzczYWRmM2UwZTdlNWJjODMwMTY0YWFjMTU5NmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjNGYzOTllZTY3YmYwNmFmMDMxMDg4MzNiNTAzMjlkYzVhOTFjNWRhNWE1NjNlMDM4OGM1YzkzNTBmYmVkYzgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e6ef771fc2f441b88c0838afe9f726a8",
+      "statement": "The `whatsapp` feature gates the WhatsApp backend module and its dependencies; without it the TUI rejects --whatsapp with an error.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L24-L39",
+          "version": "repo-lines-v1:sha256:43b48936d64d12fc8d2d90697b1e47db17a7d4248edc0a63b1f88d3835bf0816:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4N2U2ZWVhZjI4OGVkOTI5NzM0MjI0MDI4ZmE2YzY2NTFkMTQxNzcxOGJjNWY4NGU4NDY5MmE0M2Y4ZTEyOGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiMTI5NjExNmRhZDAwMzZmZjExYzJmNzkwZWEwYWY4Nzc5MjdhMTJhMTVhYzZiYzgzMGFmZTFiYTIyZDdmY2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0YjM1OTkzNWI0ZTY2NjdkZWMzZDYwYzAzYTc0YjVmNzk3MDE2ZjcwMGQyMjQyYmIzMDUzMTFmNWQ2YmE0OTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRlN2Q0ZDRiN2ViODQ0YTMzNzRlYWNhZjM4MjdkODg4MmYzMThlNjAwOWQ4ZGI4MDdmN2RmZGMzNTVjZDljODgifQ"
+        },
+        {
+          "resource": "repo://src/backend/mod.rs#L7-L9",
+          "version": "repo-lines-v1:sha256:1f748a2799556a43c225f42d25b439b74f49c44f974f978a332c70c10523c072:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjc3OTgxYzM1MWZmYTdkYTA4NjM5ZWRkNTA2MDlmZjNjODk1N2I2N2ZlMzY4NTFiNmM3ODM4ODI2NmJlNjYzMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzQ4NDdmZDhjZmFmM2JjNGQ4Mjk1YzMxZjQ5NzcyNzY2NzVmNzIzYmQ1OTU1NGFkOTVkZjIzYWNhNTMwZTFlMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjlhODQwZjZlMWFmM2I5MDgxMjBmYmE0ZDI3NWYyMDUzYTRhOGNkNDFhMGE0YTAxYmZhMDQxYWY0NDI1NTQ0ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://src/main.rs#L85-L96",
+          "version": "repo-lines-v1:sha256:622836ca0a2f592e3348a21433636d698f15781ef026a0934e5fba41348ed0e6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjMzUzZGFmOGMwODI5NDg5ZDBjODhhZTFmYjVhNTFlNTc0NTY3MTlhZjQ5NGY5ODUzM2NmNzc4ZGMyY2Q4YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcyNDAyNDYyNTc4MmZhMTIxZDNiMzI1MDIxZDNkMWIwYzRiOGI2ZDQ4ZmIzNGU3ZDc4N2JiNGJlN2I5ODc5YWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc2MTY0MTdiNDBiYTNlYjUyOGQzOTFlODRlMWMwMGVlYzg2YWQwMzU4NjE0ZjY4OTM5MWZlMTRjMThjOTEzODAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2d2a9d8b24f543829afa26ea8e43275a",
+      "statement": "The UI and App communicate with backends only through neutral model types and the Request/Response protocol; backend-specific code lives under backend::<name>.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/mod.rs#L1-L3",
+          "version": "repo-lines-v1:sha256:d568da4b100f37fd3736f1dcf8f229df8a4f3794b1d79189e35428a2bb1b3ab3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzU4NDVlOTY1ZmEwNzJlMzQ2Mzc1MTdlMWE0YmU4YWJiZDhhOTA1ODZkN2M4M2FlNjE5MDc3NmFkMmExNDQ2ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGNlZWRlMjMwMzM5OTgyZjhhMWFhZjEzZjBiOTk4YjEwMzRiNjQ4MTc1NjdmMzliNTVhNzkxZWI1MmNhYmRmOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjlhODQwZjZlMWFmM2I5MDgxMjBmYmE0ZDI3NWYyMDUzYTRhOGNkNDFhMGE0YTAxYmZhMDQxYWY0NDI1NTQ0ZSJ9"
+        },
+        {
+          "resource": "repo://src/lib.rs#L1-L4",
+          "version": "repo-lines-v1:sha256:f940ca239cd09b038adf1ed188ccab601dedc8ca804673d4a1f2ad594090f426:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTRlMmRiYmI3NjEyYzJjMWI2YmEzMGNhODc5NjhhNjM5MWZjNmEwZWU3M2E1OGZlZDkzZDQ3YzBmMGVmYTMzNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzZkMGMwNjg3NGQ0YTQyNTQwNjY3OTYyNzQ2OGQ0ZWE4ZGQ0ZGFmZDViYThhY2ZjNDZkNzRhYzNkN2ZlOThmZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGIxNzc1MzRlODIwYjBlOWU5Mjc3OWFhMWIwYWE3NDZkNGQzN2ExN2ZiNmJlZjY0NDc3OGUwNDNiY2QxMWE2NiJ9"
+        },
+        {
+          "resource": "repo://src/model.rs#L1-L4",
+          "version": "repo-lines-v1:sha256:92811e30e236a57ccdaa58d1b2bfee6c4aee06ffb201c846f9af3682847137b7:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTAwOTY2MzJlMGZmMDBhNjUxYWJkZDA1ODY5MzJjNTMwMjM1NzhmMTZjYzdmMGY2ZTJmNmZmMWJlMjFmMWYyMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTRiYjFmODY0NWNkZDIxNjAwNjQ0MTllYWI5ZWY5ZTk0OTE5YTQyYmY0ZGY0YWZhYWYwMjBkYjQ5ZGM0NzZhOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDAyYmRhMzNhMGY1ODcwZjY5NzFhNDQ1NGJjODZhYmEwMGJhNmYzZTllMDE1ZTM5NTQwNTlhMzk3MTJhNmI0ZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_5856bc10b4fe4db5bb865a84e713850e",
+      "statement": "A single unbounded request channel and a single unbounded response channel connect the frontend to the backend, replacing earlier per-operation channel pairs.",
+      "evidence": [
+        {
+          "resource": "repo://src/main.rs#L78-L83",
+          "version": "repo-lines-v1:sha256:1967785869afca0ce7880a63ca1f446c4a0ea1b8d57a327a7a16afde5842a7c6:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGQzM2FjYjM1NDkwMTFiYTQ4ZjRkNjM3YmI2MDY0NDliYWRjYmNlYmUzODgyZTUyM2I5YzQxZDJmNDE1YmMzMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjdiYzViYTExOWZiNzhhZTYxNDkzMTA0MTA1ZjMzYjVhZmFkYTI5ZGI3MDNiYWQwY2U4YTBhNTEzNzU0MDdmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjlmZmNmNzQ3OWU3NWM0MmQxMTcxYmM0ZjkxODJlZWYxYTk5NjMyZGI4NWE4ZTY5MGUxYmI3MTFmOWRmNTFlYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTg5ZjJkNzc3NjdkNTYyNjdjY2ZjZTNiOWIzYTYxODZmMDM0MTk2OTM0NGEyZjk2YzAxNTFjMjM3Y2IwZDNlYiJ9"
+        },
+        {
+          "resource": "repo://src/send.rs#L44-L48",
+          "version": "repo-lines-v1:sha256:f4b6ea36bc5053aac5ba8995e10e561bad405e632f7b29cc194ef129f1238bb5:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWQ2MTNmNmI5MzdhYjQwNzRkYmQ0ZjY5MTIyNDQ4YWI0MDU5NTVkMWZhODg2OGMyZjExMzA3MTQwNjMxZTQ4YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBhNThjN2I0ODJmYjcwYmQwOTA5YWM2YTExMTM4ZjdlODE1ZTRhMDhjZTg1ZDRhNzExNzQ5Y2U3MmFkY2JhMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjc2YTU0NGNjMDIzZWQ0MDVlM2I5OGI4YTM1NDA5MGZhZDE2ZTllMThkNWVlOWY3YmE2YzNlNzAwNTMwMDlkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzQ5YzE3ODgyZWZjZWNjMmY5YzdiYzNkNTQ4NGI4N2Y1NWIyMmMyNDA3YWQ5ZDY2MDA3NzM3MTIzZDU5ZTA5MiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_74966cd0d990454eb4363e4a671a9631",
+      "statement": "Environment variables are read as RONDINE_<KEY> with a fallback to the legacy RTETE_<KEY> name.",
+      "evidence": [
+        {
+          "resource": "repo://src/lib.rs#L23-L29",
+          "version": "repo-lines-v1:sha256:1603a86a5ac616e1169a5cea6134caf738f45a740845c4e9869af3f717655b0b:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzY0ZWRlYTg0NDRkOGJiODVhZGU2OTYzMTBkMDE4YTg3YjRlZmE1NmJiNDdiYmViZWQ0Yzg1ODU1NWJhY2QyMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTZmYjQyNzM2Y2MxNDg4Y2E1NTEzYTAzNTJlMTBlNTU0MDI3ZTUzNTViYzEwMzUxYWYyOTg4ODVkZjFlZTBlNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjIsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDE5NzU1Mzc4MjAzODNjMjJjZDFlNDBkOWM2OTNjMTYwYjEzMzc5Zjk2NTRiOTA5YTA3YTNiNGFiZWZlZTUyYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_42af15ece84a48a6853df215826afc4b",
+      "statement": "TUI-only modules (events, view, term, gfx, kitty, sixel, styles) are declared inside the TUI binary, not in the shared library.",
+      "evidence": [
+        {
+          "resource": "repo://src/lib.rs#L6-L18",
+          "version": "repo-lines-v1:sha256:21c91d9c6d5e02509815d07f83d3f7b9de91e10a3b3b7233dc1c57a5945fe16a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5N2JjZTBhNjY5ZDBkNzgwYzE5M2RlNzIwMjFhNmEwMzc0YzhhYmQ1MjQ5ZjQwZWJlNjBkNzM1ZTgyOGIxNjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmNzg4NDQzZDdmZGM0NzJjYjNlMTkyNGVhMjQzNGYyMTZmYmM1MTlhOGNhOTI3MmVlZjZiZmFhZjYxMmYyODgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNWFkMzYzZmMyMjllOWY2OTllOGRlNWViZTYyZGVkMzk2ZDI2MWZmNTdkMmIzNjc4ODZkOTMxZjg2YjdhMjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5YjRkNzViMjMxYjJkZmMxN2NkZGRhODIxODY0YzJiZWQwNDVmODFlYmYwOWU2NDU4ZmIzNzlhNTZmY2ZhYzYifQ"
+        },
+        {
+          "resource": "repo://src/main.rs#L5-L13",
+          "version": "repo-lines-v1:sha256:ea42972b55b8737f0848ed5419c9de7ec4aa4ff5c0528c3b144bba56d1f313cb:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWU0ZTE1NjkwMmYxMGUzYzE2ZWRhMTU1MzI1NTg4MDE1ZDVlYzE0OWRmMTg4ZmU5ZjMwNDRhODVjN2EyZjVhZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmJlNmVlYjVmZTRmYWVjYjZmMTczOTc3NDg0NjcyZjBkMmNiMjBhNDQ3M2JjODMwYzcyMjU0NWJhM2FkYzRkYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmI3NDgyMGRjY2E1ZjJhN2UyN2Y3ZGQ4MmI4NTYyOTVjM2FhMzEyYjYyZGI4NWQ0OTYxNWMyN2Q3YTQ5YWY3ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDFjZTEzZmU4YzdiNGFmNTNmYjRmODQ3OGMyNjNhYzYwNzJhMmQwOTZmYTYzOTg5NzY1NjlhMjk5YmViMzkzZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_872659e5b041407eac1b050612aba6f4",
+      "statement": "The GUI performs Telegram sign-in inside the window through net.rs, although the gui/main.rs module comment still describes login as TUI-only.",
+      "evidence": [
+        {
+          "resource": "repo://src/gui/main.rs#L1-L3",
+          "version": "repo-lines-v1:sha256:566eb8eaaa112b55b886ee26409b1e96dabb8bea1d43bd99a65780961cb9379f:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2I5NjNjY2Y0YjU5MmQwNDZhNTBjMDk4ODExMmY5YmMyZWU1YjIzNmM1ZmQwMjUwNDU5ZWZiYzkyM2U0MzkyMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDlkNjVjMGIyZTkwZjAxYTAyYzM3NzNiZTBlNTg1MmU2NjQ1OGQ3YmIxZWUwOWRjZDM1NmM1ZjRlNmY0MzY0NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzdlMDBjNTg0Y2VhOWFhY2UzY2JmMDM1M2M0NTA2ZmEzNjM2OTgxMGZjZjMyYzIyZTkzOWViMDFiYTkyNTIyYSJ9"
+        },
+        {
+          "resource": "repo://src/gui/net.rs#L247-L312",
+          "version": "repo-lines-v1:sha256:c7dfde5020f0ca1b6a1628a2d293b32b18443730a207d02618a49cc7e8062f0f:eyJzZWxlY3RlZExpbmVDb3VudCI6NjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjZDljY2Q1NWVkZjUyZDRmOTI3ZjZiZDgxNzk5MmU2ZTRlYjIxZTczM2Q5MWU5Mjg1NjhjNWIzZjNhMGYxMTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1ZWM1MDEwNTJmYmE3ODc0YWJlMWJmY2UwZDQ3ZjdkNGMzYjA4ZTA2NWM4YTBmNjVjMjE0YmMzN2I1NjkwNGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjExZGQ2NGE3MGE2ZjkwY2JiZDAwMWJiYmRmMjlkMTUxMGIyMjhlOWEzNTQ1OWYwNTBlMTFjY2YwN2U3M2ZiMTMifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

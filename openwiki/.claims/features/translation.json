@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:011cbe6fd18b2ca5313a981992a8212a48ac47c1064e1499baa5152b84aa43b7",
+  "claims": [
+    {
+      "id": "claim_95244029456c472fb7847d9eb4a0571e",
+      "statement": "Translation supports DeepL (default) and any OpenAI chat/completions-compatible service, defaulting to Groq with llama-3.3-70b-versatile, with Groq, OpenRouter and local Ollama presets.",
+      "evidence": [
+        {
+          "resource": "repo://src/translate.rs#L16-L32",
+          "version": "repo-lines-v1:sha256:c923670bdf01e357407460ff1508c83539040d888ed94f894473a571fa64768a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMxZDI1YzY5YjE0YTdkMGY2YzM3OTZhY2Y5N2U4N2UyMjc1NDAwODVkYWU5ZTlhNjlmMmJkZTUyMTQxMTAyNjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIwMmQyYzBkNmRjNWU3NGQ5MmZhMTRiOTFkYmVhMjY0MDkwYmViMzVmZGI5MTg4ZDliMzQxMTgxZGNlOWY0Y2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzZmZiMWJkNDZkYmRhYzQyZmQyZmIzYTc1YjQ4N2Y1MjA4NjZkNmU0OTY1M2E2NzhhNGFhYTI1MjQ1MDY1NmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlZDc5MjcyNjAyOGYyYzBjNjcwNDEzZWU0ZDU4OTkzNGQxYTQ2YzU1MzI1NjQzZWQ4ZjI3NjRjZTBkZWM2NzgifQ"
+        },
+        {
+          "resource": "repo://src/translate.rs#L63-L75",
+          "version": "repo-lines-v1:sha256:932a9f23e498dbf22771c98c0ceca2f8b799df3c47c480d7c903f0510f5113fa:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzMWViMWY3NWU3NjZiYzA3OWNjMDk3Yzk5MTM1ZGZhYzdmNjhhNzBjMWJlYTQyNzY5NzA5NmFmMjQyYWNhMGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhYzBmNzAzOTQ2MGFiZDgyODQ1OTI3ZmVmNzk5ZTIwNWZlMDA4ZWEyYmI4ZTJjMTdmYmMzMDk4NmNmYmY1MTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYyYWQ0MmYzMDAwMjg5ZTRlY2MyZGE1NzhjZDZhZGRmMDBiN2Y0YTZjZjUzMjQ3NTdkNmY0MTQxMmEzNmY5MTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e68729a5aa0a4413a1ed8035cf884126",
+      "statement": "Translation config is stored as key = value lines in translate.conf, written 0600 in a private config directory because it holds API keys.",
+      "evidence": [
+        {
+          "resource": "repo://src/translate.rs#L77-L126",
+          "version": "repo-lines-v1:sha256:ec8f5ebad162b722514516b63f23d3ec8c61367b56fadea350563f336eb8439f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExMGRkYjQwM2IyM2Y4Njk4MzQ3NjU0NjQwNmEyMjEzMzcyYjZmZjc0MTNkNjEwODdlZGJlMzAyZDdiYmIwNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFjYzZjMDRiYjA3NjA0YjQ1OTJlYzg1ZDY0YjI1YTU1MWQyZThjYzQxYzViODZhNDE0YTM1MDljZGQyNzU2YTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ecfe04b8fa1341e0a6f2851372139200",
+      "statement": "A configuration is ready when DeepL has a key, or the OpenAI provider has a key or a localhost URL.",
+      "evidence": [
+        {
+          "resource": "repo://src/translate.rs#L128-L135",
+          "version": "repo-lines-v1:sha256:5dcd2fc8c3d204e4e9b0a30034ba20597d6645d6b5ea76a409e924c7ce9077bf:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2FlNGIyMTQ4ZDQxMjg4MWIxMDk2NWI1ODA0NmY4ZGI3ZGFkZjRlNGMyYWIwMjQ1YmI5MjY3ZDM5NGNmMWMyMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDEzOGNkMGQzOTlmOThkNGI4NmVjMDZjZmMxMjFlN2NkNmJiZDRhMzEyZmViODZmMjkwMzJlMjZkZGY2ZjE2MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGMyYTVjNDQ2ZDZlM2I5MDZkY2JmOWFhYWUwMzE2NGU4YmQ5YWZmYmYzMjkxZDFhYjliMDE3MmY5ZWI3M2ViOCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_11bf745708ae400185a77ac18f0f1b06",
+      "statement": "DeepL free-plan keys ending in ':fx' use api-free.deepl.com, and en/pt/zh targets are mapped to EN-US/PT-BR/ZH-HANS.",
+      "evidence": [
+        {
+          "resource": "repo://src/translate.rs#L187-L227",
+          "version": "repo-lines-v1:sha256:99cd5cdb6d0f0963ee9c4f34fdc78fe7ba30bf75180c9747d4a575a17a4228b0:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkY2NiN2M4Y2MwYzhhZDE5YThkMTQ3MWZlZDQ4ZTE3MmRlMGFkYzM2ZjgwY2YzYTc0YzNkNWRjNmM5MzZmMTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU1NTYzMWMzZjdmZGUzZWQ2YTljMjk2ZjE2OWY5NzFlYWI0NjQ4YTA2ZTU1OTRhYzVhNDBiMDIxNTgxYjExNDcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f95060b816b944c4b2e5dad9cc95d3ee",
+      "statement": "The OpenAI-compatible path requests a JSON object with source language and text at temperature 0 and falls back to the raw reply if JSON is missing.",
+      "evidence": [
+        {
+          "resource": "repo://src/translate.rs#L229-L286",
+          "version": "repo-lines-v1:sha256:7ccea0eccb86ae2b0d2ac2cfad7adcdb0ecb4e731e007505af2cf35ec1e89b36:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxZGM2YzU4Nzg2NzQxM2U3MjY2ZDk1MDRkZGZlMTg3ZTk2ZmJiZDVlZjE0MDM3N2I2ODA4MTEyOTdkMzZhZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYwNjNjNGQxYWY4Y2Q4OWJiMGJkZDc2NTdmZmNiZjY4MDZhNjEwZDc5ZDZjOGQ0YzMwN2MyNDFkZjM5MDA1MjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8f65730aa18447e88f781fe5188613ff",
+      "statement": "Translation HTTP calls are synchronous ureq requests with a 25 s timeout, run in spawn_blocking behind a 3-permit semaphore.",
+      "evidence": [
+        {
+          "resource": "repo://src/translate.rs#L170-L177",
+          "version": "repo-lines-v1:sha256:495538d480352e9e4754eaf36e71ca2be65c9c42f4347ec9630357bf224aa9c3:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTdhOTU4MDg0ZTAxYTU2MDk0NzM0ZWYwYjQ4YWI3ZGQ0NjBiYzczZWQzYzJmMjEzNTg3NzM0ZDU4OGRlNTJhMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTZkY2YxYmU3ZmNmNjE1NmIwNGVjOWQ1Y2E1MDBiMmRjODFiMzdmYzNlYTcxNmMzNDc1ZmIwZDliODBjMTY1ZCJ9"
+        },
+        {
+          "resource": "repo://src/worker.rs#L164-L186",
+          "version": "repo-lines-v1:sha256:90ba1ceaee9d22c28f6fd91b67ddb9cfea9e061500024df902a3b9cc35df6f1c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3YTM3OWNkM2UxOTc1YWY4NmFiZjIxYjAyMTliNDFkMWY5NjhiMDUxMzIyNmFlNDEzYzQxMDBjMWMwNGQ4OGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmZjZlZTI4YzhkNzczMDNiY2ZhOTc4ZTBmOGY0NTZmNDAzZTAzMWRiNzAyMDg4ZWJiNDEzYTFiOTczNDdmNjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_644df587c4954dd889f40fb7ae7d5c77",
+      "statement": "Queued translations are dropped with a status hint when no provider is configured; otherwise each text message is marked Busy and sent once.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L654-L673",
+          "version": "repo-lines-v1:sha256:eb5d49b505e740ea99babdeca8653e7d5cc7aeae35a77f22616ed44562cca707:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk0ZDdiNjkyMjY3OTdjMjE0YzYwM2FlNDY1YTY3NmE3MjI2MzFiZWFkYzA0Nzg1YTJkNTM1YTIwOWVlNzlhODciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhZDM2MDNmMDZjMzNmNGU4YzUwYTlkOGY2ZDFlNWM2ZWMzYjU5YTk5NjNmZTA2N2FhZDIzNzE1NjEyNDAwMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYWI2Mjk1OTMzNDJiMWViN2ZhNzQzMTJlZGNiZmNkM2Q0ODNmMDViMWQ0OTgzYWMzMWZiYzU1NjJhOWM0MDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9508db3fa74e4dc284799aec24e5e860",
+      "statement": "Enabling auto-translate for a chat or loading its history queues the last 20 incoming text messages not yet translated.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L112-L113",
+          "version": "repo-lines-v1:sha256:5cd32ef5a52daef01bd06695e4b0bd879830e15ed321db5a89a3e5bc71561f1c:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWE1NjY3ZTgyNDliMjRjZmIzM2JjNmFjMjk3N2MyMDIwNmMxNTkwOTI0Yjk0YmUyNmY0MWZiM2Q3N2ZiODBiNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWNlYmE2Zjk2NWI0ZmY2OGUyNDg2MzI2ZjRkYjIxNjU3M2U2NDgxYzZmOTcwZjJjYTAwYWVhNTNlOTUwZTk0YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDc5ZDhlNGE0MTY4MGI5MTlhM2ExNGNjYjU5MzYyM2NhZWQ2OTE5ZmM4Yjk1ODE3YTkyNmRiMDFjNDQyMjBiNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWM3ODk2OGY4ZTJjMDUyMTY0ZDk4NGU3OWQzZGFmMzQ1N2FiZWViZmZlMTcxOTIwYWYxNDRlYThmMzA1OWJmZSJ9"
+        },
+        {
+          "resource": "repo://src/app.rs#L636-L652",
+          "version": "repo-lines-v1:sha256:2b308b4a67c59151ef4efb0a479592ba3fca41b179dbca58661bebac89b7c1fd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyNGZmOWYxMmQ5NWFlYTlmY2NkOTU4Y2RkOTZkOTQyNGJjM2UxODNmMjE2ZGU3Y2JmOWEwMWQ3NmFiMjA1NWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1MWNhZTMyMzkwYWNkZGE0M2Q3NGIyOGIwMDBjYjUwZmM2MDU3MDRhNmViMzg3NDBhNjBlMjc0YTkwMGNjNzYifQ"
+        },
+        {
+          "resource": "repo://src/gui/main.rs#L1089-L1097",
+          "version": "repo-lines-v1:sha256:d7b0a3f4cdd36743257a44eb58e78759558f8ef3a879a8b1a5256bc5b40b9ce9:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzk0YzQ2NmYzMzI3NTJiY2MzMGViZGJmMmEwODNkODYxYzFlYWU0ZDU1MmYzMDYxOWM4N2QzNmY2NTI0MjExZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzNmY2ZhMzMwNWRjMDM3ZmU4YjUzZmViZmFkMzY3NzRmYmVmZGI4MGZmZjkwODg4ZmIwZDE4MzA4ZTlmMDk2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTlhMWNlZDQ1YTdkY2UyMDAzNzExZjU0NWYxMjM2OTAyYzFhNTI2MTA5OTk2OWY4ODIzYmI5YmJiZTJlOGZjZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTkyODk3ZmQyYjFkMTcwYWVjMzA3MGJiMzA1ZjA2ZWQxMDY5NDlkYjFkYzkxZTUwZjJiZGMyYzIyZmQ0NTVkOSJ9"
+        },
+        {
+          "resource": "repo://src/sync.rs#L178-L179",
+          "version": "repo-lines-v1:sha256:19e97804fab4b16ad330d8e5c3f8cdc14fac8102fbfa4b66a217903160d83bc3:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDE4YzMwYzk3ODdjM2MyNDE4MDMzMGZiODY3YTc2ZGM1NjMwMDAwYjYwMjczZDQ0MGQ2Y2NmZTFmNDc2YWFhMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjEwMzhiNDkzNjc4ZjE0YjMxMjEwOWE1MTgwNjdmMDQwYWQ1OTFhZGRiODk2N2IyNGU5YTk0ZGI0ZTk4OGI4NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzc3MzBmYTM2N2Q1ZmQ0NTliY2U4NmU0Njg2MTAxOTRjOTEyYmQzZjJiNDlmNGZlNTNkMjFhNTllNTA5Yjc0OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWQzZjQxMjU5NzQ5ZTJkMjY5ZWM4ODIxZjZiZGUxY2FjNTk3MTJlZDZiYzU5ZmQ1MzgyZGEwMGIwMzVjZTc3MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4cbecf84aa4540c5ab5a424f80cbc414",
+      "statement": "TUI Ctrl-G toggles the translation of the selected or last received text message.",
+      "evidence": [
+        {
+          "resource": "repo://src/app.rs#L622-L634",
+          "version": "repo-lines-v1:sha256:841b6bded9f66f483b80c774ef1a84c7dd00fb6d1139cc59e8de9ae07c9ea6a2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyMjU0NzM1YjNlOWE1ZmY2ZDNiN2M5ZTdmMTlmNjZlYzYyNWExZmFiZjcxZTY0ZDEzYTE2MWU0YWI2ZTM5NTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA4Zjg5NDBiZDZmM2MzMjMwOTJmYmEwYzgzOGJhMDA0Y2VjNmZmZTdkNjYwNzY4ZWIxOTU0OGQ1NWE0ZDA4ZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA0MzI2Mzg0ZTU0Zjk4YjJiYzE1ZTE2MDc5NzAwMWIzNjdlNDU5NDA1ODk4ZmUyZWY5ZGE3ODEyNTkwNGFjYWUifQ"
+        },
+        {
+          "resource": "repo://src/events.rs#L288-L304",
+          "version": "repo-lines-v1:sha256:be47f9fb96d0dc35e70f865d3b68a763ab1a14e38a61db96c2968286af9b7dba:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwZDFjYWQyOGU0NTdhYjM2NzQ5MTE1N2EzNjliNGMwNGU0OGY2ZDJhYmYzMjkyYTNlNjg0ZGRhMmU2NzVlODgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxNDNhMTA3YmIwMTMzODExMGZjMDlmZTYyZDg3MWU3YjI4ZTYxOGM4YWI4Y2MxOTRiYzY5NWI3N2JmZWMwYWYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

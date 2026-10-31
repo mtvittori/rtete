@@ -11,7 +11,6 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -447,10 +446,9 @@ impl Store {
             }
         }
         if append {
-            let mut f = std::fs::OpenOptions::new()
+            let mut f = crate::paths::private_file()
                 .create(true)
                 .append(true)
-                .mode(0o600)
                 .open(self.msgs_path(jid))?;
             let mut body = Vec::new();
             for m in &fresh {
@@ -615,11 +613,10 @@ pub fn summary(m: &StoredMsg) -> String {
 
 fn write_atomic(path: &Path, body: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("tmp");
-    let mut f = std::fs::OpenOptions::new()
+    let mut f = crate::paths::private_file()
         .write(true)
         .create(true)
         .truncate(true)
-        .mode(0o600)
         .open(&tmp)?;
     f.write_all(body)?;
     f.sync_all()?;

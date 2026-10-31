@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:a4926d7abb8da5759e68e4fef94d5b714f6a041e8538a0533b1b581bf9ee2c39",
+  "claims": [
+    {
+      "id": "claim_4b154f2cef264145a5f2f20bbf9a5137",
+      "statement": "Telegram API credentials are stored as one line '<api_id> <api_hash>' in <config>/rondine/credentials, created inside a 0700 directory with a file opened 0600 from creation.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L255-L307",
+          "version": "repo-lines-v1:sha256:0eb5e7b77743b381902e2a38e97350415d59dedf513dbe1385eaf8fb50c702f3:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4MWE1NjRiODA1NzVmNjQ0ZDUzZThlNDYyZjRkMzhhNjdlYzEzY2I5Nzg2OGMwYWNkNmYyNzcxNjZmN2I0YmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmOTlmY2JhYTAzNDIzZGFhZDczZTQxNmY2NDBmODQwYWZlZGI2OWRlNWM4M2Q1MDJhMTE5OTg4NmVmMDQwNzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZlMGIzODU3MjZmOTNkZmU3YTIyMzc2MzNlNDkxZjAyNGUzYWNhNzgxNDNiMDM0OGQxMDI5OTJlOWNlNWNmZjUifQ"
+        },
+        {
+          "resource": "repo://src/paths.rs#L145-L169",
+          "version": "repo-lines-v1:sha256:db0c694549d3249454399cdd349a320efd0734d6158f6bf472edec656f388e3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1NTkwMzE2ZWZiMWFhNjBlNDA3Njc5ZTg2ZGJiNjU2MDA2MTcwM2RkNjIxMzBhZTgwOWI4OGQ5YzQ5OTgxYjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIxMWI1YzI4MWYzYjVjOWQyMGYyY2QwNTRjMGM2ZGJlYzMwY2RlNGU4Njk3YThmZGM0ODA5ZDg1YjI4MjEwMzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_257ab9a8cdef4beea517187981bbdab0",
+      "statement": "The sqlite session file rondine.db is pre-created 0600 before sqlite opens it and existing files are chmod-ed to 0600 on Unix, because it contains authorization keys.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L372-L410",
+          "version": "repo-lines-v1:sha256:cc0c55e2b270bbca1c07b7fe97cb527d9e48d7547094cf9704405f49245e840a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVjNzk1ZDc2YWVjODM3ZjhiNjNmNDkyZDg5YjRjYWRjOGMwZWM3MmM5NTFlYmUyYmViZjc1ZGUyYzNmMDM2ZWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmNmI2NzA0NTBmYjZhYWVmNjEyMTJhOTM4NjUyMmYzYTFlY2Q1ODU2YTg5YjU2MDlhZjQzNmU0YjU2ZmE1NGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e8c90b0de1124a81ae6e11409208c955",
+      "statement": "TUI connection retries up to 5 attempts with exponential waits capped at 16 s, only for network-wobble errors, not for wrong credentials or codes.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L412-L478",
+          "version": "repo-lines-v1:sha256:0b19594b4b63ffa889f60e49d6f3a4fac59ab6750856f3dd5e367f2a15e2d45a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlNGY2MDNiZTBhN2ZlZDdhNDc3MjI3ZDg4ZjQ2NmIyNDY1MDYzOTVlZTdmODI0YTM1YzgxMmM4MDgyZDg4NjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwYjcwNjc5NjNiN2U5N2Y1YmY0ZDA3YTkzYjE5MDMxNTJiNzU0MmQzYzIxNmI2MDNhZjVmOTJmZGNkNWM1NTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0YzI2MGQ3ZWFlNDRkNmM0MjJlZjQ3MTUwNjBkMmVkMTdmN2UxOTBhZjBhZmQwNjk5OWQ3ZTExZjZkNzU2ZmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c748224d63c743b48291c6c0ad44217c",
+      "statement": "GUI sign-in uses sign_in_steps, which re-asks each step (phone, code, 2FA password) with an error message instead of aborting, receiving answers over an mpsc channel.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L309-L370",
+          "version": "repo-lines-v1:sha256:79503064f1b933ce71c70ad22b23b0c6f1d9fdbb694fb63aa2aeb0ff719971ae:eyJzZWxlY3RlZExpbmVDb3VudCI6NjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjZGY4NzI1OTE2ZmNkMjA0OWI1OTM0ZDU2Y2QzMzc3Y2EwNjQxYTM0OTdhYTVmOTgwNzE3OWQxOWRjZTEzN2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFiNzE0ZDcxZGJkZjM3MmI1YTIzYmIyMzEwZmM1M2QwNWZiMGViM2MzODdlYmM0ZDRkNzlhM2FmOWFmNzI5YmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhMWZmZDEzMjg2MDhiMjVlZWQ1YjU4ZTgyNTNjNzU2ZDA1N2M1YTdhNjRjMDI5NzcyOWE0MzA0MTk3MTI1NWYifQ"
+        },
+        {
+          "resource": "repo://src/gui/net.rs#L247-L312",
+          "version": "repo-lines-v1:sha256:c7dfde5020f0ca1b6a1628a2d293b32b18443730a207d02618a49cc7e8062f0f:eyJzZWxlY3RlZExpbmVDb3VudCI6NjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjZDljY2Q1NWVkZjUyZDRmOTI3ZjZiZDgxNzk5MmU2ZTRlYjIxZTczM2Q5MWU5Mjg1NjhjNWIzZjNhMGYxMTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1ZWM1MDEwNTJmYmE3ODc0YWJlMWJmY2UwZDQ3ZjdkNGMzYjA4ZTA2NWM4YTBmNjVjMjE0YmMzN2I1NjkwNGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjExZGQ2NGE3MGE2ZjkwY2JiZDAwMWJiYmRmMjlkMTUxMGIyMjhlOWEzNTQ1OWYwNTBlMTFjY2YwN2U3M2ZiMTMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2dd83d1ec362491795a1f140ca3af489",
+      "statement": "Bare 10-digit phone numbers starting with 3 are normalised to +39 (Italian mobile); other numbers only get a + prefix, so foreign numbers need their country code.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L480-L500",
+          "version": "repo-lines-v1:sha256:e71c5609500ae9f487961cace382dfab51de9f4f34804f55b0b8069cbe5c6703:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1YjAzMTNjMDNiNGRiZDRhZjA2ODYwZTI1NDI4YTYyYmM0YjQ2MTk4Y2JlNWNkZTA0MDkwNTVlNjQxMTA5NGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY3YTc0MTIyNGM0ZTk0ZDJhNzQ4MmNjNzhhNTE5MWZkODllZjAxOWY4ZDY4ZjFiZmE2MWM1ZWQ4ZjcyOTZiNjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQwNWIwNTE2MDBlZjk0NTAwZDBhOTZiM2YwZjE1NGE2ZjgwOTYzOTY0Mjg0NGY2ODVjNTUyNTZhOTBjMjE5NWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_741821e82f55447ca4a19b79ddd1d6f3",
+      "statement": "The terminal 2FA password is read without echo through rpassword.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L541-L561",
+          "version": "repo-lines-v1:sha256:923cbdb803196dc83b4da913968bc52c1f87e728319830e2607841efb4327bef:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4YmI4YzVkODc4MGE2NzFjOTVmNGYyMGE2N2Y2NWE4OWZlZGMxOTExNTJkNGE4OGVjNmYxMDVmNjM5OGVkYjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjczMjJhZmUwMGIxZmRlY2ZiMWY5N2U2NjI3MWE0MTA3MThjMGE3MWM0MTkxZmQxY2Q0MDg3M2E4OTI1YmVhNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUwYTc5MDVlODg2NzUyNjJiZjlmZTg2MTc1Mjc1NTRmNjI5OTJiODc1NGQ3NjIzYzc0ZjM5NzllODQ5Yjg3ZGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8de9eb36000b40d18a2245ef7620c2c3",
+      "statement": "In the Telegram dispatcher, preview conversions and avatar downloads share one 2-permit semaphore.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/worker.rs#L244-L252",
+          "version": "repo-lines-v1:sha256:651376ab4dd2bcde8ab674a5631c8129058ff29c0bae771398e63b2f5d7b5598:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjhhMTRhMTE5ODFhZWI5ZWJkMDYzMzFlNDQ4YjdhZGM1NjY3NGU1MTg3NDE1ZWQ5YTQ5NzBiNmQ0NTkyMWZkYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGM2NDc5Y2MyMzA0NDBmZDQxZTgyMjQyMTg2Nzk2OTg1NTlkMjg5M2JkNjdiNDM4MGFmYWI4MTFiMzhhNTVhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDdlYzQxYTIxZjNiMzU4YTViNGVjZTliMTM2YjRhOWEwZWU0MmUwNDhiNGNkMzNiNWQzZjQyYzJjYWNmZjUxNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzdkNDU5YmViMjA2ZmIwOTM1YTExMWM0NTUwZTUxZTA0MTdlZGViMGRlNTljOTdkMmFiMzFkYjViOTVhOGU4MSJ9"
+        },
+        {
+          "resource": "repo://src/backend/tg/worker.rs#L98-L121",
+          "version": "repo-lines-v1:sha256:fc755d125d8ca224ec0b93a8138554cda531c599c0b579d5b89c04149a1974cc:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzZDk4ZDM5OTc3M2I0NGZiMDhmYzQ4NTdmZDA2NGIzMTkzNTZlYzAzZTI0MGQ0NWI0YmViMThmMmVjYTUzN2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjNjQ3OWNjMjMwNDQwZmQ0MWU4MjI0MjE4Njc5Njk4NTU5ZDI4OTNiZDY3YjQzODBhZmFiODExYjM4YTU1YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU4NGIyYjhhMmRiZTgxYjZiODdlNGVlYWQ4MDc2N2QzZGY1NzJmYzFhYWRhMTQ0ZDc2NWQwNjMxZTI2OTE1OWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiNGEyM2YwZWJhMDRiMTZlMGI1ZjI1MzU2NzVlMjEwNDFkYjg5MmEzNjI0OTA4NmZmOGViOWViNzA1YTI2YWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_33139757b5ae4357bddfc09fb711647a",
+      "statement": "Telegram media cache keys are the hex MD5 of the server media id; for videos only the largest thumbnail is downloaded as JPEG.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L1435-L1486",
+          "version": "repo-lines-v1:sha256:fde51e8b65a733ce4260ecd5ce7b827d2b8d97d8254bcb224a9f78c6c98ed111:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzNGY5MzIxZjU3NmI3NzMwZjUyZDQwYzk2OGIwZTIyZmJmNmIyZTdlYTljNDczYjI3MzdhZDA0ZDQ3ODc4MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwZmM2ZTJlNjU0OTBkMDYxYjdlYmU4NzBmZTJiYTEyZmQxNmViODRiNzM0MjVlOGEwMTQ5OWU4YWJlZTY0Y2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ZDQzNzVlNjM0YjY1MmVlOTM1N2MwNTBjZWIxZDFjOGZiMjU4MGYwZTcyMWQ3YWNkN2MxYTM1NTYyODgzNjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f351a964ec744540942ccf8fc43c75d5",
+      "statement": "Live updates are streamed without catch-up and translated into neutral Live events sent as Response::Live; stream errors become Response::LiveErr and the task stops when the channel closes.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/live.rs#L139-L166",
+          "version": "repo-lines-v1:sha256:a1f579e3b37882b9f986217abd299dcf87a8cff7bb0127b48cf9bb03dcb80c74:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3ZmQwNjVlYmFiYTAyYjkwZWRjYTU3ZmFiYzM4Mzk3OGI3OGRjN2Q5MjliYWY3NWI0ZjMyY2Y0MTRkNTFkYmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c01279e315e34dfcadefe307840083ce",
+      "statement": "Message deletions carry a chat id only when Telegram reports a channel; otherwise the Deleted event has no chat.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/live.rs#L40-L48",
+          "version": "repo-lines-v1:sha256:3e112205fdaf5498688e29ac66681cd94179e7a4dba12cd0dcb1206e32f09658:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjdmNTBjOTE0NjYyMDE1NWEzN2ZjYjdhNzMwODEwZjg1ZGExYWMzYTZjNjhmMjgzNmFhY2U3MmE0MGIyZDYxMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmU0MTkzZTIyZGVmODRmYTBhNDk3NmY3Yjg3MjUxYjE5MGY0ZDkwZmFhNGJmYzUzNzMwZjdlMTg2MjY3Mjg5ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTFlZDhmODI3ZTRhMzc4ZjdjYjZmZDRiMjc4NGYwNTk0N2M0ZWQzZGNlOTMwZDg2Yjk4ZWZmNDJmY2ViZTVkNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2f37f3b58fbb4e25a885d8064e74091d",
+      "statement": "Muting a chat sets mute_until to i32::MAX, archiving moves it to folder 1, and deleting a private chat loops messages.deleteHistory until the offset is zero.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L1135-L1187",
+          "version": "repo-lines-v1:sha256:15f0f132b5458db32ba0ed384c5c7810011fe7cf7b98ae34f3eabbd050573571:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJlYzJmNzEwODYzOWE4YWFmOGIyYTE5ZmNkYWE5Y2E1ZDk4Mzk2NTVmMzRiMGJkMWM4MGYzOGVkOTVmMzEwMTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY1NTM1ZDBhNmFhMWU5ZWE3M2Q5Y2I5NjUwODY4MjM2ZGExNTFhMTlhMDNiYjMzZWViMjQ4NDM3ZmNiOTNkZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwODdkNDA3NzZlNDBmYzgwYjc2MDg3ZmFhOTI4MWZmMzAzNTU0OWRhNmJjNGU3ZjIxNjNlMzhlNGJkNzQ3MGYifQ"
+        },
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L1204-L1252",
+          "version": "repo-lines-v1:sha256:bcac154bba9d29d78141c1f9f49a852c24e9bd6d4c2cc05b5751b8814d5316c4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhNDAzNGZkZmZlNDZkZThmOWFiMGE5YmUzNTE1Mjg4N2I5OGE2NDYzMzJhNWIxZDU5MzZjYWMxYWY2ZTUzOWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1ZjZmNDY2ZTU5Y2ZjMzA3MDNjNDVmNzJhZjY1ZGU1NGFjMzYzZDM1NGNjMWEzMzMwMzUwYWNkNDUyNDM0YzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzNWMzOGU0YzY1NjcyZDgyMGY5ZTczZTZjY2RhMDkwNjc0NWM2NzBhYmM4MDU2MWE5NWQwMzc0ZDEwZWVjMzkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_79226a45262f4edeaf6aecdc470cc942",
+      "statement": "The self user, which has no numeric Bot-API id, is mapped to the sentinel ChatId 1<<40.",
+      "evidence": [
+        {
+          "resource": "repo://src/backend/tg/mod.rs#L34-L44",
+          "version": "repo-lines-v1:sha256:a048d99d72ef91695d37c2769433f251a06f18d1335a66d90139d53602eb123c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1MTFkMWJiN2ZlNjJhZDIzNzBkOWI0ZTU1ZDU2YzliYzdmYjdlZTQzNGJkNGNjMWE4NGEzMjY3NjdmYjM0ZWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmZGNiMDU1ZTg5MzAzNTA1NTZkZjk2MThkZWRhNjZhMzJkMzBlNmI1NjY0MjY2ZWFjZTJjODcyYTVjN2JmY2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYjFhNDk0OWM3MmQwYzFlNTliOGRjNmQ0NDM4OTg0MDlhMGQxMjQzMmE3NWI0MzRkZjQzZWYwZWUzZDk1YzEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-27T16:14:44.132Z"
+  }
+}

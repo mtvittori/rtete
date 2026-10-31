@@ -1,5 +1,5 @@
-//! Impostazioni della GUI, salvate in `~/.config/rtete/gui.conf` come
-//! righe `chiave = valore`.
+//! Impostazioni della GUI, salvate in `<config>/rondine/gui.conf`
+//! (~/.config su Linux, %APPDATA% su Windows) come righe `chiave = valore`.
 
 use std::path::PathBuf;
 
@@ -141,10 +141,8 @@ impl Default for Settings {
 }
 
 fn path() -> PathBuf {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"));
-    base.join("rondine/gui.conf")
+    // la stessa cartella di config del resto dell'app (cross-OS)
+    rondine::paths::config_dir().join("gui.conf")
 }
 
 impl Settings {
