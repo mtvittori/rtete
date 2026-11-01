@@ -330,6 +330,49 @@ impl Store {
         }
     }
 
+    /// Il testo con le menzioni scritte col nome: WhatsApp le manda come
+    /// `@<numero>`, ormai quasi sempre il JID anonimo (`@lid`), che a
+    /// leggerlo non dice niente. Restano come sono quelle sconosciute.
+    pub fn with_mentions(&self, text: &str) -> String {
+        if !text.contains('@') {
+            return text.to_string();
+        }
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text;
+        while let Some(at) = rest.find('@') {
+            let (before, tail) = rest.split_at(at);
+            out.push_str(before);
+            let digits = tail[1..].bytes().take_while(u8::is_ascii_digit).count();
+            // un indirizzo email o un numero corto non sono menzioni
+            let glued = out.chars().last().is_some_and(|c| c.is_alphanumeric());
+            let name = (digits >= 6 && !glued).then(|| self.mention_name(&tail[1..=digits])).flatten();
+            match name {
+                Some(n) => {
+                    out.push('@');
+                    out.push_str(&n);
+                    rest = &tail[1 + digits..];
+                }
+                None => {
+                    out.push('@');
+                    rest = &tail[1..];
+                }
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// Il nome di chi è menzionato come `@<user>`: col JID anonimo se è
+    /// noto, sennò col numero; `None` se non si sa niente di più.
+    fn mention_name(&self, user: &str) -> Option<String> {
+        let lid = self.display_name(&format!("{user}@lid"));
+        if lid != user {
+            return Some(lid);
+        }
+        let pn = self.display_name(&format!("{user}@s.whatsapp.net"));
+        (pn.strip_prefix('+') != Some(user)).then_some(pn)
+    }
+
     /// Gli sticker ricevuti e inviati, dal più recente, con la loro chat:
     /// WhatsApp non ha set da sfogliare, questi fanno da «Recenti».
     pub fn recent_stickers(&self, limit: usize) -> Vec<(String, StoredMsg)> {
@@ -489,6 +532,29 @@ impl Store {
         self.messages(jid).iter().find(|m| m.wa == wa).cloned()
     }
 
+    /// La chat che contiene uno dei messaggi (per id WhatsApp), fra quelle
+    /// con qualcosa da leggere: prima le chat in RAM, poi i file.
+    pub fn chat_of_wa(&mut self, ids: &[String]) -> Option<String> {
+        let has = |m: &StoredMsg| !m.me && ids.contains(&m.wa);
+        if let Some((jid, _)) = self.hot.iter().find(|(_, msgs)| msgs.iter().any(has)) {
+            return Some(jid.clone());
+        }
+        let mut unread: Vec<&ChatMeta> = self.chats.values().filter(|c| c.unread > 0).collect();
+        unread.sort_by_key(|c| std::cmp::Reverse(c.ts));
+        unread.into_iter().map(|c| c.jid.clone()).find(|jid| {
+            std::fs::read_to_string(self.msgs_path(jid))
+                .is_ok_and(|raw| ids.iter().any(|id| raw.contains(&format!("\"{id}\""))))
+        })
+    }
+
+    /// Quanti messaggi in arrivo restano da leggere dopo l'ultimo di `ids`;
+    /// `None` se nessuno è della chat.
+    pub fn unread_after(&mut self, jid: &str, ids: &[String]) -> Option<usize> {
+        let msgs = self.messages(jid);
+        let last = msgs.iter().rposition(|m| ids.contains(&m.wa))?;
+        Some(msgs[last + 1..].iter().filter(|m| !m.me).count())
+    }
+
     pub fn by_id(&mut self, jid: &str, id: i32) -> Option<StoredMsg> {
         if !self.chats.contains_key(jid) {
             return None;
@@ -559,7 +625,7 @@ impl Store {
                     pinned: c.pinned,
                     last: c.last.as_ref().map(|(id, text, me)| LastMsg {
                         id: *id,
-                        text: text.clone(),
+                        text: self.with_mentions(text),
                         outgoing: *me,
                         date: c.ts,
                     }),
@@ -636,6 +702,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let store = Store::open(&dir).unwrap();
         (dir, store)
+    }
+
+    #[test]
+    fn mentions_by_name() {
+        let (dir, mut store) = tmp_store("mentions");
+        store.set_name("205686000631949@lid", "Marco");
+        store.set_name("393331234567@s.whatsapp.net", "Bice");
+        store.link("148618887622718@lid", "393331234567@s.whatsapp.net");
+        assert_eq!(
+            store.with_mentions("io e @205686000631949, @148618887622718 e @393331234567!"),
+            "io e @Marco, @Bice e @Bice!"
+        );
+        // sconosciuti, numeri corti e email restano come sono
+        assert_eq!(store.with_mentions("@999999999999 @12 a@205686000631949 @"), "@999999999999 @12 a@205686000631949 @");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

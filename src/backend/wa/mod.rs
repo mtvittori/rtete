@@ -184,7 +184,7 @@ pub fn row_of(store: &mut Store, jid: &str, m: &StoredMsg) -> HistoryRow {
         id: m.id,
         outgoing: m.me,
         from,
-        kind: row_kind(jid, m),
+        kind: row_kind(jid, m, &store.with_mentions(&m.text)),
         reactions,
         date: m.ts,
         reply_to,
@@ -194,11 +194,12 @@ pub fn row_of(store: &mut Store, jid: &str, m: &StoredMsg) -> HistoryRow {
     }
 }
 
-fn row_kind(jid: &str, m: &StoredMsg) -> RowKind {
+/// `text` è il testo del messaggio già con le menzioni risolte.
+fn row_kind(jid: &str, m: &StoredMsg, text: &str) -> RowKind {
     if m.deleted {
         return RowKind::Note(tr("🚫 messaggio eliminato").into());
     }
-    let caption = m.text.trim().to_string();
+    let caption = text.trim().to_string();
     let media = media_ref(jid, m);
     match (m.kind.as_str(), media) {
         ("image", Some(media)) => RowKind::Photo { media, caption, gif: m.mime == "image/gif" },
@@ -223,10 +224,10 @@ fn row_kind(jid: &str, m: &StoredMsg) -> RowKind {
             size: Some(m.size as usize),
             caption,
         },
-        ("text", _) => RowKind::Text(m.text.clone()),
-        ("note", _) => RowKind::Note(m.text.clone()),
-        _ if m.text.is_empty() => RowKind::Service(String::new()),
-        _ => RowKind::Text(m.text.clone()),
+        ("text", _) => RowKind::Text(text.to_string()),
+        ("note", _) => RowKind::Note(text.to_string()),
+        _ if text.is_empty() => RowKind::Service(String::new()),
+        _ => RowKind::Text(text.to_string()),
     }
 }
 

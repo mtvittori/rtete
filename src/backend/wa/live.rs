@@ -214,7 +214,7 @@ impl Shared {
                     self.message(&m.message, &m.info);
                 }
             }
-            Event::Receipt(r) => self.receipt(r),
+            Event::Receipt(r) => self.receipt(r, client),
             // archivio, fissate, silenziate e «da leggere» cambiati dal telefono
             Event::ArchiveUpdate(u) => {
                 self.chat_changed(&u.jid, ChatAction::Archive(u.action.archived.unwrap_or(false)))
@@ -392,12 +392,35 @@ impl Shared {
     }
 
     /// Ricevute: l'altro ha letto (spunte doppie) o io ho letto altrove.
-    fn receipt(&self, r: &whatsapp_rust::wacore::types::events::Receipt) {
+    fn receipt(&self, r: &whatsapp_rust::wacore::types::events::Receipt, client: &Arc<Client>) {
+        // whatsapp-rust 0.7 non segna mai `is_from_me` nelle ricevute e
+        // ignora `recipient`: «letto» da un mio dispositivo (il telefono)
+        // si riconosce dal mittente, che sono io
+        let sender = bare(&r.source.sender);
+        let mine = [client.pn(), client.lid()].iter().flatten().any(|j| bare(j) == sender);
         let mut store = self.store();
-        let jid = store.canon(&bare(&r.source.chat));
-        let chat = chat_id_of(&jid);
         match r.r#type {
-            ReceiptType::Read | ReceiptType::Played if !r.source.is_from_me => {
+            ReceiptType::Read | ReceiptType::ReadSelf | ReceiptType::Played if mine => {
+                // nei gruppi `from` è il gruppo; nelle chat a due è il mio
+                // JID, e la chat la dicono i messaggi letti
+                let chat_jid = store.canon(&bare(&r.source.chat));
+                let jid = if store.chat(&chat_jid).is_some_and(|c| c.group) {
+                    Some(chat_jid)
+                } else {
+                    store.chat_of_wa(&r.message_ids)
+                };
+                let Some(jid) = jid else { return };
+                let Some(still) = store.unread_after(&jid, &r.message_ids) else { return };
+                let Some(c) = store.chat_mut(&jid) else { return };
+                if c.unread == still {
+                    return;
+                }
+                c.unread = still;
+                self.save(&store);
+                self.live(Live::ReadInbox { chat: chat_id_of(&jid), still: still as i32 });
+            }
+            ReceiptType::Read | ReceiptType::Played => {
+                let jid = store.canon(&bare(&r.source.chat));
                 let max = r
                     .message_ids
                     .iter()
@@ -410,14 +433,7 @@ impl Shared {
                     c.read_out = c.read_out.max(max_id);
                 }
                 self.save(&store);
-                self.live(Live::ReadOutbox { chat, max_id });
-            }
-            ReceiptType::ReadSelf => {
-                if let Some(c) = store.chat_mut(&jid) {
-                    c.unread = 0;
-                }
-                self.save(&store);
-                self.live(Live::ReadInbox { chat, still: 0 });
+                self.live(Live::ReadOutbox { chat: chat_id_of(&jid), max_id });
             }
             _ => {}
         }
