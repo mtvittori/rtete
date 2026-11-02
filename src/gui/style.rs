@@ -1,6 +1,7 @@
 //! Colori e stili. La palette è globale e cambia a caldo: quella di Rondine
-//! (scura sul modello di Telegram Desktop) o quella del tema Omarchy
-//! corrente, letta da `~/.local/state/omarchy/current/theme/colors.toml`.
+//! (scura sul modello di Telegram Desktop), quella chiara di Telegram
+//! Desktop (il tema «Day») o quella del tema Omarchy corrente, letta da
+//! `~/.local/state/omarchy/current/theme/colors.toml`.
 
 use std::path::PathBuf;
 use std::sync::RwLock;
@@ -74,6 +75,33 @@ pub const WHATSAPP: Pal = Pal {
         color!(0xa5b4fc),
         color!(0x06cf9c),
         color!(0xfc9775),
+    ],
+};
+
+/// Il tema chiaro di Telegram Desktop.
+pub const TELEGRAM_LIGHT: Pal = Pal {
+    bg: color!(0xe6ebee),
+    sidebar: color!(0xffffff),
+    header: color!(0xffffff),
+    bubble_in: color!(0xffffff),
+    bubble_out: color!(0xeffdde),
+    accent: color!(0x40a7e3),
+    text: color!(0x000000),
+    muted: color!(0x8a8a8a),
+    link: color!(0x168acd),
+    danger: color!(0xd14e4e),
+    // azzurro chiaro: la chat scelta tiene il testo scuro
+    selected: color!(0xd6e9f8),
+    hover: color!(0xf1f1f1),
+    // nomi più scuri, leggibili sul bianco e con le iniziali bianche
+    names: [
+        color!(0xc03d33),
+        color!(0x4fad2d),
+        color!(0x168acd),
+        color!(0xd09306),
+        color!(0x8544d6),
+        color!(0x2996ad),
+        color!(0xce671b),
     ],
 };
 

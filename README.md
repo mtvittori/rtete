@@ -27,6 +27,19 @@ cargo build --release
 
 Il binario finisce in `target/release/rondine`.
 
+### Build veloce (sviluppo)
+
+`release` usa LTO completo e `codegen-units = 1`: è la build più lenta.
+Per iterare c'è il profilo `fast` (LTO `thin`, 16 codegen unit, senza
+`strip`):
+
+```
+cargo build --profile fast
+```
+
+Il binario finisce in `target/fast/rondine`. Per solo controllare che
+compili, `cargo check` è ancora più rapido. Usa `release` per i rilasci.
+
 ## Versione grafica (iced)
 
 Accanto alla TUI c'è `rondine-gui`, la stessa Rondine (rete, worker, cache
@@ -81,8 +94,8 @@ stesse sessioni).
 
 In Impostazioni → Aspetto si sceglie lo **stile**: Telegram (com'era) o
 WhatsApp (titolo «Chat», bolle con la punta, campo tondo e invio verde).
-Ogni stile ricorda il **suo tema** (Omarchy, Rondine scuro o Verde
-WhatsApp): cambiarlo in uno non tocca l'altro. In entrambi gli stili:
+Ogni stile ricorda il **suo tema** (Omarchy, Rondine scuro, Verde
+WhatsApp o Telegram chiaro): cambiarlo in uno non tocca l'altro. In entrambi gli stili:
 
 - filtri sopra la lista: Tutte, Non lette, Preferite, Gruppi, più la voce
   **Archiviate** (l'archivio di Telegram, sincronizzato);

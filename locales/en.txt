@@ -920,6 +920,9 @@ Rondine can't start
 Rondine scuro
 Rondine dark
 
+Telegram chiaro
+Telegram light
+
 SPAZIO USATO
 STORAGE USED
 

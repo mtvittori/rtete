@@ -23,6 +23,8 @@ pub enum ThemeChoice {
     Rondine,
     /// il verde di WhatsApp
     WhatsApp,
+    /// il tema chiaro di Telegram
+    TelegramLight,
 }
 
 impl ThemeChoice {
@@ -31,6 +33,7 @@ impl ThemeChoice {
             ThemeChoice::Omarchy => "omarchy",
             ThemeChoice::Rondine => "rondine",
             ThemeChoice::WhatsApp => "whatsapp",
+            ThemeChoice::TelegramLight => "telegram_chiaro",
         }
     }
 
@@ -39,6 +42,7 @@ impl ThemeChoice {
             "omarchy" => Some(ThemeChoice::Omarchy),
             "rondine" | "rtete" => Some(ThemeChoice::Rondine),
             "whatsapp" => Some(ThemeChoice::WhatsApp),
+            "telegram_chiaro" => Some(ThemeChoice::TelegramLight),
             _ => None,
         }
     }
@@ -431,5 +435,17 @@ mod tests {
         let old = Settings::load();
         assert_eq!((old.style, old.theme, old.theme_wa), (UiStyle::Telegram, ThemeChoice::Rondine, ThemeChoice::WhatsApp));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn telegram_chiaro_si_salva_e_si_rilegge() {
+        // il codice scritto nel file e quello riletto da `load()`
+        assert_eq!(ThemeChoice::TelegramLight.code(), "telegram_chiaro");
+        assert_eq!(ThemeChoice::from_code("telegram_chiaro"), Some(ThemeChoice::TelegramLight));
+
+        // la riga `tema = telegram_chiaro` riporta il tema giusto
+        let mut s = Settings::default();
+        s.theme = ThemeChoice::from_code("telegram_chiaro").unwrap_or(s.theme);
+        assert_eq!(s.active_theme(), ThemeChoice::TelegramLight);
     }
 }

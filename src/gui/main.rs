@@ -504,6 +504,7 @@ fn apply_theme(choice: ThemeChoice) {
         ThemeChoice::Omarchy => style::omarchy().unwrap_or(style::RONDINE),
         ThemeChoice::Rondine => style::RONDINE,
         ThemeChoice::WhatsApp => style::WHATSAPP,
+        ThemeChoice::TelegramLight => style::TELEGRAM_LIGHT,
     };
     style::set(pal);
 }

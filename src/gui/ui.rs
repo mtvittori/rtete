@@ -1964,6 +1964,7 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
             choice(omarchy_label, s.active_theme() == ThemeChoice::Omarchy, Msg::SetTheme(ThemeChoice::Omarchy)),
             choice(tr("Rondine scuro").into(), s.active_theme() == ThemeChoice::Rondine, Msg::SetTheme(ThemeChoice::Rondine)),
             choice(tr("Verde WhatsApp").into(), s.active_theme() == ThemeChoice::WhatsApp, Msg::SetTheme(ThemeChoice::WhatsApp)),
+            choice(tr("Telegram chiaro").into(), s.active_theme() == ThemeChoice::TelegramLight, Msg::SetTheme(ThemeChoice::TelegramLight)),
         ]
         .spacing(8)
         .wrap(),
