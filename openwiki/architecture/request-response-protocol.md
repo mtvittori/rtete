@@ -3,9 +3,6 @@ type: architecture
 title: Request/Response protocol and neutral model
 description: The contract between Rondine's UI/state and its messaging backends — the Request, Response and SendJob enums in send.rs, the backend-neutral types in model.rs (ChatId, ChatRef, MediaRef, HistoryRow, Live), id-space rules, and how to extend the protocol or add a backend.
 tags: [protocol, model, backend-contract, channels, extension]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-1317db6898e1cf0daa186e3d
     resource: repo://src/backend/tg/mod.rs
@@ -20,6 +17,9 @@ sources:
   - id: openwiki-source-8b9177c16218108d4b93861c
     resource: repo://src/send.rs
 generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Request/Response protocol and neutral model

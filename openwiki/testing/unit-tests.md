@@ -3,9 +3,6 @@ type: testing
 title: Testing
 description: Where Rondine's tests live, what each inline test module covers, how to run them for each feature combination, and which areas have no automated tests.
 tags: [testing, cargo-test, unit-tests, features, coverage]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-1317db6898e1cf0daa186e3d
     resource: repo://src/backend/tg/mod.rs
@@ -19,7 +16,10 @@ sources:
     resource: repo://src/i18n.rs
   - id: openwiki-source-571998b1877b0f8daf274c97
     resource: repo://src/view.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Testing
@@ -28,7 +28,7 @@ All tests are inline `#[cfg(test)] mod tests` blocks next to the code they
 test; there is no `tests/`, `benches/` or `examples/` directory and no CI job
 that runs them (the only workflow regenerates this wiki, see
 [Build, features and platforms](../operations/build-and-platforms.md)).
-There are about 50 tests across 13 files. Test names and messages are mostly in
+There are 53 tests across 13 files. Test names and messages are mostly in
 Italian, matching the code.
 
 ## Running
@@ -56,7 +56,7 @@ feature. The GUI tests belong to the `rondine-gui` binary target.
 | `src/translate.rs` | LLM JSON parsing (`parse_llm`), DeepL target codes |
 | `src/backend/tg/mod.rs` | `ChatId` ↔ `PeerId` round trip (incl. self user and channels matching `links::channel_chat`), `ChatRef` carries the access hash, `normalize_phone` cases |
 | `src/backend/wa/mod.rs` | protobuf → `StoredMsg` for text, replies and photos (media survives round trip); reactions/protocol messages are not rows; whatsapp-rust SQLite storage opens and reopens next to libsql (`#[tokio::test]`) |
-| `src/backend/wa/store.rs` | stable chat ids above Telegram ranges, `WA_STATUS` matches `chat_id_of(STATUS_JID)`, 24 h status pruning, `@lid` + phone JID merge, insert id assignment/dedup/reload from disk, update of message and preview, dialog ordering and names |
+| `src/backend/wa/store.rs` | stable chat ids above Telegram ranges, `WA_STATUS` matches `chat_id_of(STATUS_JID)`, 24 h status pruning, `@lid` + phone JID merge, `with_mentions` (mentions written as contact names; unknown numbers, short numbers and e-mail addresses left alone), insert id assignment/dedup/reload from disk, update of message and preview, dialog ordering and names |
 | `src/sixel.rs` | PNG → sixel encoding, missing file, rewritten-cell detection, wide characters, last-row rule, LRU eviction — see [Terminal graphics](../frontends/terminal-graphics.md) |
 | `src/view.rs` | compose growth, labels, URL detection and wrapping, long-word wrapping, timezone formatting, message meta and reply lines |
 | `src/gui/settings.rs` | each style keeps its own theme; save/load round trip and legacy `tema = rtete` value |

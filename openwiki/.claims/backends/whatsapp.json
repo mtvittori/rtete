@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:c5629728be95d93a1ffbf522daa9dd0e67aa32de80ff84849a81cf43e1871257",
+  "pageVersion": "sha256:b4d20548b7be440e3115fda75350959d61c6c3fbe0fa63a53f1be02f1f160f56",
   "claims": [
     {
       "id": "claim_5cb8692ae44448d799d916645812f11c",
       "statement": "start_with opens the local Store and the whatsapp.db session under <data>/rondine/whatsapp, supports QR or 8-character pair-code linking, waits for the first Connected event, then starts the dispatcher and returns stored dialogs and the push name.",
       "evidence": [
         {
-          "resource": "repo://src/backend/wa/mod.rs#L386-L458",
+          "resource": "repo://src/backend/wa/mod.rs#L387-L459",
           "version": "repo-lines-v1:sha256:19a208a3b940daba1cd1cfeaf3bfd9dabeed0407ef3419a7aff92379318d87dc:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmNTZkYzg2Y2E5NDg1NTUxMWNiNTMzMDMxM2QzNjU5OTMwYWE0OTQzMjMwOWY3ZmRjMjg5ZTYyNWE5MjE0NTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmODJkZGYzMTNkZmMyNGQ3ODIwYTgxNzUwNzkyZDBmMjg3MDI5NDRkMWVmM2NjZTFjMmQwNTc3YWNlMTM0ZTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
         }
       ]
@@ -17,7 +17,7 @@
       "statement": "has_session() reports an existing WhatsApp link solely by the presence of whatsapp/whatsapp.db.",
       "evidence": [
         {
-          "resource": "repo://src/backend/wa/mod.rs#L367-L370",
+          "resource": "repo://src/backend/wa/mod.rs#L368-L371",
           "version": "repo-lines-v1:sha256:b184aa112cd06e62f93aa4081747dcf50a5104e6d19ff6145b99e5af2d07fa02:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODlhZjkwNjJiOWU1MzU2ODE3NDhhMzQzYjk2ZTA5ODNmOTIzZmJkYmViYmRmZWZmNjhkYmJlZmRhN2IzOTNmNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjA2M2M0ZDFhZjhjZDg5YmIwYmRkNzY1N2ZmY2JmNjgwNmE2MTBkNzlkNmM4ZDRjMzA3YzI0MWRmMzkwMDUyMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWJjOTdjZDYyOGFmMDE4NzFlNjI2NmM1MTBmNDJiOWNkOWY3NGQwZDExYTI4NGY1NjIyNjUzZWI3NDQ3ZWRiNSJ9"
         }
       ]
@@ -31,7 +31,7 @@
           "version": "repo-lines-v1:sha256:0d8e4763dbfb49302aaf63a29ea2aa5ac114bb344f740157f987013f913d1e2d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3MDQ3YjA2ODYwODZhNDgyNTBiYzljZmFlNTA3N2M5MWFjNDRkNDEyZjA4MzEzYzQ5ZjJhMzQ2YjUxOGEyYzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyZTMyMGI5NzBkMjAwNjkwMzhmYjY5ZTA5YTFhNDUxZjAwZGQ0NTViYWQ2NDc4NmE5ZDRmMjVmYzRlM2NjNWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlNGRkNjlhODE3NTllMzNiYTljYjc3Y2ZkMjA2MjhlODE0MDhkYjE1YmU5N2Y1NTM0YWM3ZDg0ZjRiOGNlYzUifQ"
         },
         {
-          "resource": "repo://src/backend/wa/store.rs#L360-L362",
+          "resource": "repo://src/backend/wa/store.rs#L403-L405",
           "version": "repo-lines-v1:sha256:8a820d0cc65ef48cb7fe40b25e5c0281ced19ae6f492cf2551c0b106572db9bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTgwODY3ZmQ2YTZiOTI3NDMzMWZhZWE5OTU1MzhjMDA3Y2NjZGU1NTFmODA3NzYyNTQ2MjkwZjAxYzVjZGFlMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODU0NjQ1YmQ4OWUyM2I1ZmE2N2ZhMTkxODMzNDFlZGEwZTgxZDZkNGNkNzNiNzkyM2UyMTk5OWU5YmNjYjdlNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTI4ZGMzYzE3ZjYyMWUxOTkyOWE2MDQzZjk5NDdhN2I3MWRlN2EzZWJhYmZlMTgxY2NiYjg0OTdlM2ZhZDg1MSJ9"
         }
       ]
@@ -45,7 +45,7 @@
           "version": "repo-lines-v1:sha256:daae130ba3b22c4d642cab08191d7b41fa8b1ae5064b9f47831bea5d1b03821a:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjM4OGRiY2UxMDQ5ZDMwZjBjY2U3MGRiN2ZhMGE0ZmNjMjQ4Zjg5MDcyZTAxOTU3YWZhYmYyMGYzM2E1ZmQxZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjU0MmE5NThiMDViMjdlYjJkNjdlMWJlNWQyYzNkOTI5NjhkYTg3YzU0ZDExMzU3N2JlZGE5YzA5NmYxOTYwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzU0M2YzNzQxMjg1YmU1MTEwZWEwZTU2ZWQyNTA5OTZlMjc5MjY1ZjA0YTE4MzM4ZDZhNmQxYTk2NzQzYmQ5ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODkyYTA0YjM2YzA0ZTBhMWM2M2JjODA3YzQ1ZDNmZjNkOWFlYmU1OTZhY2Q5ZTVjMTc5NWFmNTE2ZGMwNmYxMSJ9"
         },
         {
-          "resource": "repo://src/backend/wa/store.rs#L364-L384",
+          "resource": "repo://src/backend/wa/store.rs#L407-L427",
           "version": "repo-lines-v1:sha256:838d3bb217cad1e09bc0c83c7b94769a0bcd15dc3f4996c481c8be40e6ff2f6e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE4NTliMzcxODczNzQzNjg2MDJkZDVjZDlmY2QxYmE2MzFiYTUwYmFiM2Y5MzQ2MDU3ODBlM2Q5NzMxOWQ1ZjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIzNTUyZGFlYTZjYWI4YjBjN2YxNDBlNGU1YTFmYjA1ZjYyYTEyZjUxZDJlZGUzNjMxMTA3YmMyZDQ5YTIzMmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5NDI3OGUwYTc2ZTFkNWMyYjc1NDNjNzU2YzNjZmZlNWJmZTQ3Y2YzNWNlOTdiNjJmNTc5YTAwYjllY2E0ZmMifQ"
         }
       ]
@@ -55,7 +55,7 @@
       "statement": "Inserting messages skips already-stored WhatsApp ids, assigns sequential per-chat numeric ids, appends to the JSONL file when all are newer and otherwise rewrites the file atomically.",
       "evidence": [
         {
-          "resource": "repo://src/backend/wa/store.rs#L417-L463",
+          "resource": "repo://src/backend/wa/store.rs#L460-L506",
           "version": "repo-lines-v1:sha256:9c8f4c0bdbaaa7acac7d14cadf1eb14d87c9a4ec76e972a694bfa1693e0052b1:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwN2Y4MzJmNjhjNDllMDM1MTIwMmFmNjBiN2Y1OGQyNDgzOTIzYWFkNWFiMzZlMjI0OGE1OGQzZDQxYjc4NDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc3ZGI0ZGEyMDVmNWZkYmIyYTUzOGU5NjE5YzU5NzkyNjk2ZDU3NjRkNTA4NWM0MzJhYzg3YmFhN2NlMTBjYjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ZGY3ZjE2NDhiYTUzYjI0MTNkYzRjMjI5ODVlNTU4YjQ4MzgyOWYyYzlhMjNiNGY1MTVhZWE1NjkwYzNjYTIifQ"
         }
       ]
@@ -89,7 +89,7 @@
           "version": "repo-lines-v1:sha256:8c6436fd9adabad3c3c1a863ce2d04e0912f0fa7b6cb97c061f21f9a4802fcfb:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGFhNWE2ZjgzMWMwNGVhMTQwYzE0N2MzMGVlOTMxNmIxMGU2ZDVkNmVmZjM2MTNhZWI1ZDYwYjY3MjlmNDM0MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGM2NDc5Y2MyMzA0NDBmZDQxZTgyMjQyMTg2Nzk2OTg1NTlkMjg5M2JkNjdiNDM4MGFmYWI4MTFiMzhhNTVhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDk4OTQ2YzNiYTlmYzZkNTAzYWNiY2RmZjM4M2JkMTZkMWRjOGI0MDlmZmNiMWU1NTVmMzdhMzE5YzZkODFkYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGM5NDk0NTAzNDhkYTc5NmZlN2IyYjY1Y2ViYzU1MDUyMzA1ODlmMjJmZDJjMTFjYTIxMjVjODAxODhkMmUxNiJ9"
         },
         {
-          "resource": "repo://src/backend/wa/store.rs#L386-L405",
+          "resource": "repo://src/backend/wa/store.rs#L429-L448",
           "version": "repo-lines-v1:sha256:f1e955dac32b8458f91f536c65b9851dde5f6b74235b3b2e0402993172a8fa92:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4MDEwZWQyMDczOWNlY2Q2N2Y4ZDU5NGJkNzQwZmUwYTI5OTc0YjExMTExNTc3N2FjZTNiNjUxZDY2NDk3ZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkNWEyNjMxZmQ1YTI4NTg4MmFhZjNhZjQ0ZjFmOTRkOTI5ODgxODE0YTI4NmZkNWY5YzRlNzgwZWFkOGY5YWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIxNDYyODcyNTg0YTdiZDNjZDQyNzZiMTA3ZWZmZWRhZjQ5OGRhYWI2NGQ5MTA0NmU4ZDkxZmVkOTczZjA1YzAifQ"
         }
       ]
@@ -157,7 +157,7 @@
       "statement": "WhatsApp video previews use the JPEG thumbnail embedded in the message rather than downloading the video.",
       "evidence": [
         {
-          "resource": "repo://src/backend/wa/mod.rs#L269-L284",
+          "resource": "repo://src/backend/wa/mod.rs#L270-L285",
           "version": "repo-lines-v1:sha256:fa0491f1203b46c636dd67b2483360f9215797a7738e2a21c9b9631f127a9990:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlNzc3OTUxNzA3NWY5ZWNkZWJiODRlODQ1ZDYwZWViNGM2YWI5ZmUxNzA3MzE4MDQ4NjNiZDNhNjhjYTI0YjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzMDVjMDFiNjc3ZDlkMWQzY2U0MDhjNGVmODc4ZTAwZTY2NjNmNjAzYzJmMmY2YzIxMjJlNGNkMDZmMWM3MTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0NjVlYTI1OWNlYjMzODA3NDc2YjIyMTFjMzQ1ODA5MjFiY2I3MGQxZGE5NWNiNmRkYjA1NzA1NmFjNmU2ZGUifQ"
         }
       ]
@@ -167,7 +167,7 @@
       "statement": "The README lists forwarding, blocking, chat deletion and GUI as missing for WhatsApp, but the dispatcher implements Forward, Block and DeleteChat.",
       "evidence": [
         {
-          "resource": "repo://README.md#L142-L148",
+          "resource": "repo://README.md#L155-L161",
           "version": "repo-lines-v1:sha256:b5a9e6238b540a65fa61107da0570b70d6da72856c57b519f2e36f00e04cf842:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDI0YzA1NDAxMDFjMTExZTJjMTM3YWFiMTUwNWM2ZDhiMzRjYTI4ZmM4OGZkYjIyNjU5MmMwMzBjYmZjMzU1NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDE5M2M2ODA4MTEwZDBmYTFkYzllZWJiZTlhNDhmNDdiNWFmYWMzZWU5ZGE5ZTIyYWZiMzhlYzljN2E4Y2RmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjU0ZWYzMDk5ODEzYzU3MjAwNjVkNDY3MzZhMDZiNDk5M2YxZjQwYjI0NGYwZGU1ODY0MTY0YzdiOWFiYWI3ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWJmNmQ4OGE3MmVkYWRmNTFhNGY4MWE3ZTcyODczYjEzYzYxYzNmYTFhZWY1OGIzZWQyNDdiMmI2ZGRlZWNhOCJ9"
         },
         {
@@ -179,6 +179,6 @@
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-27T16:14:44.132Z"
+    "at": "2026-11-02T21:14:13.476Z"
   }
 }

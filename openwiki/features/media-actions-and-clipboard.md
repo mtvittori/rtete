@@ -3,9 +3,6 @@ type: feature
 title: Downloads, playback, clipboard and links
 description: Backend-neutral user actions in Rondine — saving media to Downloads, audio/video playback through an external player, clipboard copy and paste of text, images and files, Telegram link recognition and resolution, and locally stored starred messages.
 tags: [downloads, player, mpv, clipboard, wl-clipboard, arboard, links, starred]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-651d1fb6c9e49916a916ab51
     resource: repo://Cargo.toml
@@ -21,7 +18,10 @@ sources:
     resource: repo://src/starred.rs
   - id: openwiki-source-89402e3f86a3a076c01e7039
     resource: repo://src/worker.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Downloads, playback, clipboard and links
@@ -55,7 +55,8 @@ its own process (README: "0 extra RAM").
   `.exe` and path separators per OS).
 - Arguments: mpv `--no-video --no-terminal --really-quiet` for audio,
   `--no-terminal --really-quiet --title=Rondine` for video; ffplay
-  `-nodisp -autoexit` for audio, `-autoexit` for video.
+  `-nodisp -autoexit -loglevel quiet` for audio, `-autoexit -loglevel quiet`
+  for video.
 - The file is first downloaded to `<data>/rondine/tmp/play-<gen>-<name>` and
   deleted when playback ends or is replaced.
 - **One track at a time**: each `Player::play` increments a global generation
@@ -107,7 +108,8 @@ on `&`):
 
 `channel_chat(id)` converts a private-link channel id into the Bot-API
 `ChatId` (`-(10^12 + id)`) used by the Telegram backend, so a private link to a
-chat the user already has can open it locally. Resolution is Telegram-only
+chat the user already has can open it locally. It returns `None` for ids
+outside Telegram's channel and supergroup ranges. Resolution is Telegram-only
 (`Request::Link`/`Join`): `resolve_link` resolves usernames into a ready
 `DialogInfo`, checks invites with `messages.checkChatInvite` (already a member
 → `LinkHit::Already`, otherwise `LinkHit::Invite` with title and member count

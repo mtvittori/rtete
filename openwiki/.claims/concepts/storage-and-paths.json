@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:de0e11a59c50848b33146f23e085f6aa4724537e3edc2c4a9e192633b7a3883d",
+  "pageVersion": "sha256:f893487103516e0fca6a92966091a01afbd03f8c377893bb71bf0c83c2390124",
   "claims": [
     {
       "id": "claim_425583f02c2b4edc97685add3bf07926",
@@ -27,7 +27,7 @@
       "statement": "On first run, rtete/ config and data directories and the rtete.db session files are renamed to their rondine equivalents if the new ones do not exist.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L327-L329",
+          "resource": "repo://src/gui/main.rs#L329-L331",
           "version": "repo-lines-v1:sha256:488ff170ac4db8fe64537c06d1351f8d88215319b692d9b558624d97dd73876d:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2Y2YWZkNmVjNmI0NTkxMzE4ZGRmYjZjNjgxMTMwZTcyNGY5NTJjNjgxNTAzNGZjNDU3Y2Y2OWQ5MmQ4NzllZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg4Mjk5MzRjZjA2YTEwOGMwYzc2YjI3OGIxMTA5NGQ3YmFmMzZiMGQxMTdmOTEzNmYzMDVmM2U0MTE4YTVhZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWUwN2ZiZjY4M2E3YjJkZmNjODIzYzNiMzc3MDQxNmQ3Y2MzZjBlZWU0MzhhNmMzMTE1MzQwM2M2Njc5NzEzZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmQ5MzZlYmNhN2E5NDM4Y2Q1ZThjZjJjNjYyOGVlMmFmMTg4N2FmNTgyNmNkMGNhZGQ0ZTUyNzgyNjFlMzQ5NiJ9"
         },
         {
@@ -83,12 +83,12 @@
       "statement": "GUI settings are saved as 'key = value' lines in <config>/rondine/gui.conf.",
       "evidence": [
         {
-          "resource": "repo://src/gui/settings.rs#L143-L146",
+          "resource": "repo://src/gui/settings.rs#L189-L192",
           "version": "repo-lines-v1:sha256:79f513f99b3b76bcd5aee5f12938acea75197913f46f4bfe55b0365af15cf04e:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTEwZGRiNDAzYjIzZjg2OTgzNDc2NTQ2NDA2YTIyMTMzNzJiNmZmNzQxM2Q2MTA4N2VkYmUzMDJkN2JiYjA0NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzU3OTY2Y2FlNWEzY2NiNDIzZDEzZDE4ZDI1MTkzNTU5ZTBhZmE2NWU4ZWM5OWQ2OWQ1ZjVjMWIwZDUyY2M0MyJ9"
         },
         {
-          "resource": "repo://src/gui/settings.rs#L257-L297",
-          "version": "repo-lines-v1:sha256:cbfeea4f311fd7bf972d2a081e6014e9ffc26c44c717fc3b4163cbd7e8a3789e:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyMDNhMzNiYjRkN2VkOGRiMmJjYWQ3YjI3NWQxYWY3NzliZWIxOTQzNDY1NzczN2I3MzU5NzQwZjA1NzBmOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1YTlhN2ViNzFlNTk4MmE5ZTMwMGNiOWE4ZDZmYjlkNDc0YWI5OWYzYzM1MTBkZjg3OTY5ODc3NmYyOGY1NjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyMDU5MWZlOTJkYjUzNGYzODNhNmQ1YzU2OTMyYTE1ODYxNTQ5N2Y2M2VkNzcxY2RkN2IwNTkwZmExY2RhOTUifQ"
+          "resource": "repo://src/gui/settings.rs#L333-L379",
+          "version": "repo-lines-v1:sha256:06680d5d58d423ded66af78171bf113a06af18cc8c988929f1fc054fb1f91aba:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyMDNhMzNiYjRkN2VkOGRiMmJjYWQ3YjI3NWQxYWY3NzliZWIxOTQzNDY1NzczN2I3MzU5NzQwZjA1NzBmOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1YTlhN2ViNzFlNTk4MmE5ZTMwMGNiOWE4ZDZmYjlkNDc0YWI5OWYzYzM1MTBkZjg3OTY5ODc3NmYyOGY1NjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyMDU5MWZlOTJkYjUzNGYzODNhNmQ1YzU2OTMyYTE1ODYxNTQ5N2Y2M2VkNzcxY2RkN2IwNTkwZmExY2RhOTUifQ"
         }
       ]
     },
@@ -115,6 +115,6 @@
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-27T16:14:44.132Z"
+    "at": "2026-11-02T21:14:13.476Z"
   }
 }

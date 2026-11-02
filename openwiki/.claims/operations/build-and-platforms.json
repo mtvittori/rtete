@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:ab8cbeacb123ebe15a4c0244f8fd64d6e5674f3d425d782cd4aac758526e0411",
+  "pageVersion": "sha256:2a24e15dd5cf6e2c2070e979356bf6833c417474c66573b50a78a01ac1bf9d2f",
   "claims": [
     {
       "id": "claim_3d5b22a831ab4f2c94eb593ef370d1bb",
       "statement": "The gui feature enables iced and rfd and is required by the rondine-gui binary; the whatsapp feature enables whatsapp-rust, its SQLite storage without bundled SQLite, serde and qrcode.",
       "evidence": [
         {
-          "resource": "repo://Cargo.toml#L20-L52",
-          "version": "repo-lines-v1:sha256:57380edfdfeeace85952e44718ec283c98954605bed10061ab6a26e9a28a412c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiZGVmNDFkNWM0M2I1YjczMmYzMjIxYzljODU1MDlkMzY3NTcxODA2ZmJhZTczNjRhMjI0NzNjMGNiMzM0ZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxMGI4MTBiZGY5OTczMmQzNWYxOGU1YmYzYjUyMTkzZWNjOGFhNmNmNmEzYTQxYjc5YzJiMjdlMDQxZmU4MmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5MmU3Njc4NWEwYmMwY2ZmZWUyZGJhM2Q5ZWI3ZGU3MjUwNGNjYTI0OTBiZDk3MzlkNmE4MjY0M2E4OWJiMGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjNGYzOTllZTY3YmYwNmFmMDMxMDg4MzNiNTAzMjlkYzVhOTFjNWRhNWE1NjNlMDM4OGM1YzkzNTBmYmVkYzgifQ"
+          "resource": "repo://Cargo.toml#L37-L39",
+          "version": "repo-lines-v1:sha256:129cc2c9161ded0d2bc917d9c60bc910c18d7e439d2894b86f7d799e3b0247a3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjZmNmMxYzczZTQ2ODViNmY1NTc5MmFlNTM5MjU1M2ZmNzlkM2NjMDY3YjBiNzRlMDY4Njk4ZjZiMmM3NmI4MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2IxMjk2MTE2ZGFkMDAzNmZmMTFjMmY3OTBlYTBhZjg3NzkyN2ExMmExNWFjNmJjODMwYWZlMWJhMjJkN2ZjYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzAwZTc5ZjRiODMwZjBkMTNhOGQ0MTE3OGEwZmNiYjkzYTM3NzNhZGYzZTBlN2U1YmM4MzAxNjRhYWMxNTk2YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGU3ZDRkNGI3ZWI4NDRhMzM3NGVhY2FmMzgyN2Q4ODgyZjMxOGU2MDA5ZDhkYjgwN2Y3ZGZkYzM1NWNkOWM4OCJ9"
         }
       ]
     },
@@ -21,7 +21,7 @@
           "version": "repo-lines-v1:sha256:86c866c728d0560c593a77f9ef0eaaa288087b1ea2d042e74a30362307c0c547:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzNjNTU3ZWQwZjY4OGUyZjdlZWMwMWRkZDQxNzk1MGI4NTJhZTgzNTczMGVmM2E3YTk3MTQ1ZDA3MjYwODI5YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2RhZWI4ZmM3YzI3ZmE5MDhjNmE3YTlmYjMxNmE0YmZiNTNhM2RlN2NjMWY0NWM0NWNmNWFkZDY2N2Q1ZDM3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2U4ZmI2Y2U0MGFmYjdkYTY2N2RkZDM4NWVlMjRlNDgwZjczZjZjN2VkYzIyZjk5NDQ3YWY1ZWNhZmNhZjI1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmZlODZlYjZkZmFhODY5NzJmMTUyNmE2ZmVkMzM2NGU1ZGI2NzU5YTgyOWFjMjhkY2I4NzUzYWUwNDk5MjBhNiJ9"
         },
         {
-          "resource": "repo://src/clipboard.rs#L84-L113",
+          "resource": "repo://src/clipboard.rs#L85-L114",
           "version": "repo-lines-v1:sha256:6d922bc000db92b99e743597821598e52e4a66d286ce0d9efb1d133aca65f7ad:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2NjczOTgyOTJjMmUzYTYyNDVkNTI3NzY5ZDc4MTA5OTRkNzhlMWYxZTAyN2ZmZmQxNDU2Nzc5ZWM0YzExODQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkNDE3OTFiY2U3ODg3YTA0MTg1YmQwMGZhMDM5MzJiNWNjMDczNDViMjhhOGM1ODcyYTFmMTM2ZDkxMTM3NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwNTlmYTRkMmUzYmZlMzA3MjZmYjU5NGZjNDZhNDExNjk3NjdlOTUyMzQxMTcwYjc1MWI0ZWJjODUyMjZjNmMifQ"
         }
       ]
@@ -61,7 +61,7 @@
       "statement": "Runtime RONDINE_* variables include PLAYER, SCALE, CELL_W, CELL_H, FORCE_KITTY, FORCE_SIXEL, B64 and WA_PHONE, each also accepted with the RTETE_ prefix.",
       "evidence": [
         {
-          "resource": "repo://src/backend/wa/mod.rs#L389-L394",
+          "resource": "repo://src/backend/wa/mod.rs#L390-L395",
           "version": "repo-lines-v1:sha256:0a99b57df8315bcd54cee5946731defff5a1eed4643d54b2e5f4c811ca639d4c:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQyODAwY2I1NzQ3ODllZWUyOGU5OTk1MTE5ZDE0Y2JmNDE3MzdiZjhkNThmYWY1ZGE0MmUyOGVkNDA1OTE4MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTgwNzY5ZThhNjI3Zjg1YmQyYzNkNTUxOTcyMTNiNDFkYTE1ODM1OTQxZDlmNjVmMTk4YTY0M2VlZDVmMmQwNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjc5NjAzMzcyNmIxY2IxZjNkODJkNTkwNzIzYWQ5YmQzODQ0NTliZGYxNTBjNmNlNDBmMzk0YTNmMWQwYzYyNyJ9"
         },
         {
@@ -103,6 +103,6 @@
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-27T16:14:44.132Z"
+    "at": "2026-11-02T21:14:13.476Z"
   }
 }

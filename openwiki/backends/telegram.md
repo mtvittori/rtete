@@ -3,9 +3,6 @@ type: backend
 title: Telegram backend (grammers)
 description: How Rondine connects to Telegram with grammers 0.11 — API credentials, terminal and in-window sign-in, the private sqlite session, connection retries, the per-request dispatcher, live update translation, peer-id mapping and media download.
 tags: [telegram, grammers, mtproto, backend, login, session, live-updates]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-911ac49ed677c25780a954d6
     resource: repo://src/backend/tg/live.rs
@@ -18,6 +15,9 @@ sources:
   - id: openwiki-source-514af1f9d4353b80cbbf634c
     resource: repo://src/paths.rs
 generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Telegram backend (grammers)

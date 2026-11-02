@@ -3,9 +3,6 @@ type: concept
 title: Media cache and conversion
 description: Rondine's low-RAM media pipeline — how stickers, photos, GIFs and video thumbnails are downloaded once into an on-disk asset cache, converted to PNG/APNG off the async runtime, tracked in App state, and pruned to a size cap.
 tags: [media, cache, png, apng, gif, conversion, low-ram, avatars]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-9fec9d1af408501c9c455161
     resource: repo://src/app.rs
@@ -20,6 +17,9 @@ sources:
   - id: openwiki-source-514af1f9d4353b80cbbf634c
     resource: repo://src/paths.rs
 generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Media cache and conversion

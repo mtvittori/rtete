@@ -3,9 +3,6 @@ type: frontend
 title: Terminal UI (ratatui)
 description: How the rondine TUI binary starts, runs its single select loop over terminal events and backend responses, renders with ratatui plus image placements, handles keyboard, mouse and paste input, and always restores the terminal on exit or panic.
 tags: [tui, ratatui, crossterm, input, event-loop, terminal]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-651d1fb6c9e49916a916ab51
     resource: repo://Cargo.toml
@@ -19,7 +16,10 @@ sources:
     resource: repo://src/term.rs
   - id: openwiki-source-571998b1877b0f8daf274c97
     resource: repo://src/view.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Terminal UI (ratatui)
@@ -66,17 +66,20 @@ State and backend responses use the shared library
 while !app.quit {
     render: terminal.draw(view::draw) → Vec<Cmd::Place>
     if placements changed since last frame → app.refresh_preview_queue
-    app.request_older / request_quoted / flush_translations
+    app.request_older / request_quoted / flush_translations / flush_read_mark
     images: gfx frame_begin → draw_png per Cmd → frame_end → frame_flush
     select! {
         crossterm EventStream  → events::handle_event
         response channel       → sync::handle_response
+        sleep 500 ms           (only while a read mark is pending)
     }
 }
 ```
 
 There is a single `tokio::select!` over the terminal event stream and the one
-response channel; a closed channel or stream ends the loop. Every iteration
+response channel; a closed channel or stream ends the loop. The 500 ms branch
+exists so that a `MarkRead` deferred by the 2 s throttle is sent even when no
+other event arrives (see [App state and sync](../architecture/app-state-and-sync.md)). Every iteration
 redraws, so state changes from either side appear immediately. Avatars are not
 requested in the TUI loop (only the GUI calls `request_avatars`).
 

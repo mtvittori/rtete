@@ -3,9 +3,6 @@ type: architecture
 title: Architecture overview
 description: Crate layout of Rondine (formerly RTete) — a shared library, a ratatui TUI binary and an optional iced GUI binary — and how frontends, state, workers and the Telegram/WhatsApp backends talk through one request channel and one response channel.
 tags: [architecture, crate-layout, features, backends, channels]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-651d1fb6c9e49916a916ab51
     resource: repo://Cargo.toml
@@ -23,7 +20,10 @@ sources:
     resource: repo://src/model.rs
   - id: openwiki-source-8b9177c16218108d4b93861c
     resource: repo://src/send.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Architecture overview
@@ -124,8 +124,10 @@ render/select loop. Details: [Terminal UI](../frontends/tui.md).
 
 **GUI** (`src/gui/main.rs`): migrate directories → load settings → choose the
 iced renderer → parse `--telegram`/`--whatsapp` solo modes → single-instance
-hand-off → `net::start` builds a dedicated tokio runtime and starts Telegram;
-WhatsApp starts too if a session already exists → iced application. Login and
+hand-off → `net::start` builds a dedicated tokio runtime and, unless
+`--whatsapp` is set, starts Telegram; WhatsApp also starts when
+`backend::wa::has_session()` finds an existing `whatsapp/whatsapp.db` →
+iced application. Login and
 WhatsApp pairing happen inside the window (the module doc comment in
 `src/gui/main.rs` still says login is TUI-only; `src/gui/net.rs` now
 implements in-window sign-in). Details: [Desktop GUI](../frontends/gui.md).

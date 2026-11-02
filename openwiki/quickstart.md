@@ -3,9 +3,6 @@ type: quickstart
 title: Quickstart
 description: Entry point to the Rondine wiki — what the project is, how to build and run the TUI and GUI with Telegram and WhatsApp, first-run login, and a task-routing map to every other page.
 tags: [quickstart, overview, build, run, navigation]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-651d1fb6c9e49916a916ab51
     resource: repo://Cargo.toml
@@ -17,7 +14,10 @@ sources:
     resource: repo://src/gui/main.rs
   - id: openwiki-source-ed8bf05e307c6278442542c2
     resource: repo://src/lib.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Quickstart
@@ -41,6 +41,9 @@ Italian.
 ```sh
 cargo build --release                                   # TUI, Telegram
 target/release/rondine
+
+cargo build --profile fast                              # faster dev build (thin LTO)
+target/fast/rondine
 
 cargo build --release --features whatsapp               # TUI + WhatsApp
 target/release/rondine --whatsapp

@@ -3,9 +3,6 @@ type: frontend
 title: Desktop GUI (iced)
 description: Architecture of the rondine-gui binary — the dedicated tokio runtime bridging backends to iced, the Telegram/WhatsApp environments with parked state, unified feed and solo instances, single-instance hand-off, in-window login and pairing, settings, themes (including Omarchy) and desktop notifications.
 tags: [gui, iced, tokio, environments, single-instance, notifications, themes, hyprland]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-f985e52353b94464277d2b2d
     resource: repo://src/gui/main.rs
@@ -17,7 +14,10 @@ sources:
     resource: repo://src/gui/settings.rs
   - id: openwiki-source-b240b1b3f293de51103377cb
     resource: repo://src/gui/style.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Desktop GUI (iced)
@@ -108,6 +108,8 @@ A `Gui` shows one environment (`env: Env`, which is `UiStyle::Telegram` or
   `link` and `phase` with the parked slot, moves the shared starred list
   across, stops a pending "typing" on the old service, saves the style, applies
   that environment's theme and closes panels that belonged to the other one.
+  The chat that comes back into view, if it has unread messages, gets a
+  `MarkRead` and its unread count is zeroed.
 - `in_env(env, f)` applies a network event to the hidden environment by
   swapping it in temporarily with `background = true` (scroll/focus tasks are
   discarded).
@@ -133,9 +135,10 @@ history snaps to the bottom on the first page or when already at the bottom.
 
 Subscriptions: the network stream, keyboard, window focus/unfocus, file drop,
 Ctrl-V outside text inputs; per-frame ticks only while an animation runs; a
-timer every 80 ms while connecting (spinner), 400 ms while someone is typing,
-2 s when the Omarchy theme is active, none otherwise — an idle window does no
-periodic work.
+timer every 80 ms while connecting (spinner), 400 ms while anyone is typing
+(either side) or a deferred read mark is pending, 2 s when the Omarchy theme is
+active, none otherwise — an idle window does no periodic work. Every tick runs
+`Tick`, which also calls `App::flush_read_mark` to send a deferred read mark.
 
 Presence and typing: `Request::Presence(focused && show_online)` is sent to
 both environments on focus changes; typing is sent at most every 4 s while
@@ -156,8 +159,10 @@ cache behaviour is described in
 
 ## Themes (`style.rs`)
 
-The palette is a global `RwLock<Pal>` swapped at runtime: `RONDINE` (dark,
-modelled on Telegram Desktop), `WHATSAPP` (green) or **Omarchy**, read from
+The palette is a global `RwLock<Pal>` swapped at runtime. `ThemeChoice` offers
+four themes: `Rondine` (`RONDINE`, dark, modelled on Telegram Desktop),
+`TelegramLight` (`TELEGRAM_LIGHT`, the light theme of Telegram Desktop),
+`WhatsApp` (`WHATSAPP`, green) and **Omarchy**, read from
 `$XDG_STATE_HOME/omarchy/current/theme/colors.toml` (`background`,
 `foreground`, `accent`/`blue`, optional `selection`, colour names for sender
 names). The mtime of that file is polled every 2 s so a system theme change

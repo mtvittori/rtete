@@ -5,7 +5,7 @@ description: How the backend-neutral `App` struct holds chats, history rings, pr
 tags: [state, sync, app, history, backoff, live-events]
 verified:
   - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
+    at: 2026-11-02T21:14:13.476Z
 sources:
   - id: openwiki-source-9fec9d1af408501c9c455161
     resource: repo://src/app.rs
@@ -19,7 +19,7 @@ sources:
     resource: repo://src/model.rs
   - id: openwiki-source-5b1fad98f7b3082039d72750
     resource: repo://src/sync.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
 ---
 
 # App state and sync
@@ -122,13 +122,17 @@ These helpers are called by the frontends' loops and turn state into
   [Message translation](../features/translation.md).
 - `request_avatars` — one `Request::Avatar` per missing photo, reusing files
   already in the avatar cache.
-- `read_mark_due` — throttles `MarkRead` to one every 2 s during message bursts.
+- `read_mark_due` / `flush_read_mark` — throttle `MarkRead` to one every 2 s
+  during message bursts. A mark that falls inside that gap is deferred, not
+  dropped: `read_mark_pending` is set, and the frontend loop calls
+  `flush_read_mark` once the gap has passed (the TUI wakes every 500 ms while a
+  mark is pending; the GUI re-checks on its tick).
 
 ## Applying live events (`handle_live`)
 
 | `Live` variant | Effect |
 | --- | --- |
-| `NewMessage` | bump chat (or request `Dialogs` if the chat is unknown and no dialog was supplied), clear typing, update preview line, push into the open chat (and mark read, throttled) or increment `unread`; queue auto-translation for auto chats |
+| `NewMessage` | bump chat (or request `Dialogs` if the chat is unknown and no dialog was supplied), clear typing, update preview line, push into the open chat and mark it read (deferred when inside the 2 s `MarkRead` gap) or increment `unread`; queue auto-translation for auto chats |
 | `Edited` | `replace_row`; cancels an in-progress local edit of the same id |
 | `Deleted` | with a chat id: remove from that ring only; without: remove from every ring **except** channels/supergroups (`ChatId::own_msg_ids`), whose ids collide with private-chat ids |
 | `Reactions` | replace reaction list |
@@ -140,11 +144,14 @@ These helpers are called by the frontends' loops and turn state into
 
 Every `Response` variant has one branch. Notable rules:
 
-- A failed `Hist` sets a status message instead of showing an empty chat:
-  "network error" and "no messages" are kept distinct.
+- A failed `Hist` sets a status message (only when that chat is open) instead of
+  showing an empty chat: "network error" and "no messages" are kept distinct.
 - When the open chat's history arrives, unread is zeroed, a manual
   "mark as unread" flag is cleared via `ChatAction::MarkUnread(false)`,
   `MarkRead` is sent and previews are queued.
+- In the GUI, switching environment parks the current `App` and, when the chat
+  that comes back into view has unread messages, sends `MarkRead` and zeroes its
+  unread count.
 - `HistOlder` marks the chat done when the page is short (start of history) or
   when rows were rejected by `RING_CAP`.
 - `Docs` errors do not insert an empty set (which would look "loaded" forever);

@@ -3,9 +3,6 @@ type: concept
 title: On-disk storage and paths
 description: Where Rondine keeps credentials, sessions, caches, settings and saved files on Linux, macOS and Windows; the RTete-to-Rondine directory migration; private file permissions; and safe naming of downloads.
 tags: [paths, storage, xdg, permissions, migration, config, security]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-f985e52353b94464277d2b2d
     resource: repo://src/gui/main.rs
@@ -21,7 +18,10 @@ sources:
     resource: repo://src/translate.rs
   - id: openwiki-source-89402e3f86a3a076c01e7039
     resource: repo://src/worker.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # On-disk storage and paths
@@ -71,6 +71,11 @@ Owners: [Telegram backend](../backends/telegram.md) (credentials, session),
 [Desktop GUI](../frontends/gui.md) (gui.conf),
 [Downloads, playback, clipboard and links](../features/media-actions-and-clipboard.md)
 (tmp/, starred.json, downloads).
+
+A solo GUI instance (`--telegram` or `--whatsapp`) rewrites `gui.conf` but keeps
+the values that belong to the other environment as read from disk (the last
+used style and the other environment's theme), so two instances open side by
+side do not overwrite each other's choices.
 
 ## Private permissions
 

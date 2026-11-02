@@ -3,9 +3,6 @@ type: frontend
 title: Terminal graphics (kitty and sixel)
 description: How the Rondine TUI shows stickers and photos inside the terminal — environment-based protocol detection, cell-size measurement, the kitty transmit-once/place-per-frame model and the sixel damage-tracking renderer with its encoding cache.
 tags: [tui, graphics, kitty-graphics-protocol, sixel, foot, ratatui, rendering]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-6aa7b8ef076b4ef4f9683a99
     resource: repo://src/gfx.rs
@@ -16,6 +13,9 @@ sources:
   - id: openwiki-source-5e596d6a16d9e5bc22dba0c3
     resource: repo://src/sixel.rs
 generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Terminal graphics (kitty and sixel)

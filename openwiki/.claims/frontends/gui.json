@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:85f9befb4d876d1e1d2c1a13743340d26ef95f374d3c443b54f17c41196e70bf",
+  "pageVersion": "sha256:ebe33aeaaecdbbb3f37d67b8a9b9ab5aa82a85d6208e3439e4809de39f919ee3",
   "claims": [
     {
       "id": "claim_8699a7e2525c462d8eb96d9dbce50535",
@@ -35,11 +35,11 @@
       "statement": "Single-instance behaviour uses a Unix socket per app id in XDG_RUNTIME_DIR: a new launch hands its link to a running instance and focuses it via hyprctl; on Windows it is disabled.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L345-L363",
+          "resource": "repo://src/gui/main.rs#L347-L365",
           "version": "repo-lines-v1:sha256:9764c6683a12d64ec05c1c43e3dbfb2f7b29d16c0131d6379ba3d89b036c1030:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwNWQyOGEzNTAwYjEyMzE4YzlkNDc4MDMxYzE0NzBkNjJmYjlhNjJlM2NhZGE1NjdlOTg2ZjNmZWZjYjljODQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5MzYxNmNmZTQwMTBhMmRkZjgyN2NjM2NkNjg3YzI3MjU2M2ZiNjY2ZWJlMTZkYmIzODc1NjY2NDViOTNmOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyNDRlZTdiZTcyOGJmZTIzYTlkMmU0YWEwY2IzNWJhZjIyOGU4N2Q3ZDNiMzk2NTI1NDQ1MWIzZDM2M2U0Y2UifQ"
         },
         {
-          "resource": "repo://src/gui/main.rs#L402-L414",
+          "resource": "repo://src/gui/main.rs#L404-L416",
           "version": "repo-lines-v1:sha256:f8f6dece9363c0e2785d2219de6d7024f39cb8e3025b308eba5bba7d3ddfe171:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlYTg5MzNjZGU5YjQzYTk1MWE1OGNjZWY0MDhhYTM5YTk5NzZmODg2ZTEyNjhlYWJiZTYzOWQ2ZjU2MmU2NTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMxNWViZWM2NzNiYmViNmQ2NDhhMjdmODdhMGY4MzFmZjc0YzIzODc4MjlkNzA5MjUwZDliOWM4MjA0OWIzY2YifQ"
         },
         {
@@ -53,11 +53,11 @@
       "statement": "--telegram/-t and --whatsapp/-w start solo instances with their own window class rondine-telegram or rondine-whatsapp.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L336-L343",
+          "resource": "repo://src/gui/main.rs#L338-L345",
           "version": "repo-lines-v1:sha256:6cb447eaa9e0ec5871fb0af6f38f048a4491645fd7f88f0377b17b8ad0e544db:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWY4NDcwMTg4ZDNhNzRhNzZhYmI2OWYyYzI4N2RiYTg0ZjY1N2YxM2M5ZWJkYWZlZTA1ZDA2OGQ5MzZlOWFkNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzAwODZiNDAwNDU2ZTYxZTNjODU5NjQzY2E1MGY2YTdmMjUyMjlmMDE1N2E2NjI4YjBlNGNiYjNhMGFiOTY1NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzIxNmNlZWMyMGEzMGNhNjJhN2E0ZjA5Mjg5NDUxM2Q3MThjYzc3ZTMwOGRkZWNhYWNhYjg2ZWMxZDM5OGJhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGNmZGNkNDhlMTNhZDdmNmNlYTRiMzRjZDY3MmYxOTZlOTg5ZjAyNDdlOGM2ODc5NzIyODVkMzg2MGNhYjQ2YyJ9"
         },
         {
-          "resource": "repo://src/gui/main.rs#L392-L400",
+          "resource": "repo://src/gui/main.rs#L394-L402",
           "version": "repo-lines-v1:sha256:e70d09673a89802d3875c17d2c550aef4157172e62c728d0bc3f17235ba1eb5f:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTE0ZGQ1NDYyOWYzZGE2MTViN2I3MjdkMzNiNmEwN2JjNWY0ZDM4ZDQzNTNmZjc5MzA2ODdhZjliZGUyNjlmMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzc1NzhjOGUwYTU2N2UwNjUyYzkxYTlhZmVjMGViZjA5N2JhMTgzODg1NTZhYTA2Mzg5MjRmNDgyYmVmODI1YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2YxMTRmOGI3YmJiYjhiOWRjZWM0M2JlMjY4ZDMzMmU4MTJiNDI5MzA2NTA1YWFjM2I2NmI1Y2FlMTcxOTVjZiJ9"
         }
       ]
@@ -67,7 +67,7 @@
       "statement": "Unless ICED_BACKEND is set, disabling the GPU setting forces the tiny-skia software renderer.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L331-L335",
+          "resource": "repo://src/gui/main.rs#L333-L337",
           "version": "repo-lines-v1:sha256:731fc4943317c99a2791bf3c2da3ecf843f8d09dc9707d40faf21c060566aa03:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGJlNDRhODQ3ZGJiMDJiMGE3NGViNTgzYWQ5ZjE0MTNmZTdiODVmNTJjMmFmMWM0ZGQ3Y2Q0ZmRmODZiZGZlYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWQ4OWY1NDZjZTJhY2JlY2Y3NjEzOTZkMTVkMDYyM2UxZjg0MWQ5MDIzZjk5Yjc3OGFmYzdiNGU5NjliNDc2OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzg2MDg0MTAyMGY1ZDkwNTEyZjIxMTE0M2U0MTVkZDc5MjRmYzFkYjJmN2Q5YTI5ODIwMTgzMGI4YmM3NmRkMSJ9"
         }
       ]
@@ -77,12 +77,12 @@
       "statement": "The GUI shows one environment and keeps the other parked with its own App, link and phase; switching swaps them, carries the shared starred list, stops typing, and applies that environment's theme.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L1740-L1780",
-          "version": "repo-lines-v1:sha256:8d378d986969fdcbed98c9a4e81126f013d4123b673398ac4a96e08b2ce73668:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlMzU2Mjg1NmZiNjIwZmVkNmZiMDM1MmU4YTBhYzYxNTg4YTIyZTkwOTM5ZTg4ZjBhYWMzY2IzMjMyZTU3OTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM2NmNkM2YzMTBjMWVlZTNkYmM5ZGI1Y2JkMTFiZDhjZjhhZDhmZGE1YWE0MTFiODE3MWU3NjkxZDZiYmZiY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1OTQwODg5MjNlMzI2YmNlYjM5ZjUxYzdiYzFhM2Y2MzgzNTkwMmJkMTUxNGNmMzQwZmJkNjUyZTM1NDZjYmQifQ"
+          "resource": "repo://src/gui/main.rs#L1763-L1800",
+          "version": "repo-lines-v1:sha256:438aaebaffd5ec7067db82883a8527a7e25c78da438f2957d8a5b91ae16d69d0:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2NTM3NGM4MjYwY2E4ZTRmNmE5YTkwZDIyNmUzNmZiZTkyZTUyZDY0NTBiMDYwYWEzMTE1YTE4NDcyZGI0YjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlMDMzMDJlYTIyMDZkZTgxYmQ2ZjZmYTNhMTZkZTZhNjc5YjI3OGQ1NmEwNzEwYmNlNTkzNjhlODZkYTJjNTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNiZDY0YTY0MGRlYTBlODdhODY3ZTMxYjc2NGM2Y2MyMmM2YjIzZjliNDIyYzVjNDgxN2Q1YzhjYzYyNTgyMmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwZTEzNGRiYjM0NjYzNzdjYmFhYjRjMTcyOTkwNmU0MGI4YWI1MDFmMjhiZThjMzk5Mjc4NDIzODMwNzEwMDkifQ"
         },
         {
-          "resource": "repo://src/gui/main.rs#L239-L245",
-          "version": "repo-lines-v1:sha256:27a859b0141fddf62e5b85d244e228bff94553872cd72d4bf75a5872f56878e1:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODFjOWY0NTk4OTJkYzAwOTc1Y2ZjYWQ5MzNlMDVlMjU2M2ZhYjk5N2VkM2NhNGY4ZDkzMDBlZDAzMjZhMTY1NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDY2YzE0NjU0YWJlNjc3ZWIxNTg3ZjMwNjEyNjNhNDU2ZGYyOTJkYjQzYWIxOTU1NzEzMzVjNTZlM2U4ZmY0ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTYzNjJhZTJhYjZhYTRlZGQ5YmRhODJmOThmMDU5ZmVjMzVmNWFlODkwMjQyMDM4NGQ0MTExNDBkZjRiMmVkZCJ9"
+          "resource": "repo://src/gui/main.rs#L239-L246",
+          "version": "repo-lines-v1:sha256:3de21388dd3496df170a9600aef60d2875a746ebe1b88464c34cdd4d2939db6e:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzNlYmQ1ZDMxYTA0ZGY3N2IxMTVlOTk1MGI0ZTU5MWRmY2JjZjQ1M2Q3ZWMwMjFhNGRjNDliZjEzMTY2NWQ1ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODdlYTM5ZTIwNWU2YWM0MDFmZTkxNDYxMjVjZTYzZWE4MmQwNTVkYmY0ODNjNGUwOTVmNTIyMTAzMGQ4NDJkOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjk5ZGNjYzhiZTdlYjQ1OGRiMzM0MzIyMzI5YzZhZjE1NmM2YzliM2Y5ZDg0NjdmMjk5ZjJjYzQxZWMzMTE5OCJ9"
         }
       ]
     },
@@ -91,7 +91,7 @@
       "statement": "Events for the hidden environment are applied by temporarily swapping it in with background mode, discarding scroll and focus tasks.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L1782-L1806",
+          "resource": "repo://src/gui/main.rs#L1814-L1838",
           "version": "repo-lines-v1:sha256:7f3b445fb9b3c8ca6fc44bbdb78b3eca976ba1354d3062f5527e834c7f6127a2:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjMWU5MzhiOWU1MWQwZDM2YjgwZTgzNTA2OWU5YTc0ZjAzMDg3YTU2OGNmMmFmMzhiODIxM2MxMjZjYTc0OGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc4MDZiOGI4ZDg2MjBjNTVmYzkxY2MwNDEyMDg4M2U5NTE4MzBiOTk3OGI2MGYzZTBlOGFhNDgwZDY0OGY3MWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIzMmY0ZDUwNzI3YTQ1MjUxMzc0OTg3MzQ1NjUwZWNhMmNjZmMzZTlmZWY2Y2JiNjM1ZGJmZGU0NTAzYWFmMDcifQ"
         }
       ]
@@ -101,7 +101,7 @@
       "statement": "The unified feed is active only when enabled, not in a solo instance, and with the whatsapp feature compiled in.",
       "evidence": [
         {
-          "resource": "repo://src/gui/settings.rs#L148-L152",
+          "resource": "repo://src/gui/settings.rs#L194-L198",
           "version": "repo-lines-v1:sha256:6b4ddf5291e9a1eeeed5e06c7c523b9818803e05af3573b45bf1a8d25f4793f7:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDMxNTdjYjMwYWExN2JkYTJiNWViMTlhZjNlZTAwYWY0OThmMGU3OWVjNzhkYTBlNDQ1Njc4NjhmZDAwZGZlZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWYwNzZiZjI5ZWQzOGRmZWVlY2JiODI0YTFlZWE2MDA1YmQ4ZDViNDdlZDk2NTQxN2Q4Yzc0NmIzZmE3Y2E1MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWZiMTAwODNkNjhjNzIxZWUzYmQwMWZmZDdlYmM1ODJmMDMyMjhkYWNhMGY0NzkwMTdiY2Q2YTJkZjk0YmM2ZCJ9"
         }
       ]
@@ -111,18 +111,18 @@
       "statement": "After each message the GUI issues the same state-driven requests as the TUI loop: older pages, quoted messages, avatars, previews and translations.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L1571-L1587",
+          "resource": "repo://src/gui/main.rs#L1592-L1608",
           "version": "repo-lines-v1:sha256:ac0cfabe61eb2ecaec23e1eed7da580aa8c36dbe5edae1609804598b8ba7b70e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2NTFiNjQ4ODJhNWVhMTM0NTllMWVhZGQzNjU4NTY2YzdiYWMxOWExNTZmOWRlNDQxMjc3N2Y4Yjk3YTRhMjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIxOWFiNTQxNjllZTk4NTlmMWFiYTljN2FhZTc5MGM2NGEzMThjMjI2NDQ1MThkMTdmYTkyNmVmZDFkZGJjYmYifQ"
         }
       ]
     },
     {
       "id": "claim_9a6e66420701401d9f49472c11271fd2",
-      "statement": "Periodic ticks run only while connecting (80 ms), while typing is active (400 ms), or with the Omarchy theme (2 s); otherwise the idle window has no timer.",
+      "statement": "Periodic ticks run only while connecting (80 ms), while anyone is typing or a deferred read mark is pending (400 ms), or with the Omarchy theme (2 s); otherwise the idle window has no timer.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L529-L551",
-          "version": "repo-lines-v1:sha256:da507a27973b7fa29879c667e7b9133af0464330dba19c930126ae7654ac5708:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkNDJhNzA5YzRkY2E4ZTYwYmNkZjNiZjQ3YTk5MDQ5ODMxYmQ5MzdjM2I0NWNkNjBkM2Y4YmQ1YTAzMDI2MTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNGQ3MjI4NzFiOGY1OTI1MGE2OWQ5ZmM4NDcwZjM1YjY0MWFjNzM0NDU0Mzg0OGJjZDhkZmY2ZWM0OTY2ZmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5OTIxZWQ5NjE3NjliOWM4M2E2ZDBiNzIxYThjMzRjYzBlNmRkZTMyMjc3MTI5YTQ4ODIzYzcxOWU2MDA1NjEifQ"
+          "resource": "repo://src/gui/main.rs#L540-L553",
+          "version": "repo-lines-v1:sha256:41d08deda6945e9ccb5399d8277cbf29e3395286f563a1037963c50b52df43a6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2OGU3MTU2MTU1Y2JmNjNhZTdkYTA1Zjc2MzcxMDY5MDQxMDg4MWM5Nzg1NzcxODlkMWJlMjFjMTQ2ODlhZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1MTA3NmVhNDg5ZjM2MDdiNzRmZDJjZjA4YzVjMTdjMmQyYTY0YWNkMTgyODcwOWI3NDM5NGEzNTFhM2NmYzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExMGQ4MWFhZjQxZDdiMjcwMTRlNzFjOTFlNDg5NjNkOThkYzFlOGYxODVlOTFjMDA0MTJjOGVmZGZlOWMwZGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwNGEzNDg2MTliODYwY2NlMTI2NzNiYWU2ZTZiMTQ3OWU5ODU5MzU2OGZmMmI0NTA2ZTBhMzljMzczNDQ1ZmYifQ"
         }
       ]
     },
@@ -131,12 +131,16 @@
       "statement": "Typing notifications are re-sent at most every 4 seconds and cancelled after 5 seconds without keystrokes; presence follows window focus and the show-online setting for both environments.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L1868-L1911",
-          "version": "repo-lines-v1:sha256:407208edaa73d378ee30eb20a68f43443e30b24fcb73139db53a316dac8ac3e2:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0YjcyZjFiM2Y1NzRhMmRmOTdmNzkwMzRmOGRlYmI1MmU0ZjJhNjI4NWVlMTRjYTU5YTAxMDJiM2Q4M2QxNWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0MjEwOTg0Y2Y1MTZkOTMwMWEzZGJlOWMwZmI5Nzg2ZjgyNGExMWYyYjQ3YzdlYjI0MTA0ODE2YTI3MjQyODAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJlOTliZGU3NGMxZWFmNzRiMjhiMjljYjg0Mzg1ZDkzMjA3YWZkYzcyMzM2MjRlNTY5N2E3NWRjYzMwZGU2N2UifQ"
+          "resource": "repo://src/gui/main.rs#L1904-L1908",
+          "version": "repo-lines-v1:sha256:9e6cca3129bc6171a3497f3e87b587188f28ac32245568afc995391c8a020900:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDRkMzhjYjdkNTNjMWI1YWUxYjI4ODAzZTQ1NzZlYjVhNjg1N2RhYTlmNzU2ZDFhMDc4MDU3ZDcxYmRhZjU1NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmM5MGQxNmZhZjc2MmM1ZTVhNzA3MDI0Nzc1ZWVjMjYyNjE0NmFkYWI4OWVhMjRlOTJiYzEwZmQ4MjJiM2E1MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmJmZDNjOWZmMDgzM2I0ZDY1NzE3YzExMmIyNGYzMmE3MDEyZDA1MTk3Y2IxYjYxMmU5YjI1OWNlNzk4YWRmNiJ9"
         },
         {
-          "resource": "repo://src/gui/main.rs#L944-L957",
-          "version": "repo-lines-v1:sha256:b3ef168ce277484a40f403747b1a44276b06953798bca36a57be91ba99039ab6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzZWI5MDJkYjQ0YTY2NzZmYmQwMTllOTVlZTY4YzExYTkwZWY5N2NlOGEwYmVlMjkxM2NjMjg2MTJlMjRkMjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5YTFjZWQ0NWE3ZGNlMjAwMzcxMWY1NDVmMTIzNjkwMmMxYTUyNjEwOTk5NjlmODgyM2JiOWJiYmUyZThmY2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3NThhNmFhZmU2OTY4YjczMGZiMjEwZDM3YmJhNDQzOWQ2Zjc0ZGE5MmRmYTY0ZTc1OTA1ODhiNzc5YWI1ODIifQ"
+          "resource": "repo://src/gui/main.rs#L1911-L1935",
+          "version": "repo-lines-v1:sha256:d3b809807ccbb865764eedc0c1e0fc317014e0c76594d1060feb995f46871eec:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliOTA5ZjE0NGIxMGE0NDA2ZGZkNDBkZjI2N2I0MWEwNTY0ZDA4MWI3ZmU0MmI5YmU4NGZmZjBjZDQ5YmMyMWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjZDc1ODViMzdlYzMwNzdiZTI1OGEwYjg4ZWM5YzUwZWI0N2M1MGVmMGFiMTU3NzdjYWZlMDg5NGY2ZjEzNDQifQ"
+        },
+        {
+          "resource": "repo://src/gui/main.rs#L947-L956",
+          "version": "repo-lines-v1:sha256:cd43683b7178749524fa9fe3b7b1b2f13f4a2d7be2784798e51b5b7cf1e3192e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzZWI5MDJkYjQ0YTY2NzZmYmQwMTllOTVlZTY4YzExYTkwZWY5N2NlOGEwYmVlMjkxM2NjMjg2MTJlMjRkMjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjNjQ3OWNjMjMwNDQwZmQ0MWU4MjI0MjE4Njc5Njk4NTU5ZDI4OTNiZDY3YjQzODBhZmFiODExYjM4YTU1YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5YTFjZWQ0NWE3ZGNlMjAwMzcxMWY1NDVmMTIzNjkwMmMxYTUyNjEwOTk5NjlmODgyM2JiOWJiYmUyZThmY2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmZjI2Yzc5Y2VlZGVhMGJlMjNiNDg4ZTdkOTc4ZTljYjhjMTU1NmVkZTFiNDZmMWQwOWU2YzE4ZGE3MGRiZWQifQ"
         }
       ]
     },
@@ -145,11 +149,11 @@
       "statement": "The Omarchy theme palette is read from colors.toml under XDG_STATE_HOME/omarchy/current and reapplied when its mtime changes.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L951-L955",
+          "resource": "repo://src/gui/main.rs#L957-L961",
           "version": "repo-lines-v1:sha256:4a9b98be7af204ceabd31a3dc3da8a8b3c8c62e5b98b3c3be24eb5a67aaf21f9:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTBjZDM3YmQ0YTU0MDNlNGYxY2FiMDk0MDJhMGQ2Y2IyODQ1NTgxOTRmYWMwYzY0MTViZDVhMjU2MDNjZmIzMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGM2NDc5Y2MyMzA0NDBmZDQxZTgyMjQyMTg2Nzk2OTg1NTlkMjg5M2JkNjdiNDM4MGFmYWI4MTFiMzhhNTVhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWU5MmU4YmM2MTg3M2RjOTBkMmRmYjI5OGNmNTRkYmVjZGNlMjc3MWI2MzJiM2VjZWI5MzI1MjZjMjFiODM0ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjg2N2RkYWViM2ZlMjU3MDY2YjJmOGRkYTk2YjEyMzEwOTI0OWQ1MjJjZGMwZmQ1OGY3YWQwZDkwYzEyOTMyZCJ9"
         },
         {
-          "resource": "repo://src/gui/style.rs#L103-L191",
+          "resource": "repo://src/gui/style.rs#L145-L233",
           "version": "repo-lines-v1:sha256:8e7848e34c148ff6605a8ee2808dbf43dac3abf673a898a232d8b9e640c365f4:eyJzZWxlY3RlZExpbmVDb3VudCI6ODksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxYTMyMTJmNzMxZjhjYzY4NmY3Y2FhODc3MGU3YWI1YTk4ZmMyZjg1NDFkMzFjMTQ2ODY5ZGY0N2JkOGJkMGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVmMjY4MzQ1M2Y2ODg4YTEyYmIwNDYxZTcwMGY5Yzc2YTE0MjllZTVjMzZhZjdkMmY3ZDlmZmZjODhmN2ViNGYifQ"
         }
       ]
@@ -159,7 +163,7 @@
       "statement": "Desktop notifications use notify-send with one replaceable notification per chat, skipping muted chats, WhatsApp statuses and the open chat of a focused window; clicking opens the chat and closing uses gdbus.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L1808-L1825",
+          "resource": "repo://src/gui/main.rs#L1840-L1857",
           "version": "repo-lines-v1:sha256:5cdb40bf029bf6a8f345ba347caa8e3983df2e8688ab3e15f87e3fe31d5384c4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViZmQ3NzBmODNhMmY2YjE0ZmIzYmJkNjgwZDgxZDZlMWU3NmRkZjdjYWViMTliYzZkNDJiNzcxMzQwYmJlZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5ZDMyZDMwNzNhMWIwNmFmNDIxYjdmYjAxOGIwYTAxMTQ5YWY5NDIzYzNhODA3ZGQzYTUxODJkYzJlYTI3NDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMwYWM3ZWJiMDgyMThlNjUyNWY5MGJhZWFjYTU1MGFkZGM0MDYyYjE0MjY0MjhlZGE0ZjA0MjkwNTRhN2M0MTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiYTdhYWYxNmUxZDE3ZjY3YmI5YmVkZGJkZWMzMjkxNjdlZjkzYzFiYzg0MmJiZTUwMTZmOTllMDE1ZGFhYTIifQ"
         },
         {
@@ -173,7 +177,7 @@
       "statement": "Unlinking WhatsApp from the devices page resets the WhatsApp App and returns that environment to the linking page.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L1703-L1710",
+          "resource": "repo://src/gui/main.rs#L1724-L1731",
           "version": "repo-lines-v1:sha256:739488d486c20dcab06b130a0de09876876158ffcc19215fb55b4aeb50d783bf:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTRkOWVjMDdkM2VhMGVkMmUwYmUyZGI4MDQ3Yjk2ODc5NTEzNjgyNzk4YjlmYzJmMGI4NmZiMTA2YjE0NjQyZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGM2NDc5Y2MyMzA0NDBmZDQxZTgyMjQyMTg2Nzk2OTg1NTlkMjg5M2JkNjdiNDM4MGFmYWI4MTFiMzhhNTVhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTBjMzg1NGE2OGNhNjFlZjY3NGJmNjVlODBlYzg4NmVmYTA1ODY2NjYyNmFhNWYzNWNiZjRjYTYxYTcwMzJmNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDhmMTQ0YTgwYjgzMjM1MWMyODE0ZWQ3NDNlMGFhODM0NThkODdlODg3YzJmYTc5NmY3YjVkZWI2YzNkODE3ZSJ9"
         }
       ]
@@ -181,6 +185,6 @@
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-27T16:14:44.132Z"
+    "at": "2026-11-02T21:14:13.476Z"
   }
 }

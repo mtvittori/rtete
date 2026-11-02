@@ -3,9 +3,6 @@ type: backend
 title: WhatsApp backend (whatsapp-rust)
 description: The optional, unofficial WhatsApp backend built on whatsapp-rust 0.7 — QR or pair-code linking, the whatsapp.db session, the local JSON/JSONL message archive with hot-chat cache and id mapping, event handling, and the request dispatcher.
 tags: [whatsapp, whatsapp-rust, backend, pairing, local-archive, multi-device]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-36f054f1f38f2197a6af5bca
     resource: repo://build.rs
@@ -21,7 +18,10 @@ sources:
     resource: repo://src/backend/wa/store.rs
   - id: openwiki-source-0a069b3906143584680c8e59
     resource: repo://src/backend/wa/worker.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # WhatsApp backend (whatsapp-rust)
@@ -106,6 +106,12 @@ Key rules:
   alias and `merge` folds a duplicate chat into the phone-number chat
   (messages, unread counts, pinned/muted/unread flags). `canon(jid)` always
   returns the phone JID when known.
+- **Mentions**: WhatsApp sends mentions as `@<number>`, usually the anonymous
+  `@lid` number. `Store::with_mentions` rewrites an `@` followed by at least six
+  digits (and not glued to a letter, so e-mail addresses are left alone) into the
+  contact's name when one is known; unknown ones stay as they are. It is applied
+  to the last-message preview in the chat list (`Store::dialogs`) and to message
+  text when history rows are built (`wa/mod.rs`).
 - **Media**: no whatsapp-rust types in the store; the media-bearing protobuf is
   kept base64-encoded in `StoredMsg.media` and decoded back into a `WaMedia`
   inside a `MediaRef`.
@@ -125,7 +131,7 @@ Key rules:
 | `Connected` | prune old statuses, set presence "available" (needed to receive online/typing), resolve `@lid` chats to phone numbers, request a one-time full app-state sync of contacts and archive/pin/mute state, signal readiness to `start` |
 | `PairSuccess` / `PairError` / `LoggedOut` / `TemporaryBan` | pairing sink or a failure (before readiness: returned by `start`; after: `Response::LiveErr`) |
 | `Messages` | store each message; reactions and protocol messages (revoke, edit) update the stored message instead of creating a row; emit `Live` events |
-| `Receipt` | read receipts → read state |
+| `Receipt` | whatsapp-rust 0.7 never sets `is_from_me` on receipts, so `receipt()` decides «mine» by the sender matching this account's own PN or LID. A read/played receipt from one of my devices (the phone) means I read incoming messages: the chat is the group in `source.chat`, or else the chat holding those message ids (`Store::chat_of_wa`, hot chats first, then unread chats on disk); the new unread count is the incoming messages after the last id read (`Store::unread_after`), emitted as `Live::ReadInbox`. A read/played receipt from others raises `read_out` on my messages (`Live::ReadOutbox`, double ticks) |
 | `ArchiveUpdate`, `PinUpdate`, `MuteUpdate`, `MarkChatAsReadUpdate` | update `ChatMeta` and emit `Live::ChatChanged` |
 | `ChatPresence` | `Live::Typing` ("is typing" / "is recording a voice message"), re-emitted every 5 s for up to 30 s until paused or superseded, because WhatsApp sends it only once |
 | `Presence` | `Live::Seen` (online is reported as valid for one hour) |

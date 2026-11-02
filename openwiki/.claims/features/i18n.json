@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:93645b1362281cbc51e740d39be68804fa262b28757c1367122291d665a8713c",
+  "pageVersion": "sha256:e236478b15b1fb0389ab74b063d377e9d3060dccfd4a1e6232b98d4bd1994abf",
   "claims": [
     {
       "id": "claim_89b6ef0798d74fd4977dfe50588ddb7c",
@@ -65,11 +65,11 @@
       "statement": "The GUI language comes from the 'lingua' setting, with 'auto' resolving to system detection.",
       "evidence": [
         {
-          "resource": "repo://src/gui/main.rs#L330-L330",
+          "resource": "repo://src/gui/main.rs#L332-L332",
           "version": "repo-lines-v1:sha256:eb3fd0ea21c29a4123d6d52c83db96fe200f689f3af2fd1b67bcfa385cc8d522:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWIzZmQwZWEyMWMyOWE0MTIzZDZkNTJjODNkYjk2ZmUyMDBmNjg5ZjNhZjJmZDFiNjdiY2ZhMzg1Y2M4ZDUyMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWIzZmQwZWEyMWMyOWE0MTIzZDZkNTJjODNkYjk2ZmUyMDBmNjg5ZjNhZjJmZDFiNjdiY2ZhMzg1Y2M4ZDUyMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDg4ZmYxNzBhYzRkYjhmZTY0NTM3YzA2ZDEzNTFmOGQ4ODIxNTMxOWI2OTJkOWI1NTg2MjRkOTdkZDczODc2ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWQyNGMxNzUxY2JlZDZlMTEwMzJhYmMyYWU5NjlhNzJmZDIyNTc3ZmJlOGRmMGMzMDEwY2FhMjk0N2NkZGQ2OCJ9"
         },
         {
-          "resource": "repo://src/gui/settings.rs#L286-L286",
+          "resource": "repo://src/gui/settings.rs#L362-L362",
           "version": "repo-lines-v1:sha256:686f490a0b335c3f2076f63dd52876c8e5ec8ba0b19e201f0c6874db77c2929c:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjg2ZjQ5MGEwYjMzNWMzZjIwNzZmNjNkZDUyODc2YzhlNWVjOGJhMGIxOWUyMDFmMGM2ODc0ZGI3N2MyOTI5YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjg2ZjQ5MGEwYjMzNWMzZjIwNzZmNjNkZDUyODc2YzhlNWVjOGJhMGIxOWUyMDFmMGM2ODc0ZGI3N2MyOTI5YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTAyNjM0ZTFjYTdkNGQ3MTVjNjY1YjZjNTc2Y2IyMTk0OTc4ODc3YzVmYmJlOGFmMzUxMDhiOTBkODg4YjI0NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTBjOWUyZGY5YjQxZTg4NzI3NTg0MzMzZTIzYTQzYjhjZjAzYTUwMDIxNDlkNzZjOGRlYzA2MTdkMWJmZGRhMSJ9"
         },
         {
@@ -81,6 +81,6 @@
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-27T16:14:44.132Z"
+    "at": "2026-11-02T21:14:13.476Z"
   }
 }

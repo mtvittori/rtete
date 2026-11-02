@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:5f127e5bd2c94a19ccb0313e08dc1ce4c2e239cfe64d9006930403c5d0d712c1",
+  "pageVersion": "sha256:85dc034f3ea5d07998da74de3e264ccddfe47f6f5e967a5d77148ea4cfe6bf90",
   "claims": [
     {
       "id": "claim_792e85258e8b4a0ca7d01bd9afeb848d",
@@ -17,8 +17,8 @@
       "statement": "The TUI main loop redraws, refreshes the preview queue only when image placements change, issues older/quoted/translation requests, places images, then selects between terminal events and backend responses.",
       "evidence": [
         {
-          "resource": "repo://src/main.rs#L132-L188",
-          "version": "repo-lines-v1:sha256:4cad10abbe88d904d9ef7b394835c757915eb9fa5c0772ff33f2285dc09c8837:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3ZTM0MDkyNDE0MDc1NDY2NmZjZGJhMmZlMTg2ZDk3MmM2NDQ4ZGZjYjVhNjRmNzlkZDU2M2IxNzgwMmNjMzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ2ODU0NzkzYzI2MzI1Mjg3ODY4NDRlNWU1ZTBmYmFmODNkYmI4ZWU4ZGNiZWU5NjM1MmM5YmNkYzg4YWNiNDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMxZDgxZmJkZTIwMTBlMDE5ZjhiODU3ZTYzMTcwMzA4YjIyMDYyODczNmE3M2I2ZjI1OTU0NWNiMTUxMDU1NWIifQ"
+          "resource": "repo://src/main.rs#L133-L190",
+          "version": "repo-lines-v1:sha256:fa74d77c69371dd924949cb7e0fa70fba8f9fb60d99374d32eaab13189734d5d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhZDgyOWU2YmE2YzI3ZmVkNTQ3ZWY4ZDEzZDU1NTcwMTFkMzc0NmQ0YzE5YTdmYjU3YWEyZWFlN2RmMzFmMmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI1NDhkODI0NzVlZTVkNzg1OGUyZTNmMGE5ZGQxN2U4OWRkOTZlNWY2NmJjNDY0MDRiYmU2NjI5ODNmY2NiNjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5YjNlZDU4MWY5ODVlNTk5Zjk1ZTNlMmU2YTEzZDA1MTVjNzQzMzg1MmEzYjQ2NTFjODI1YTExNGIxOWJmZjEifQ"
         }
       ]
     },
@@ -123,6 +123,6 @@
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-27T16:14:44.132Z"
+    "at": "2026-11-02T21:14:13.476Z"
   }
 }

@@ -3,9 +3,6 @@ type: operations
 title: Build, features and platforms
 description: How to build Rondine's binaries and feature combinations, what the release profile implies, the Windows SQLite link workaround, platform differences between Linux, macOS and Windows, the runtime environment variables, external tools, and the scheduled OpenWiki workflow.
 tags: [build, cargo, features, windows, linux, environment-variables, ci]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-6d4b4e707b8d60b6ccfa3425
     resource: repo://.github/workflows/openwiki-update.yml
@@ -29,7 +26,10 @@ sources:
     resource: repo://src/view.rs
   - id: openwiki-source-89402e3f86a3a076c01e7039
     resource: repo://src/worker.rs
-generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+generated: { by: "claude-code", at: "2026-11-02T21:14:13.476Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Build, features and platforms
@@ -68,6 +68,14 @@ opt-level = 2, lto = true, codegen-units = 1, strip = true, panic = "abort"
 `panic = "abort"` means destructors do not run on panic. The TUI therefore
 restores the terminal from a panic hook as well as from its `TermGuard`
 (see [Terminal UI](../frontends/tui.md#terminal-lifecycle-termrs)).
+
+## Fast development profile
+
+`[profile.fast]` inherits `release` but uses thin LTO (`lto = "thin"`),
+`codegen-units = 16` and keeps symbols (`strip = false`). It is for iterating:
+`cargo build --profile fast` writes `target/fast/rondine`. `cargo check` is
+faster still when only compilation needs confirming. Release artifacts should
+always come from the `release` profile (README "Build veloce").
 
 ## SQLite: one copy, and the Windows stub
 

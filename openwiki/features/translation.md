@@ -3,9 +3,6 @@ type: feature
 title: Message translation
 description: How Rondine translates chat messages with DeepL or an OpenAI-compatible service (Groq, OpenRouter, Ollama) — configuration file, request flow through the worker, manual toggle versus per-chat automatic translation, error handling and the settings test phrase.
 tags: [translation, deepl, openai, groq, ollama, ureq, auto-translate]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-10-27T16:14:44.132Z
 sources:
   - id: openwiki-source-9fec9d1af408501c9c455161
     resource: repo://src/app.rs
@@ -20,6 +17,9 @@ sources:
   - id: openwiki-source-89402e3f86a3a076c01e7039
     resource: repo://src/worker.rs
 generated: { by: "claude-code", at: "2026-10-27T16:14:44.132Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-02T21:14:13.476Z
 ---
 
 # Message translation
