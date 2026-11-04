@@ -2,6 +2,9 @@
 //! stato `App`) con un'interfaccia iced al posto della TUI. L'accesso
 //! (numero, codice) resta alla TUI: qui si riusa la sessione salvata.
 
+mod font_view;
+mod fonts;
+mod marks;
 mod net;
 mod notify;
 mod settings;
@@ -26,6 +29,8 @@ pub const COMPOSE: &str = "compose";
 pub const HISTORY: &str = "history";
 pub const FWD_SEARCH: &str = "fwd-search";
 pub const LOGIN_FIELD: &str = "login";
+/// Passi per unità della scala (1/20): il fattore si arrotonda a questo multiplo
+const SCALE_STEPS: f32 = 20.0;
 
 #[derive(Debug, Clone)]
 pub enum Msg {
@@ -70,6 +75,14 @@ pub enum Msg {
     TgHandler,
     Join,
     Gpu(bool),
+    /// font scelto nelle impostazioni
+    Font(fonts::FontPick),
+    /// spessore del testo normale
+    FontWeight(u16),
+    /// grandezza del solo testo
+    TextScale(f32),
+    /// l'elenco dei font installati è pronto (ridisegna)
+    FontsLoaded,
     Forward(i32),
     ForwardTo(ChatId),
     FwdFilter(String),
@@ -425,6 +438,11 @@ fn boot() -> Gui {
     let env = if cfg!(feature = "whatsapp") { settings.style } else { Env::Telegram };
     style::set_wa(settings.layout() == UiStyle::WhatsApp);
     apply_theme(settings.active_theme());
+    style::set_text_scale(settings.text_scale);
+    // senza font scelto il sistema dei font resta intatto
+    if settings.font.is_some() {
+        fonts::apply(settings.font.as_deref(), settings.font_weight);
+    }
     let telegram = Parked { app: new_app(&settings), link: None, phase: Phase::Connecting(0, tr("avvio…").into()) };
     let whatsapp = whatsapp_slot(&settings);
     let (active, parked) = match (env, whatsapp) {
@@ -497,6 +515,12 @@ fn whatsapp_slot(settings: &Settings) -> Option<Parked> {
 #[cfg(not(feature = "whatsapp"))]
 fn whatsapp_slot(_: &Settings) -> Option<Parked> {
     None
+}
+
+/// Arrotonda un fattore di scala al passo di `SCALE_STEPS`.
+/// Input: il fattore grezzo. Output: il fattore arrotondato. Effetti: nessuno.
+fn round_scale(factor: f32) -> f32 {
+    (factor * SCALE_STEPS).round() / SCALE_STEPS
 }
 
 fn apply_theme(choice: ThemeChoice) {
@@ -987,6 +1011,7 @@ impl Gui {
                         }
                     }
                     SettingsPage::Storage => self.measure_cache(),
+                    SettingsPage::Appearance => return Task::perform(fonts::load_list(), |_| Msg::FontsLoaded),
                     _ => {}
                 }
                 Task::none()
@@ -1263,10 +1288,32 @@ impl Gui {
                 Task::none()
             }
             Msg::Scale(f) => {
-                self.settings.scale = (f * 20.0).round() / 20.0;
+                self.settings.scale = round_scale(f);
                 self.settings.save();
                 Task::none()
             }
+            Msg::Font(pick) => {
+                self.settings.font = match pick {
+                    fonts::FontPick::Default => None,
+                    fonts::FontPick::Family { name, .. } => Some(name),
+                };
+                fonts::apply(self.settings.font.as_deref(), self.settings.font_weight);
+                self.settings.save();
+                Task::none()
+            }
+            Msg::FontWeight(weight) => {
+                self.settings.font_weight = weight;
+                fonts::apply(self.settings.font.as_deref(), weight);
+                self.settings.save();
+                Task::none()
+            }
+            Msg::TextScale(f) => {
+                self.settings.text_scale = round_scale(f);
+                style::set_text_scale(self.settings.text_scale);
+                self.settings.save();
+                Task::none()
+            }
+            Msg::FontsLoaded => Task::none(),
             Msg::EnvRail(on) => {
                 self.settings.env_rail = on;
                 self.settings.save();

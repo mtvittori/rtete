@@ -117,6 +117,37 @@ pub fn wa() -> bool {
     WA.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// dimensione base del testo dell'app in pixel (default di iced): punto di
+/// partenza di `fs`
+pub const BODY_PX: f32 = 16.0;
+
+/// bit IEEE 754 di 1.0f32: scala iniziale del testo al 100%
+const SCALE_ONE_BITS: u32 = 0x3F80_0000;
+
+/// scala globale del testo, salvata come bit di `f32` dentro un `AtomicU32`
+static TEXT_SCALE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(SCALE_ONE_BITS);
+
+/// imposta la scala globale del testo (1.0 = 100%, 1.25 = 125%)
+/// Input: `scale`, fattore moltiplicativo. Output: nessuno.
+/// Effetti: cambia il risultato di `text_scale` e `fs` in tutta l'app.
+pub fn set_text_scale(scale: f32) {
+    TEXT_SCALE.store(scale.to_bits(), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// legge la scala globale del testo
+/// Input: nessuno. Output: il fattore di scala corrente (1.0 se mai impostato).
+/// Effetti: nessuno.
+pub fn text_scale() -> f32 {
+    f32::from_bits(TEXT_SCALE.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// converte una dimensione base in pixel applicando la scala globale
+/// Input: `px`, dimensione in pixel al 100%. Output: `px` moltiplicato per
+/// `text_scale()`. Effetti: nessuno.
+pub fn fs(px: f32) -> f32 {
+    px * text_scale()
+}
+
 /// col feed unico e le bolle colorate: il colore delle mie bolle, quello
 /// del servizio della chat aperta
 static OUT_TINT: RwLock<Option<Color>> = RwLock::new(None);
@@ -432,5 +463,25 @@ pub fn quote_box(outgoing: bool) -> impl Fn(&Theme) -> container::Style {
             border: border::rounded(8),
             ..Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// scala di prova: 125%
+    const TEST_SCALE: f32 = 1.25;
+    /// `BODY_PX` scalato al 125%
+    const BODY_PX_AT_TEST_SCALE: f32 = 20.0;
+
+    /// verifica `fs` al 100% e al 125%, poi ripristina la scala a 100%
+    #[test]
+    fn fs_applies_text_scale() {
+        set_text_scale(1.0);
+        assert_eq!(fs(BODY_PX), 16.0);
+        set_text_scale(TEST_SCALE);
+        assert_eq!(fs(BODY_PX), BODY_PX_AT_TEST_SCALE);
+        set_text_scale(1.0);
     }
 }

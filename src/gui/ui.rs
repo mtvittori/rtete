@@ -5,9 +5,9 @@ use std::collections::VecDeque;
 
 use rondine::model::MediaRef;
 use iced::font::Weight;
-use iced::widget::text::Span;
+use iced::widget::text::{self, Span};
 use iced::widget::{
-    button, column, container, image, mouse_area, rich_text, row, scrollable, space, span, text,
+    button, column, container, image, mouse_area, rich_text, row, scrollable, space, span,
     text_input, Column, Row,
 };
 use iced::{Alignment, Center, Element, Fill, Font, Length};
@@ -49,6 +49,20 @@ fn ellipsize(s: &str, max: usize) -> String {
     }
     let cut: String = s.chars().take(max.saturating_sub(1)).collect();
     format!("{}…", cut.trim_end())
+}
+
+/// Caratteri che entrano in `max` (misura a 100%) con il testo scalato: a 125%
+/// ogni carattere occupa 1.25 volte, quindi il limite scende di conseguenza.
+/// Input: `max`, limite a 100%. Output: il nuovo limite. Effetti: nessuno.
+fn scaled_chars(max: usize) -> usize {
+    (max as f32 / style::text_scale()).round().max(1.0) as usize
+}
+
+/// Testo della UI alla dimensione di corpo scalata con `style::fs`: sostituisce
+/// la funzione `text` di iced, così ogni testo segue la scala globale.
+/// Input: il contenuto. Output: il widget di testo. Effetti: nessuno.
+pub(crate) fn text<'a>(content: impl text::IntoFragment<'a>) -> iced::widget::Text<'a> {
+    iced::widget::text(content).size(style::fs(style::BODY_PX))
 }
 
 pub fn view(g: &Gui) -> Element<'_, Msg> {
@@ -157,7 +171,7 @@ fn env_rail(g: &Gui) -> Element<'_, Msg> {
         if n > 0 {
             face = face.push(
                 container(
-                    container(text(n.min(99).to_string()).size(10).color(iced::Color::WHITE))
+                    container(text(n.min(99).to_string()).size(style::fs(10.0)).color(iced::Color::WHITE))
                         .padding([0, 5])
                         .style(style::pill(p.danger)),
                 )
@@ -173,7 +187,7 @@ fn env_rail(g: &Gui) -> Element<'_, Msg> {
             .style(style::pill(if active { color } else { iced::Color::TRANSPARENT }));
         row![
             mark,
-            button(column![face, text(name).size(10).color(if active { p.text } else { p.muted })].spacing(4).align_x(Center))
+            button(column![face, text(name).size(style::fs(10.0)).color(if active { p.text } else { p.muted })].spacing(4).align_x(Center))
                 .on_press(Msg::SwitchEnv(env))
                 .padding([6, 4])
                 .width(Fill)
@@ -194,7 +208,7 @@ fn tg_login<'a>(g: &'a Gui, l: &'a crate::net::Login) -> Element<'a, Msg> {
     use crate::net::Login;
     let p = style::p();
     let field = |ph: &'static str, v: &'a str, secret: bool, on: fn(String) -> Msg, first: bool| -> Element<'a, Msg> {
-        let mut t = text_input(ph, v).secure(secret).on_input(on).on_submit(Msg::LoginSubmit).style(style::input).padding(10);
+        let mut t = text_input(ph, v).size(style::fs(style::BODY_PX)).secure(secret).on_input(on).on_submit(Msg::LoginSubmit).style(style::input).padding(10);
         if first {
             t = t.id(crate::LOGIN_FIELD);
         }
@@ -230,16 +244,16 @@ fn tg_login<'a>(g: &'a Gui, l: &'a crate::net::Login) -> Element<'a, Msg> {
     };
     let mut col = column![
         container(service_logo(Env::Telegram, 84.0, true)).center(84),
-        text(title).size(24).font(BOLD),
-        container(text(help).size(13).color(p.muted).align_x(Center)).max_width(440),
+        text(title).size(style::fs(24.0)).font(BOLD),
+        container(text(help).size(style::fs(13.0)).color(p.muted).align_x(Center)).max_width(440),
         container(fields).width(360),
     ];
     if let Some(e) = error {
-        col = col.push(text(e.as_str()).size(13).color(p.danger));
+        col = col.push(text(e.as_str()).size(style::fs(13.0)).color(p.danger));
     }
     if matches!(l, Login::Credentials(_)) {
         col = col.push(
-            button(text("my.telegram.org").size(13).color(p.link))
+            button(text("my.telegram.org").size(style::fs(13.0)).color(p.link))
                 .on_press(Msg::Link("https://my.telegram.org/apps".into()))
                 .style(style::flat(false)),
         );
@@ -253,7 +267,7 @@ fn wa_linking(g: &Gui) -> Element<'_, Msg> {
     let step = |n: &'static str, t: &'static str| -> Element<'_, Msg> {
         row![
             container(text(n).size(13).font(BOLD).color(iced::Color::WHITE)).center(24).style(style::avatar(WHATSAPP_GREEN)),
-            text(t).size(14),
+            text(t).size(style::fs(14.0)),
         ]
         .spacing(10)
         .align_y(Center)
@@ -261,7 +275,7 @@ fn wa_linking(g: &Gui) -> Element<'_, Msg> {
     };
     centered(column![
         container(service_logo(Env::WhatsApp, 92.0, true)).center(92),
-        text(tr("Collega WhatsApp")).size(26).font(BOLD),
+        text(tr("Collega WhatsApp")).size(style::fs(26.0)).font(BOLD),
         text(tr("Rondine si collega come dispositivo, come WhatsApp Web.")).color(p.muted),
         space().height(6),
         container(
@@ -276,7 +290,7 @@ fn wa_linking(g: &Gui) -> Element<'_, Msg> {
         .style(style::pill(p.sidebar)),
         container(
             text(tr("Collegamento non ufficiale: WhatsApp potrebbe sospendere il numero, meglio provare prima con un numero secondario. Le chat arrivano dal telefono e restano solo su questo PC."))
-                .size(12)
+                .size(style::fs(12.0))
                 .color(p.muted)
                 .align_x(Center),
         )
@@ -285,9 +299,9 @@ fn wa_linking(g: &Gui) -> Element<'_, Msg> {
         button(text(tr("Mostra il QR"))).on_press(Msg::LinkWhatsApp(false)).padding([10, 22]).style(style::send_round),
         space().height(8),
         // oppure il codice di 8 caratteri, se il QR non si può inquadrare
-        text(tr("Oppure collega col numero di telefono:")).size(13).color(p.muted),
+        text(tr("Oppure collega col numero di telefono:")).size(style::fs(13.0)).color(p.muted),
         row![
-            text_input("+39 333 1234567", &g.wa_phone)
+            text_input("+39 333 1234567", &g.wa_phone).size(style::fs(style::BODY_PX))
                 .on_input(Msg::WaPhone)
                 .on_submit(Msg::LinkWhatsApp(true))
                 .style(style::input)
@@ -311,7 +325,7 @@ fn wa_pairing<'a>(qr: Option<&'a iced::widget::qr_code::Data>, code: Option<&'a 
             .padding(14)
             .style(style::fill(iced::Color::WHITE))
             .into(),
-        (None, Some(c)) => text(c).size(40).font(BOLD).into(),
+        (None, Some(c)) => text(c).size(style::fs(40.0)).font(BOLD).into(),
         (None, None) => text(tr("aspetto il QR…")).color(p.muted).into(),
     };
     let (title, how) = if code.is_some() && qr.is_none() {
@@ -323,11 +337,11 @@ fn wa_pairing<'a>(qr: Option<&'a iced::widget::qr_code::Data>, code: Option<&'a 
         (tr("Inquadra il QR col telefono"), tr("WhatsApp → Impostazioni → Dispositivi collegati → Collega un dispositivo"))
     };
     centered(column![
-        text(title).size(22).font(BOLD),
-        text(how).size(13).color(p.muted),
+        text(title).size(style::fs(22.0)).font(BOLD),
+        text(how).size(style::fs(13.0)).color(p.muted),
         space().height(6),
         what,
-        text(tr("Il QR si rinnova da solo ogni poco: se scade, aspetta il nuovo.")).size(12).color(p.muted),
+        text(tr("Il QR si rinnova da solo ogni poco: se scade, aspetta il nuovo.")).size(style::fs(12.0)).color(p.muted),
     ])
 }
 
@@ -337,7 +351,7 @@ fn photo_viewer(path: &std::path::Path) -> Element<'_, Msg> {
     let p = style::p();
     let bar = row![
         space().width(Fill),
-        button(text(tr("Apri fuori")).size(13))
+        button(text(tr("Apri fuori")).size(style::fs(13.0)))
             .on_press(Msg::Link(format!("file://{}", path.display())))
             .style(style::flat(false)),
         button(text("✕").size(18)).on_press(Msg::Cancel).style(style::flat(false)),
@@ -353,7 +367,7 @@ fn photo_viewer(path: &std::path::Path) -> Element<'_, Msg> {
                 .min_scale(0.5)
                 .max_scale(8.0)
                 .scale_step(0.15),
-            container(text(tr("rotella per lo zoom · trascina per spostare · Esc chiude")).size(12).color(p.muted))
+            container(text(tr("rotella per lo zoom · trascina per spostare · Esc chiude")).size(style::fs(12.0)).color(p.muted))
                 .center_x(Fill)
                 .padding(8),
         ],
@@ -419,7 +433,7 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
             std::cmp::Ordering::Greater => ("○", p.muted),
         };
         steps = steps.push(
-            row![text(mark).size(13).color(color).width(18), text(*label).size(14).color(color)]
+            row![text(mark).size(13).color(color).width(18), text(*label).size(style::fs(14.0)).color(color)]
                 .spacing(8)
                 .align_y(Center),
         );
@@ -432,7 +446,7 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
     let hint: Element<'_, Msg> = if silent {
         container(
             text(tr("WhatsApp non risponde: controlla la connessione (deve raggiungere web.whatsapp.com). Rondine continua a riprovare da sola."))
-                .size(12)
+                .size(style::fs(12.0))
                 .color(p.danger)
                 .align_x(Center),
         )
@@ -443,11 +457,11 @@ fn loading<'a>(g: &Gui, step: u8, status: &'a str) -> Element<'a, Msg> {
     };
     centered(column![
         logo(if g.two_envs() { color } else { p.accent }),
-        text("Rondine").size(30).font(BOLD),
-        text(subtitle).size(13).color(p.muted),
+        text("Rondine").size(style::fs(30.0)).font(BOLD),
+        text(subtitle).size(style::fs(13.0)).color(p.muted),
         space().height(14),
         spinner(g, 54.0),
-        text(status).size(13).color(p.muted),
+        text(status).size(style::fs(13.0)).color(p.muted),
         space().height(6),
         card,
         hint,
@@ -476,9 +490,9 @@ fn failed<'a>(g: &Gui, e: &'a str) -> Element<'a, Msg> {
         container(text("!").size(46).font(BOLD).color(iced::Color::WHITE))
             .center(92)
             .style(style::avatar(p.danger)),
-        text(title).size(22).font(BOLD),
+        text(title).size(style::fs(22.0)).font(BOLD),
         container(text(e).color(p.danger).align_x(Center)).max_width(520),
-        text(hint).size(12).color(p.muted),
+        text(hint).size(style::fs(12.0)).color(p.muted),
         space().height(6),
         buttons,
     ])
@@ -525,7 +539,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
             .spacing(10)
             .align_y(Center);
         if d.unread > 0 {
-            line = line.push(text(d.unread.min(999).to_string()).size(12).color(p.accent));
+            line = line.push(text(d.unread.min(999).to_string()).size(style::fs(12.0)).color(p.accent));
         }
         let open_it = Msg::Open(d.peer_id);
         list = list.push(
@@ -545,7 +559,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
                 .spacing(10)
                 .align_y(Center);
             if unread > 0 {
-                line = line.push(text(unread.to_string()).size(12).color(p.accent));
+                line = line.push(text(unread.to_string()).size(style::fs(12.0)).color(p.accent));
             }
             list = list.push(
                 button(line)
@@ -563,12 +577,12 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         let face_of = |size: f32| -> Element<'_, Msg> {
             if feed { env_badge(avatar(app, d, size), env, size) } else { avatar(app, d, size) }
         };
-        let badge = |n: String| container(text(n).size(if compact { 10 } else { 12 })).padding([1, 7]).style(style::pill(p.accent));
+        let badge = |n: String| container(text(n).size(style::fs(if compact { 10.0 } else { 12.0 }))).padding([1, 7]).style(style::pill(p.accent));
         if compact {
             let mut face = iced::widget::Stack::new().push(face_of(46.0));
             if d.unread > 0 || d.unread_mark {
                 let n = if d.unread > 0 { d.unread.min(999).to_string() } else { String::new() };
-                face = face.push(container(badge(n)).width(46).align_x(iced::Right));
+                face = face.push(container(badge(n)).width(style::fs(46.0)).align_x(iced::Right));
             }
             list = list.push(
                 button(container(face).center_x(Fill))
@@ -599,7 +613,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
             top = top.push(text("👥").size(12));
         }
         top = top.push(
-            container(text(ellipsize(&d.name, name_max)).font(BOLD).wrapping(text::Wrapping::None))
+            container(text(ellipsize(&d.name, scaled_chars(name_max))).font(BOLD).wrapping(text::Wrapping::None))
                 .width(Fill)
                 .clip(true),
         );
@@ -609,7 +623,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
             }
             // WhatsApp: l'ora diventa verde se ci sono messaggi da leggere
             let time_color = if wa && unread { p.accent } else { p.muted };
-            top = top.push(text(time).size(12).color(time_color));
+            top = top.push(text(time).size(style::fs(12.0)).color(time_color));
         }
         // riga 2: (spunte) anteprima o «sta scrivendo…» … icone e badge
         let (preview, color) = match app.typing_in(d.peer_id) {
@@ -626,7 +640,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
             }
         }
         bottom = bottom.push(
-            container(text(ellipsize(&preview, preview_max)).size(13).color(color).wrapping(text::Wrapping::None))
+            container(text(ellipsize(&preview, scaled_chars(preview_max))).size(style::fs(13.0)).color(color).wrapping(text::Wrapping::None))
                 .width(Fill)
                 .clip(true),
         );
@@ -667,7 +681,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         .on_press(Msg::ShowStarred(!g.show_starred))
         .padding([6, 10])
         .style(style::flat(g.show_starred));
-    let search = text_input(tr("Cerca chat…"), &g.filter)
+    let search = text_input(tr("Cerca chat…"), &g.filter).size(style::fs(style::BODY_PX))
         .style(style::input)
         .on_input(Msg::Filter)
         .padding(9);
@@ -677,7 +691,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         container(
             row![
                 button(text("←").size(18)).on_press(Msg::ShowArchived(false)).padding([2, 10]).style(style::flat(false)),
-                text(tr("Archiviate")).size(18).font(BOLD).width(Fill),
+                text(tr("Archiviate")).size(style::fs(18.0)).font(BOLD).width(Fill),
             ]
             .spacing(8)
             .align_y(Center),
@@ -686,7 +700,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         .into()
     } else {
         let chip = |label: &'static str, f: ChatFilter| -> Element<'_, Msg> {
-            button(text(label).size(12))
+            button(text(label).size(style::fs(12.0)))
                 .on_press(Msg::ChatFilter(f))
                 .padding([4, 8])
                 .style(style::chip(g.chat_filter == f))
@@ -703,7 +717,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
         let top: Element<'_, Msg> = if wa {
             // WhatsApp: il titolo grande e le icone a destra, la ricerca sotto
             column![
-                row![text(tr("Chat")).size(22).font(BOLD).width(Fill), star, gear].spacing(2).align_y(Center),
+                row![text(tr("Chat")).size(style::fs(22.0)).font(BOLD).width(Fill), star, gear].spacing(2).align_y(Center),
                 search,
             ]
             .spacing(10)
@@ -717,7 +731,7 @@ fn sidebar(g: &Gui, compact: bool) -> Element<'_, Msg> {
     let mut body = Column::new().push(head);
     if empty {
         let what = if g.show_archived { tr("Nessuna chat archiviata") } else { tr("Nessuna chat qui") };
-        body = body.push(container(text(what).size(13).color(p.muted)).center_x(Fill).padding(20));
+        body = body.push(container(text(what).size(style::fs(13.0)).color(p.muted)).center_x(Fill).padding(20));
     }
     container(body.push(scrollable(list.padding(iced::Padding::ZERO.right(10))).height(Fill)))
         .width(if compact { COMPACT_W } else { SIDEBAR_W })
@@ -741,7 +755,7 @@ fn chat_menu<'a>(d: &model::DialogInfo, favorite: bool, here: impl Fn(Msg) -> Ms
     let p = style::p();
     let pid = d.peer_id;
     let item = |icon: &'static str, label: &'static str, m: Msg| -> Element<'a, Msg> {
-        button(row![text(icon).width(24), text(label).size(14)].spacing(8).align_y(Center))
+        button(row![text(icon).size(style::BODY_PX).width(24), text(label).size(style::fs(14.0))].spacing(8).align_y(Center))
             .on_press(here(m))
             .width(Fill)
             .padding([6, 12])
@@ -758,7 +772,7 @@ fn chat_menu<'a>(d: &model::DialogInfo, favorite: bool, here: impl Fn(Msg) -> Ms
     ]
     .spacing(1);
     col = col.push(
-        button(row![text("🗑").width(24), text(if d.is_group { tr("Esci ed elimina") } else { tr("Elimina chat") }).size(14).color(p.danger)].spacing(8))
+        button(row![text("🗑").size(style::BODY_PX).width(24), text(if d.is_group { tr("Esci ed elimina") } else { tr("Elimina chat") }).size(style::fs(14.0)).color(p.danger)].spacing(8))
             .on_press(here(Msg::MenuDelete(pid)))
             .width(Fill)
             .padding([6, 12])
@@ -771,14 +785,13 @@ fn chat_menu<'a>(d: &model::DialogInfo, favorite: bool, here: impl Fn(Msg) -> Ms
         .into()
 }
 
-/// ✓ inviato, ✓✓ letto (nel colore dei link)
+/// ✓ inviato, ✓✓ letto: segni vettoriali di `marks::ticks`, nel colore dei link
+/// se letto. Input: id del messaggio, ultimo id letto dall'altro, lato in pixel.
+/// Output: l'elemento dei segni. Effetti: nessuno.
 fn ticks<'a>(id: i32, read_out: i32, size: f32) -> Element<'a, Msg> {
     let p = style::p();
-    if id > 0 && id <= read_out {
-        text("✓✓").size(size).color(p.link).into()
-    } else {
-        text("✓").size(size).color(p.muted).into()
-    }
+    let read = id > 0 && id <= read_out;
+    crate::marks::ticks(read, if read { p.link } else { p.muted }, size)
 }
 
 /// ora di oggi, giorno della settimana, oppure la data
@@ -844,7 +857,7 @@ fn env_chip<'a>(g: &Gui, name: Element<'a, Msg>) -> Element<'a, Msg> {
     }
     let (color, label) = brand(g.env);
     let chip = container(
-        row![service_logo(g.env, 11.0, false), text(label).size(11).color(iced::Color::WHITE)]
+        row![service_logo(g.env, 11.0, false), text(label).size(style::fs(11.0)).color(iced::Color::WHITE)]
             .spacing(4)
             .align_y(Center),
     )
@@ -915,7 +928,7 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
         row![
             avatar(app, chat, 38.0),
             column![
-                env_chip(g, text(chat.name.as_str()).font(BOLD).size(16).into()),
+                env_chip(g, text(chat.name.as_str()).font(BOLD).size(style::fs(16.0)).into()),
                 subtitle(g, chat),
             ]
         ]
@@ -951,7 +964,7 @@ fn chat(g: &Gui) -> Element<'_, Msg> {
     }
     if !app.status.is_empty() {
         body = body.push(
-            container(text(app.status.as_str()).size(12).color(style::p().muted)).padding([4, 16]),
+            container(text(app.status.as_str()).size(style::fs(12.0)).color(style::p().muted)).padding([4, 16]),
         );
     }
     container(body)
@@ -970,7 +983,7 @@ fn subtitle<'a>(g: &Gui, chat: &model::DialogInfo) -> Element<'a, Msg> {
         p.muted = iced::Color { a: 0.8, ..iced::Color::WHITE };
     }
     if let Some(t) = g.app.typing_in(chat.peer_id) {
-        return text(format!("{t}{}", dots(g))).size(12).color(p.link).into();
+        return text(format!("{t}{}", dots(g))).size(style::fs(12.0)).color(p.link).into();
     }
     let now = jiff::Timestamp::now().as_second();
     let members = g.app.peer_info.get(&chat.peer_id).and_then(|i| i.members);
@@ -984,7 +997,7 @@ fn subtitle<'a>(g: &Gui, chat: &model::DialogInfo) -> Element<'a, Msg> {
             Some(n) => trf!("gruppo · {} membri", n),
             None => tr("gruppo").to_string(),
         },
-        s if s.online(now) => return text(tr("online")).size(12).color(p.link).into(),
+        s if s.online(now) => return text(tr("online")).size(style::fs(12.0)).color(p.link).into(),
         model::Seen::Online(t) | model::Seen::Offline(t) => match local(g, t) {
             Some(z) if z.date() == jiff::Zoned::now().date() => {
                 trf!("ultimo accesso alle {}", z.strftime("%H:%M"))
@@ -997,7 +1010,7 @@ fn subtitle<'a>(g: &Gui, chat: &model::DialogInfo) -> Element<'a, Msg> {
         model::Seen::LastMonth => tr("ultimo accesso questo mese").into(),
         model::Seen::Unknown => tr("chat privata").into(),
     };
-    text(line).size(12).color(p.muted).into()
+    text(line).size(style::fs(12.0)).color(p.muted).into()
 }
 
 fn history(g: &Gui) -> Element<'_, Msg> {
@@ -1017,7 +1030,7 @@ fn history(g: &Gui) -> Element<'_, Msg> {
         };
         col = col.push(
             container(
-                button(text(label).size(12))
+                button(text(label).size(style::fs(12.0)))
                     .on_press(Msg::Older)
                     .style(style::flat(false)),
             )
@@ -1033,7 +1046,7 @@ fn history(g: &Gui) -> Element<'_, Msg> {
             last_day = day;
             col = col.push(
                 container(
-                    container(text(day_label(d)).size(12))
+                    container(text(day_label(d)).size(style::fs(12.0)))
                         .padding([3, 10])
                         .style(style::pill(style::p().bubble_in)),
                 )
@@ -1077,7 +1090,7 @@ fn meta<'a>(g: &Gui, r: &HistoryRow) -> Row<'a, Msg> {
     if g.app.open.is_some_and(|peer| g.app.is_starred(peer, r.id)) {
         m = m.push(text("⭐").size(10));
     }
-    m = m.push(text(label).size(11).color(p.muted));
+    m = m.push(text(label).size(style::fs(11.0)).color(p.muted));
     if r.outgoing {
         let read_out = g.app.current_chat().map_or(0, |c| c.read_out);
         m = m.push(ticks(r.id, read_out, 11.0));
@@ -1094,7 +1107,7 @@ fn message<'a>(
     let app = &g.app;
     let p = style::p();
     if let RowKind::Service(s) = &r.kind {
-        return container(text(s.as_str()).size(12).color(p.muted)).center_x(Fill).into();
+        return container(text(s.as_str()).size(style::fs(12.0)).color(p.muted)).center_x(Fill).into();
     }
     let selected = app.msg_cursor == Some(r.id);
     let group = app.current_chat().is_some_and(|c| c.is_group && !c.broadcast);
@@ -1102,7 +1115,7 @@ fn message<'a>(
     if first && group && !r.outgoing && !r.from.is_empty() {
         content = content.push(
             text(r.from.as_str())
-                .size(13)
+                .size(style::fs(13.0))
                 .font(BOLD)
                 .color(style::name_color(&r.from)),
         );
@@ -1110,7 +1123,7 @@ fn message<'a>(
     if let Some(f) = &r.fwd {
         // autore nascosto: solo «inoltrato»
         let label = if f.is_empty() { tr("↪ inoltrato").to_string() } else { trf!("↪ inoltrato da {}", f) };
-        content = content.push(text(label).size(12).color(p.link));
+        content = content.push(text(label).size(style::fs(12.0)).color(p.link));
     }
     if r.reply_to.is_some() {
         content = content.push(quote(app, ring, r));
@@ -1136,11 +1149,11 @@ fn message<'a>(
                 };
                 let line = container(space()).width(Fill).height(1).style(style::fill(iced::Color { a: 0.25, ..p.text }));
                 content = content.push(
-                    column![line, text(label).size(11).color(p.link), container(linked(&t.text)).max_width(BUBBLE_W - 30.0)]
+                    column![line, text(label).size(style::fs(11.0)).color(p.link), container(linked(&t.text)).max_width(BUBBLE_W - 30.0)]
                         .spacing(4),
                 );
             }
-            Some(TrState::Busy) => content = content.push(text(tr("🌐 traduco…")).size(11).color(p.muted)),
+            Some(TrState::Busy) => content = content.push(text(tr("🌐 traduco…")).size(style::fs(11.0)).color(p.muted)),
             _ => {}
         }
     }
@@ -1150,7 +1163,7 @@ fn message<'a>(
                 .iter()
                 .find(|q| **q == it.emoticon)
                 .copied();
-            let b = button(text(format!("{} {}", it.emoticon, it.count)).size(13))
+            let b = button(text(format!("{} {}", it.emoticon, it.count)).size(style::fs(13.0)))
                 .padding([2, 8])
                 .style(style::flat(it.mine));
             match emoticon {
@@ -1204,14 +1217,14 @@ fn quote<'a>(app: &'a App, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
     // citazione lunga usciva dai bordi)
     let p = style::p();
     let what = r.reply_quote.clone().unwrap_or(what);
-    let what = ellipsize(what.lines().next().unwrap_or(""), QUOTE_CHARS);
+    let what = ellipsize(what.lines().next().unwrap_or(""), scaled_chars(QUOTE_CHARS));
     let tint = if who.is_empty() { p.link } else { style::name_color(&who) };
     let tint = style::mix(tint, iced::Color::WHITE, 0.2);
     let mut lines = Column::new().spacing(1);
     if !who.is_empty() {
         lines = lines.push(
-            text(ellipsize(&who, QUOTE_CHARS))
-                .size(12)
+            text(ellipsize(&who, scaled_chars(QUOTE_CHARS)))
+                .size(style::fs(12.0))
                 .font(BOLD)
                 .color(tint)
                 .wrapping(text::Wrapping::None),
@@ -1219,7 +1232,7 @@ fn quote<'a>(app: &'a App, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
     }
     // testo quasi pieno: il grigio «muted» sullo sfondo della bolla si perdeva
     let body = iced::Color { a: 0.85, ..p.text };
-    lines = lines.push(text(what).size(12).color(body).wrapping(text::Wrapping::None));
+    lines = lines.push(text(what).size(style::fs(12.0)).color(body).wrapping(text::Wrapping::None));
     let bar = container(space())
         .width(3)
         .height(if who.is_empty() { 16 } else { 32 })
@@ -1284,7 +1297,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
                     border: iced::border::rounded(100),
                     ..Default::default()
                 });
-            let dur = container(text(model::fmt_secs(*seconds)).size(11).color(iced::Color::WHITE))
+            let dur = container(text(model::fmt_secs(*seconds)).size(style::fs(11.0)).color(iced::Color::WHITE))
                 .padding([1, 6])
                 .style(style::pill(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
             let mut c = column![iced::widget::stack![
@@ -1303,7 +1316,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             (false, Some(img)) => img,
             (true, _) => column![
                 text(emoji.as_str()).size(64),
-                text(tr("sticker animato")).size(11).color(style::p().muted)
+                text(tr("sticker animato")).size(style::fs(11.0)).color(style::p().muted)
             ]
             .into(),
             _ => text(emoji.as_str()).size(64).into(),
@@ -1320,7 +1333,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             c = c.push(pic.unwrap_or_else(|| {
                 // download automatico spento: la foto arriva con un click
                 if !app.media_prefs.photos && !app.pending.contains(media.key()) {
-                    return button(text(if *gif { tr("⬇ Mostra la GIF") } else { tr("⬇ Mostra la foto") }).size(13))
+                    return button(text(if *gif { tr("⬇ Mostra la GIF") } else { tr("⬇ Mostra la foto") }).size(style::fs(13.0)))
                         .on_press(Msg::LoadPreview(r.id))
                         .padding([10, 16])
                         .style(style::flat(true))
@@ -1343,7 +1356,7 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
             let mut c = column![row![
                 text("📄").size(28),
                 text(info).width(Length::Shrink),
-                button(text(tr("Salva")).size(13)).on_press(Msg::Save(r.id)).style(style::primary),
+                button(text(tr("Salva")).size(style::fs(13.0))).on_press(Msg::Save(r.id)).style(style::primary),
             ]
             .spacing(10)
             .align_y(Center)]
@@ -1356,10 +1369,10 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         RowKind::Audio { name, seconds, caption, voice, .. } => {
             let label = if *voice { tr("Messaggio vocale").to_string() } else { name.clone() };
             let mut c = column![row![
-                button(text("▶")).on_press(Msg::Play(r.id)).style(style::primary),
+                button(text("▶").size(style::BODY_PX)).on_press(Msg::Play(r.id)).style(style::primary),
                 column![
                     text(label),
-                    text(model::fmt_secs(*seconds)).size(12).color(style::p().muted)
+                    text(model::fmt_secs(*seconds)).size(style::fs(12.0)).color(style::p().muted)
                 ],
             ]
             .spacing(10)
@@ -1398,7 +1411,7 @@ fn linked(t: &str) -> Element<'_, Msg> {
     if plain < t.len() {
         spans.push(span(&t[plain..]));
     }
-    rich_text(spans)
+    rich_text(spans).size(style::fs(style::BODY_PX))
         .on_link_click(Msg::Link)
         .color(style::p().text)
         .wrapping(text::Wrapping::WordOrGlyph)
@@ -1408,7 +1421,7 @@ fn linked(t: &str) -> Element<'_, Msg> {
 /// la barra azioni sotto il messaggio selezionato
 fn actions<'a>(g: &Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     let act = |label: &'static str, m: Msg| {
-        button(text(label).size(13)).on_press(m).padding([4, 8]).style(style::flat(false))
+        button(text(label).size(style::fs(13.0))).on_press(m).padding([4, 8]).style(style::flat(false))
     };
     let mut bar = Row::new().spacing(2).align_y(Center);
     for e in model::QUICK_REACTIONS {
@@ -1438,7 +1451,7 @@ fn actions<'a>(g: &Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     bar = bar.push(act(tr("⧉ Copia"), Msg::Copy(r.id)));
     if r.outgoing {
         bar = bar.push(
-            button(text(tr("🗑 Elimina")).size(13))
+            button(text(tr("🗑 Elimina")).size(style::fs(13.0)))
                 .on_press(Msg::AskDelete(r.id))
                 .padding([4, 8])
                 .style(style::flat(false)),
@@ -1453,7 +1466,7 @@ fn actions<'a>(g: &Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
 // ------------------------------------------------------ scrittura e pannelli
 
 fn banners(app: &App) -> Element<'_, Msg> {
-    let close = || button(text("✕")).on_press(Msg::Cancel).style(style::flat(false));
+    let close = || button(text("✕").size(style::BODY_PX)).on_press(Msg::Cancel).style(style::flat(false));
     let bar = |label: String, extra: Option<Element<'static, Msg>>| -> Element<'static, Msg> {
         let mut r = row![text(label).color(style::p().link).width(Fill)].spacing(8).align_y(Center);
         if let Some(e) = extra {
@@ -1469,7 +1482,7 @@ fn banners(app: &App) -> Element<'_, Msg> {
         col = col.push(bar(
             tr("Eliminare il messaggio per tutti?").into(),
             Some(
-                button(text(tr("Elimina")).size(13))
+                button(text(tr("Elimina")).size(style::fs(13.0)))
                     .on_press(Msg::ConfirmDelete)
                     .style(style::danger)
                     .into(),
@@ -1494,7 +1507,7 @@ fn banners(app: &App) -> Element<'_, Msg> {
     if let Some(name) = &app.uploading {
         col = col.push(
             container(
-                text(trf!("⬆ Invio di «{}» in corso…", name)).size(13).color(style::p().muted),
+                text(trf!("⬆ Invio di «{}» in corso…", name)).size(style::fs(13.0)).color(style::p().muted),
             )
             .padding([6, 16])
             .width(Fill)
@@ -1524,11 +1537,11 @@ fn attachment(app: &App) -> Option<Element<'_, Msg>> {
     let p = style::p();
     let info = column![
         text(ellipsize(&name, 60)).font(BOLD),
-        text(trf!("{} · scrivi una didascalia e premi Invio", size)).size(12).color(p.muted),
+        text(trf!("{} · scrivi una didascalia e premi Invio", size)).size(style::fs(12.0)).color(p.muted),
     ]
     .spacing(2)
     .width(Fill);
-    let close = button(text("✕")).on_press(Msg::Cancel).style(style::flat(false));
+    let close = button(text("✕").size(style::BODY_PX)).on_press(Msg::Cancel).style(style::flat(false));
     Some(
         container(row![thumb, info, close].spacing(12).align_y(Center))
             .padding([8, 16])
@@ -1551,7 +1564,7 @@ fn composer(app: &App, stickers: bool) -> Element<'_, Msg> {
         return container(
             row![
                 left,
-                text_input(placeholder, &app.compose)
+                text_input(placeholder, &app.compose).size(style::fs(style::BODY_PX))
                     .style(style::input)
                     .id(COMPOSE)
                     .on_input(Msg::Compose)
@@ -1579,7 +1592,7 @@ fn composer(app: &App, stickers: bool) -> Element<'_, Msg> {
             button(text("😊").size(18))
                 .on_press(Msg::Stickers)
                 .style(style::flat(app.show_sticker)),
-            text_input(placeholder, &app.compose)
+            text_input(placeholder, &app.compose).size(style::fs(style::BODY_PX))
                 .style(style::input)
                 .id(COMPOSE)
                 .on_input(Msg::Compose)
@@ -1602,7 +1615,7 @@ fn stickers(app: &App, wa: bool) -> Element<'_, Msg> {
     // schede in alto come Telegram: preferiti, recenti, tutti i set
     let here = app.open_set.filter(|_| app.set_level);
     let tab = |label: &'static str, on: bool, m: Msg| {
-        button(text(label).size(13)).on_press(m).padding([4, 10]).style(style::flat(on))
+        button(text(label).size(style::fs(13.0))).on_press(m).padding([4, 10]).style(style::flat(on))
     };
     let title = match here {
         Some(model::FAVED_SET) | Some(model::RECENT_SET) | None => "",
@@ -1712,8 +1725,8 @@ fn invite<'a>(title: &str, members: i32) -> Element<'a, Msg> {
     container(
         row![
             text(trf!("Invito a «{}» · {} membri", title, members)).color(p.link).width(Fill),
-            button(text(tr("Unisciti")).size(13)).on_press(Msg::Join).style(style::primary),
-            button(text("✕")).on_press(Msg::Cancel).style(style::flat(false)),
+            button(text(tr("Unisciti")).size(style::fs(13.0))).on_press(Msg::Join).style(style::primary),
+            button(text("✕").size(style::BODY_PX)).on_press(Msg::Cancel).style(style::flat(false)),
         ]
         .spacing(8)
         .align_y(Center),
@@ -1747,11 +1760,11 @@ fn settings(g: &Gui) -> Element<'_, Msg> {
         );
     }
     head = head
-        .push(text(title).size(22).font(BOLD).width(Fill))
-        .push(button(text("✕")).on_press(Msg::ToggleSettings).style(style::flat(false)));
+        .push(text(title).size(style::fs(22.0)).font(BOLD).width(Fill))
+        .push(button(text("✕").size(style::BODY_PX)).on_press(Msg::ToggleSettings).style(style::flat(false)));
     let mut col = column![head, body].spacing(18).max_width(620);
     if !g.app.status.is_empty() {
-        col = col.push(text(g.app.status.as_str()).size(12).color(p.muted));
+        col = col.push(text(g.app.status.as_str()).size(style::fs(12.0)).color(p.muted));
     }
     container(scrollable(container(col).padding(28)).height(Fill))
         .width(Fill)
@@ -1760,12 +1773,12 @@ fn settings(g: &Gui) -> Element<'_, Msg> {
         .into()
 }
 
-fn section<'a>(title: &'static str) -> Element<'a, Msg> {
-    text(title).size(13).font(BOLD).color(style::p().link).into()
+pub(crate) fn section<'a>(title: &'static str) -> Element<'a, Msg> {
+    text(title).size(style::fs(13.0)).font(BOLD).color(style::p().link).into()
 }
 
 /// un pulsante di scelta fra alternative (tema, misura, tetto)
-fn choice<'a>(label: String, on: bool, m: Msg) -> Element<'a, Msg> {
+pub(crate) fn choice<'a>(label: String, on: bool, m: Msg) -> Element<'a, Msg> {
     button(text(label)).on_press(m).padding([8, 14]).style(style::flat(on)).into()
 }
 
@@ -1786,13 +1799,13 @@ fn my_photo<'a>(g: &Gui, size: f32) -> Element<'a, Msg> {
 fn settings_main(g: &Gui) -> Element<'_, Msg> {
     let p = style::p();
     let prof = g.app.profile.as_ref();
-    let mut who = column![text(g.app.me.as_str()).size(18).font(BOLD)].spacing(2);
+    let mut who = column![text(g.app.me.as_str()).size(style::fs(18.0)).font(BOLD)].spacing(2);
     if let Some(pr) = prof {
         if !pr.phone.is_empty() {
-            who = who.push(text(pr.phone.as_str()).size(13).color(p.muted));
+            who = who.push(text(pr.phone.as_str()).size(style::fs(13.0)).color(p.muted));
         }
         if !pr.username.is_empty() {
-            who = who.push(text(format!("@{}", pr.username)).size(13).color(p.link));
+            who = who.push(text(format!("@{}", pr.username)).size(style::fs(13.0)).color(p.link));
         }
     }
     let card = button(row![my_photo(g, 64.0), who.width(Fill), text("›").size(20).color(p.muted)].spacing(14).align_y(Center))
@@ -1804,7 +1817,7 @@ fn settings_main(g: &Gui) -> Element<'_, Msg> {
         button(
             row![
                 text(icon).size(20).width(30),
-                column![text(label), text(sub).size(12).color(p.muted)].spacing(1).width(Fill),
+                column![text(label), text(sub).size(style::fs(12.0)).color(p.muted)].spacing(1).width(Fill),
                 text("›").size(18).color(p.muted),
             ]
             .spacing(10)
@@ -1836,7 +1849,7 @@ fn settings_main(g: &Gui) -> Element<'_, Msg> {
     column![
         container(card).style(style::pill(p.sidebar)),
         container(list).padding(4).style(style::pill(p.sidebar)),
-        text(format!("Rondine {}", env!("CARGO_PKG_VERSION"))).size(12).color(p.muted),
+        text(format!("Rondine {}", env!("CARGO_PKG_VERSION"))).size(style::fs(12.0)).color(p.muted),
     ]
     .spacing(16)
     .into()
@@ -1849,8 +1862,8 @@ fn form_field<'a>(
     on: fn(String) -> Msg,
 ) -> Element<'a, Msg> {
     column![
-        text(label).size(12).color(style::p().muted),
-        text_input(placeholder, value).on_input(on).on_submit(Msg::PfSave).style(style::input).padding(9),
+        text(label).size(style::fs(12.0)).color(style::p().muted),
+        text_input(placeholder, value).size(style::fs(style::BODY_PX)).on_input(on).on_submit(Msg::PfSave).style(style::input).padding(9),
     ]
     .spacing(4)
     .into()
@@ -1869,7 +1882,7 @@ fn settings_account(g: &Gui) -> Element<'_, Msg> {
         || saved.about != pf.about;
     let photo = column![
         my_photo(g, 96.0),
-        button(text(tr("Cambia foto")).size(13)).on_press(Msg::PfPhoto).style(style::flat(true)),
+        button(text(tr("Cambia foto")).size(style::fs(13.0))).on_press(Msg::PfPhoto).style(style::flat(true)),
     ]
     .spacing(8)
     .align_x(Center)
@@ -1880,7 +1893,7 @@ fn settings_account(g: &Gui) -> Element<'_, Msg> {
     let mut bio = column![form_field(about_label, tr("Qualche parola su di te"), &pf.about, Msg::PfAbout)].spacing(2);
     bio = bio.push(
         text(trf!("{}/70 · la vedono tutti nel tuo profilo", pf.about.chars().count()))
-            .size(11)
+            .size(style::fs(11.0))
             .color(p.muted),
     );
     let mut user = column![form_field(tr("Username"), tr("username"), &pf.username, Msg::PfUser)].spacing(2);
@@ -1890,7 +1903,7 @@ fn settings_account(g: &Gui) -> Element<'_, Msg> {
         } else {
             trf!("link: t.me/{}", pf.username)
         })
-        .size(11)
+        .size(style::fs(11.0))
         .color(p.muted),
     );
     let phone = if saved.phone.is_empty() { tr("nascosto").to_string() } else { saved.phone.clone() };
@@ -1975,22 +1988,23 @@ fn settings_appearance(g: &Gui) -> Element<'_, Msg> {
             (true, UiStyle::Telegram) => tr("Vale solo per Telegram: WhatsApp tiene il suo."),
             (true, UiStyle::WhatsApp) => tr("Vale solo per WhatsApp: Telegram tiene il suo."),
         })
-        .size(12)
+        .size(style::fs(12.0))
         .color(p.muted),
         text(tr("Con il tema Omarchy i colori seguono `omarchy theme set` mentre Rondine è aperta."))
-            .size(12)
+            .size(style::fs(12.0))
             .color(p.muted),
         env_rail_choice(g),
         section(tr("DIMENSIONE")),
         row![
-            text(trf!("Interfaccia  {}%", format!("{:.0}", s.scale * 100.0))).width(170),
+            text(trf!("Interfaccia  {}%", format!("{:.0}", s.scale * 100.0))).width(style::fs(170.0)),
             iced::widget::slider(0.7..=1.6, s.scale, Msg::Scale).step(0.05_f32),
         ]
         .spacing(12)
         .align_y(Center),
+        crate::font_view::view(g),
         section(tr("DISEGNO")),
         iced::widget::toggler(s.gpu)
-            .label(tr("Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)"))
+            .label(tr("Accelerazione GPU: scorrimento fluido, ~115 MB invece di ~80 (al prossimo avvio)")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::Gpu),
     ]
     .spacing(14)
@@ -2007,12 +2021,12 @@ fn env_rail_choice(g: &Gui) -> Element<'_, Msg> {
     let mut col = column![
         section(tr("TELEGRAM E WHATSAPP")),
         iced::widget::toggler(mixed)
-            .label(tr("Feed unico: le chat di tutti e due in una lista sola"))
+            .label(tr("Feed unico: le chat di tutti e due in una lista sola")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::Unified),
     ]
     .spacing(14);
     if mixed {
-        col = col.push(text(tr("Di che servizio è la chat aperta")).size(14));
+        col = col.push(text(tr("Di che servizio è la chat aperta")).size(style::fs(14.0)));
         for m in EnvMark::ALL {
             let label = match m {
                 EnvMark::Chip => tr("Etichetta col logo"),
@@ -2021,13 +2035,13 @@ fn env_rail_choice(g: &Gui) -> Element<'_, Msg> {
                 EnvMark::Theme => tr("Colori del servizio (ognuno il suo tema, come separati)"),
             };
             col = col.push(
-                iced::widget::toggler(g.settings.has_mark(m)).label(label).on_toggle(move |on| Msg::EnvMark(m, on)),
+                iced::widget::toggler(g.settings.has_mark(m)).label(label).text_size(style::fs(style::BODY_PX)).on_toggle(move |on| Msg::EnvMark(m, on)),
             );
         }
         // con i colori del servizio, la disposizione si sceglie a parte
         if g.settings.has_mark(EnvMark::Theme) {
             let fixed = g.settings.layout_fixed;
-            col = col.push(text(tr("Disposizione degli elementi")).size(14)).push(
+            col = col.push(text(tr("Disposizione degli elementi")).size(style::fs(14.0))).push(
                 row![
                     choice(tr("Come il servizio").into(), fixed.is_none(), Msg::LayoutFixed(None)),
                     choice(
@@ -2048,7 +2062,7 @@ fn env_rail_choice(g: &Gui) -> Element<'_, Msg> {
     } else {
         col = col.push(
             iced::widget::toggler(g.settings.env_rail)
-                .label(tr("Barra a sinistra per passare da uno all'altro"))
+                .label(tr("Barra a sinistra per passare da uno all'altro")).text_size(style::fs(style::BODY_PX))
                 .on_toggle(Msg::EnvRail),
         );
     }
@@ -2057,30 +2071,30 @@ fn env_rail_choice(g: &Gui) -> Element<'_, Msg> {
     } else {
         tr("Senza barra: Ctrl+1 Telegram, Ctrl+2 WhatsApp. Per averli come due app separate: rondine-gui --telegram e rondine-gui --whatsapp.")
     };
-    col.push(text(hint).size(12).color(style::p().muted)).into()
+    col.push(text(hint).size(style::fs(12.0)).color(style::p().muted)).into()
 }
 
 fn settings_notifications(g: &Gui) -> Element<'_, Msg> {
     let s = &g.settings;
     column![
         iced::widget::toggler(s.notify)
-            .label(tr("Notifiche dei messaggi nuovi (non per le chat silenziate)"))
+            .label(tr("Notifiche dei messaggi nuovi (non per le chat silenziate)")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::Notify),
         iced::widget::toggler(s.notify_text)
-            .label(tr("Mostra il testo del messaggio"))
+            .label(tr("Mostra il testo del messaggio")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::NotifyText),
         text(tr("Una chat letta da un altro dispositivo toglie da sola la sua notifica."))
-            .size(12)
+            .size(style::fs(12.0))
             .color(style::p().muted),
         section(tr("PRIVACY")),
         iced::widget::toggler(s.show_online)
-            .label(tr("Fammi vedere online quando Rondine è in primo piano"))
+            .label(tr("Fammi vedere online quando Rondine è in primo piano")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::ShowOnline),
         iced::widget::toggler(s.show_typing)
-            .label(tr("Fai vedere «sta scrivendo» mentre scrivo"))
+            .label(tr("Fai vedere «sta scrivendo» mentre scrivo")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::ShowTyping),
         text(tr("Su Telegram e WhatsApp. Su WhatsApp, senza online non arrivano nemmeno l'online e «sta scrivendo» degli altri (è il server a deciderlo)."))
-            .size(12)
+            .size(style::fs(12.0))
             .color(style::p().muted),
     ]
     .spacing(14)
@@ -2099,21 +2113,21 @@ fn settings_media(g: &Gui) -> Element<'_, Msg> {
     column![
         section(tr("DOWNLOAD AUTOMATICO")),
         iced::widget::toggler(s.auto_photos)
-            .label(tr("Scarica da solo le foto e le GIF delle chat"))
+            .label(tr("Scarica da solo le foto e le GIF delle chat")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::AutoPhotos),
         text(tr("Spento: al posto della foto compare «Mostra la foto», e si scarica con un click."))
-            .size(12)
+            .size(style::fs(12.0))
             .color(p.muted),
         iced::widget::toggler(s.video_thumbs)
-            .label(tr("Miniature dei video"))
+            .label(tr("Miniature dei video")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::VideoThumbs),
         iced::widget::toggler(s.avatars)
-            .label(tr("Foto profilo nella lista chat"))
+            .label(tr("Foto profilo nella lista chat")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::Avatars),
         section(tr("MISURA DELLE FOTO IN CHAT")),
         sizes,
         text(tr("Gli sticker restano sempre visibili; i media condivisi nella scheda della chat si scaricano quando la apri."))
-            .size(12)
+            .size(style::fs(12.0))
             .color(p.muted),
     ]
     .spacing(14)
@@ -2135,10 +2149,10 @@ fn settings_storage(g: &Gui) -> Element<'_, Msg> {
         total += bytes;
         usage = usage.push(
             row![
-                column![text(label), text(trf!("{} file · {}", n, model::fmt_size(bytes as f64))).size(12).color(p.muted)]
+                column![text(label), text(trf!("{} file · {}", n, model::fmt_size(bytes as f64))).size(style::fs(12.0)).color(p.muted)]
                     .spacing(1)
                     .width(Fill),
-                button(text(tr("Svuota")).size(13))
+                button(text(tr("Svuota")).size(style::fs(13.0)))
                     .on_press_maybe((n > 0).then_some(Msg::AskClear(kind)))
                     .padding([5, 12])
                     .style(style::flat(true)),
@@ -2157,16 +2171,16 @@ fn settings_storage(g: &Gui) -> Element<'_, Msg> {
         container(usage).padding(14).style(style::pill(p.sidebar)),
         text(trf!("Totale: {}", model::fmt_size(total as f64))).font(BOLD),
         text(tr("La cronologia non resta sul disco: si salvano solo anteprime e foto profilo."))
-            .size(12)
+            .size(style::fs(12.0))
             .color(p.muted),
         section(tr("TETTO DELLA CACHE")),
         limits,
         row![
             text(tr("A ogni avvio Rondine toglie i file più vecchi oltre il tetto."))
-                .size(12)
+                .size(style::fs(12.0))
                 .color(p.muted)
                 .width(Fill),
-            button(text(tr("Sfoltisci ora")).size(13)).on_press(Msg::PruneNow).style(style::flat(true)),
+            button(text(tr("Sfoltisci ora")).size(style::fs(13.0))).on_press(Msg::PruneNow).style(style::flat(true)),
         ]
         .spacing(8)
         .align_y(Center),
@@ -2193,7 +2207,7 @@ fn settings_devices(g: &Gui) -> Element<'_, Msg> {
             .align_y(Center);
         if !s.current {
             top = top.push(
-                button(text(tr("Disconnetti")).size(12))
+                button(text(tr("Disconnetti")).size(style::fs(12.0)))
                     .on_press(Msg::AskEndSession(Some(s.hash)))
                     .padding([4, 10])
                     .style(style::flat(true)),
@@ -2213,9 +2227,9 @@ fn settings_devices(g: &Gui) -> Element<'_, Msg> {
             container(
                 column![
                     top,
-                    text(s.app.as_str()).size(13),
-                    text(place).size(12).color(p.muted),
-                    text(when).size(12).color(if s.current { p.link } else { p.muted }),
+                    text(s.app.as_str()).size(style::fs(13.0)),
+                    text(place).size(style::fs(12.0)).color(p.muted),
+                    text(when).size(style::fs(12.0)).color(if s.current { p.link } else { p.muted }),
                 ]
                 .spacing(2),
             )
@@ -2227,7 +2241,7 @@ fn settings_devices(g: &Gui) -> Element<'_, Msg> {
     if g.env == Env::WhatsApp {
         // gli altri dispositivi li mostra solo il telefono; da qui si scollega questo PC
         col = col
-            .push(text(tr("Gli altri dispositivi collegati si vedono e si scollegano dal telefono.")).size(12).color(p.muted))
+            .push(text(tr("Gli altri dispositivi collegati si vedono e si scollegano dal telefono.")).size(style::fs(12.0)).color(p.muted))
             .push(
                 button(text(tr("Scollega questo PC")))
                     .on_press(Msg::AskEndSession(Some(0)))
@@ -2261,8 +2275,8 @@ fn settings_translation<'a>(g: &'a Gui) -> Element<'a, Msg> {
     .spacing(14);
     let field = |label: &'static str, ph: &'static str, value: &'a str, secret: bool, on: fn(String) -> Msg| -> Element<'a, Msg> {
         column![
-            text(label).size(12).color(p.muted),
-            text_input(ph, value).secure(secret).on_input(on).style(style::input).padding(9),
+            text(label).size(style::fs(12.0)).color(p.muted),
+            text_input(ph, value).size(style::fs(style::BODY_PX)).secure(secret).on_input(on).style(style::input).padding(9),
         ]
         .spacing(4)
         .into()
@@ -2273,7 +2287,7 @@ fn settings_translation<'a>(g: &'a Gui) -> Element<'a, Msg> {
                 .push(field(tr("Chiave API DeepL"), "xxxxxxxx-xxxx-…:fx", &c.deepl_key, true, Msg::TrDeeplKey))
                 .push(
                     text(tr("La chiave si crea gratis su deepl.com (piano «DeepL API Free»); quelle gratuite finiscono con «:fx»."))
-                        .size(12)
+                        .size(style::fs(12.0))
                         .color(p.muted),
                 );
         }
@@ -2289,7 +2303,7 @@ fn settings_translation<'a>(g: &'a Gui) -> Element<'a, Msg> {
                 .push(field(tr("Modello"), "llama-3.3-70b-versatile", &c.oa_model, false, Msg::TrModel))
                 .push(
                     text(tr("La chiave di Groq si crea su console.groq.com; con Ollama in locale non serve."))
-                        .size(12)
+                        .size(style::fs(12.0))
                         .color(p.muted),
                 );
         }
@@ -2318,7 +2332,7 @@ fn settings_translation<'a>(g: &'a Gui) -> Element<'a, Msg> {
     match &g.app.tr_test {
         Some(Ok(t)) => test = test.push(text(format!("✓ {t}")).color(p.link).width(Fill)),
         Some(Err(e)) => test = test.push(text(format!("✕ {e}")).color(p.danger).width(Fill)),
-        None if !c.ready() => test = test.push(text(tr("inserisci prima la chiave")).size(12).color(p.muted)),
+        None if !c.ready() => test = test.push(text(tr("inserisci prima la chiave")).size(style::fs(12.0)).color(p.muted)),
         None => {}
     }
     col.push(section(tr("TRADURRE IN")))
@@ -2327,7 +2341,7 @@ fn settings_translation<'a>(g: &'a Gui) -> Element<'a, Msg> {
         .push(section(tr("PRIVACY")))
         .push(
             text(tr("I messaggi da tradurre vengono inviati al servizio scelto, solo quando premi «🌐 Traduci» o nelle chat a traduzione automatica (si attiva dalla scheda della chat). La chiave resta in ~/.config/rondine/translate.conf, leggibile solo da te."))
-                .size(12)
+                .size(style::fs(12.0))
                 .color(p.muted),
         )
         .into()
@@ -2346,14 +2360,14 @@ fn settings_links(g: &Gui) -> Element<'_, Msg> {
         .align_y(Center);
     if !handler_is_us {
         handler_row = handler_row.push(
-            button(text(tr("Usa Rondine")).size(13))
+            button(text(tr("Usa Rondine")).size(style::fs(13.0)))
                 .on_press(Msg::TgHandler)
                 .style(style::primary),
         );
     }
     column![
         iced::widget::toggler(g.settings.links_in_app)
-            .label(tr("Apri i link t.me e tg:// dentro Rondine"))
+            .label(tr("Apri i link t.me e tg:// dentro Rondine")).text_size(style::fs(style::BODY_PX))
             .on_toggle(Msg::LinksInApp),
         text(tr("Link tg:// da browser e altre app")).color(p.text),
         handler_row,
@@ -2371,8 +2385,8 @@ fn starred_view(g: &Gui) -> Element<'_, Msg> {
     let mut list: Vec<&rondine::starred::Star> = g.app.starred.iter().collect();
     list.sort_by_key(|s| std::cmp::Reverse(s.date));
     let head = row![
-        text(tr("⭐ Messaggi importanti")).size(20).font(BOLD).width(Fill),
-        button(text("✕")).on_press(Msg::ShowStarred(false)).style(style::flat(false)),
+        text(tr("⭐ Messaggi importanti")).size(style::fs(20.0)).font(BOLD).width(Fill),
+        button(text("✕").size(style::BODY_PX)).on_press(Msg::ShowStarred(false)).style(style::flat(false)),
     ]
     .align_y(Center);
     let body: Element<'_, Msg> = if list.is_empty() {
@@ -2384,8 +2398,8 @@ fn starred_view(g: &Gui) -> Element<'_, Msg> {
             let when = local(g, s.date).map(|z| z.strftime("%d/%m/%y %H:%M").to_string()).unwrap_or_default();
             let card = column![
                 row![
-                    text(if s.from.is_empty() || s.from == s.chat_name { s.chat_name.clone() } else { format!("{} · {}", s.chat_name, s.from) }).size(12).font(BOLD).color(style::name_color(&s.chat_name)).width(Fill),
-                    text(when).size(11).color(p.muted),
+                    text(if s.from.is_empty() || s.from == s.chat_name { s.chat_name.clone() } else { format!("{} · {}", s.chat_name, s.from) }).size(style::fs(12.0)).font(BOLD).color(style::name_color(&s.chat_name)).width(Fill),
+                    text(when).size(style::fs(11.0)).color(p.muted),
                 ]
                 .spacing(8),
                 text(ellipsize(&s.text, 300)).wrapping(text::Wrapping::WordOrGlyph),
@@ -2435,13 +2449,13 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
         tr("Info gruppo")
     };
     let top = row![
-        text(title).size(16).font(BOLD).width(Fill),
-        button(text("✕")).on_press(Msg::ToggleInfo).style(style::flat(false)),
+        text(title).size(style::fs(16.0)).font(BOLD).width(Fill),
+        button(text("✕").size(style::BODY_PX)).on_press(Msg::ToggleInfo).style(style::flat(false)),
     ]
     .align_y(Center);
     let face = column![
         avatar(app, chat, 96.0),
-        text(chat.name.as_str()).size(20).font(BOLD).align_x(Center),
+        text(chat.name.as_str()).size(style::fs(20.0)).font(BOLD).align_x(Center),
         subtitle(g, chat),
     ]
     .spacing(6)
@@ -2451,7 +2465,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     let mut details = Column::new().spacing(12);
     match info {
         None => {
-            details = details.push(text(tr("carico le informazioni…")).size(12).color(p.muted));
+            details = details.push(text(tr("carico le informazioni…")).size(style::fs(12.0)).color(p.muted));
         }
         Some(i) => {
             if let Some(phone) = &i.phone {
@@ -2473,7 +2487,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
                 details = details.push(info_field(linked(&i.about), label));
             }
             if i.blocked {
-                details = details.push(text(tr("🚫 Hai bloccato questo utente")).size(13).color(p.danger));
+                details = details.push(text(tr("🚫 Hai bloccato questo utente")).size(style::fs(13.0)).color(p.danger));
             }
         }
     }
@@ -2504,19 +2518,19 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     };
     acts = acts.push(act(del_label.into(), p.danger, Msg::AskDeleteChat));
     let auto_tr = iced::widget::toggler(app.translate.is_auto(chat.peer_id))
-        .label(tr("🌐 Traduci da solo i messaggi di questa chat"))
+        .label(tr("🌐 Traduci da solo i messaggi di questa chat")).text_size(style::fs(style::BODY_PX))
         .on_toggle(Msg::AutoTranslate);
     // messaggi effimeri: come i «messaggi temporanei» di WhatsApp
     let ttl_now = info.map_or(0, |i| i.ttl);
     let ttl_choice = |label: &'static str, secs: i32| -> Element<'_, Msg> {
-        button(text(label).size(12))
+        button(text(label).size(style::fs(12.0)))
             .on_press(Msg::ChatDo(chat.peer_id, model::ChatAction::Ttl(secs)))
             .padding([4, 10])
             .style(style::chip(ttl_now == secs))
             .into()
     };
     let ephemeral = column![
-        text(tr("⏱ Messaggi effimeri")).size(14),
+        text(tr("⏱ Messaggi effimeri")).size(style::fs(14.0)),
         row![
             ttl_choice(tr("Spenti"), 0),
             ttl_choice(tr("24 ore"), 86_400),
@@ -2525,12 +2539,12 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
         ]
         .spacing(6)
         .wrap(),
-        text(tr("I nuovi messaggi spariscono per tutti dopo il tempo scelto.")).size(11).color(p.muted),
+        text(tr("I nuovi messaggi spariscono per tutti dopo il tempo scelto.")).size(style::fs(11.0)).color(p.muted),
     ]
     .spacing(6);
 
     let tabs = Row::with_children(model::SharedTab::ALL.iter().map(|&t| {
-        button(text(t.label()).size(13))
+        button(text(t.label()).size(style::fs(13.0)))
             .on_press(Msg::InfoTab(t))
             .padding([4, 10])
             .style(style::flat(g.info_tab == t))
@@ -2539,7 +2553,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     .spacing(4)
     .wrap();
     let shared: Element<'_, Msg> = match app.shared.get(&(chat.peer_id, g.info_tab)) {
-        None => text(tr("carico…")).size(12).color(p.muted).into(),
+        None => text(tr("carico…")).size(style::fs(12.0)).color(p.muted).into(),
         Some(items) if items.is_empty() => {
             let what = match g.info_tab {
                 model::SharedTab::Media => tr("Nessuna foto o video"),
@@ -2548,7 +2562,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
                 model::SharedTab::Audio => tr("Nessun brano"),
                 model::SharedTab::Voice => tr("Nessun messaggio vocale"),
             };
-            text(what).size(12).color(p.muted).into()
+            text(what).size(style::fs(12.0)).color(p.muted).into()
         }
         Some(items) => match g.info_tab {
             model::SharedTab::Media => shared_grid(app, items),
@@ -2572,7 +2586,7 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
 
 /// un dato della scheda con la sua etichetta sotto, come Telegram
 fn info_field<'a>(value: Element<'a, Msg>, label: &'static str) -> Element<'a, Msg> {
-    column![value, text(label).size(11).color(style::p().muted)]
+    column![value, text(label).size(style::fs(11.0)).color(style::p().muted)]
         .spacing(2)
         .into()
 }
@@ -2662,8 +2676,8 @@ fn shared_row<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     let mut line = row![
         text(icon).size(22),
         column![
-            text(ellipsize(&name, 34)).wrapping(text::Wrapping::None),
-            text(sub).size(11).color(p.muted),
+            text(ellipsize(&name, scaled_chars(34))).wrapping(text::Wrapping::None),
+            text(sub).size(style::fs(11.0)).color(p.muted),
         ]
         .spacing(2)
         .width(Fill),
@@ -2671,7 +2685,7 @@ fn shared_row<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     .spacing(10)
     .align_y(Center);
     if let Some((label, m)) = action {
-        line = line.push(button(text(label).size(12)).on_press(m).padding([4, 10]).style(style::primary));
+        line = line.push(button(text(label).size(style::fs(12.0))).on_press(m).padding([4, 10]).style(style::primary));
     }
     container(line).padding([4, 0]).into()
 }
@@ -2684,7 +2698,7 @@ fn shared_links<'a>(g: &'a Gui, items: &'a [model::SharedItem]) -> Element<'a, M
         let mut entry = Column::new().spacing(2);
         for url in &it.links {
             entry = entry.push(
-                button(text(ellipsize(url, 46)).size(13).color(p.link).wrapping(text::Wrapping::None))
+                button(text(ellipsize(url, scaled_chars(46))).size(style::fs(13.0)).color(p.link).wrapping(text::Wrapping::None))
                     .on_press(Msg::Link(url.clone()))
                     .padding(0)
                     .style(|_: &iced::Theme, _| button::Style::default()),
@@ -2695,7 +2709,7 @@ fn shared_links<'a>(g: &'a Gui, items: &'a [model::SharedItem]) -> Element<'a, M
         if !summary.is_empty() && !it.links.iter().any(|u| summary.trim() == u.as_str()) {
             sub = format!("{sub} · {}", ellipsize(&summary, 60));
         }
-        entry = entry.push(text(sub).size(11).color(p.muted));
+        entry = entry.push(text(sub).size(style::fs(11.0)).color(p.muted));
         col = col.push(entry);
     }
     col.into()
@@ -2782,14 +2796,14 @@ fn confirm_dialog(g: &Gui, what: Confirm) -> Element<'_, Msg> {
         ),
     };
     let mut card = column![
-        text(title).size(18).font(BOLD),
+        text(title).size(style::fs(18.0)).font(BOLD),
         text(body).color(p.muted),
     ]
     .spacing(12);
     if what == Confirm::DeleteChat && user && !me {
         card = card.push(
             iced::widget::checkbox(g.revoke)
-                .label(trf!("Elimina anche per {}", name))
+                .label(trf!("Elimina anche per {}", name)).text_size(style::fs(style::BODY_PX))
                 .on_toggle(Msg::Revoke),
         );
     }
@@ -2854,11 +2868,11 @@ fn forward_picker(g: &Gui) -> Element<'_, Msg> {
     container(
         column![
             row![
-                text(tr("Inoltra a…")).size(20).font(BOLD).width(Fill),
-                button(text("✕")).on_press(Msg::Cancel).style(style::flat(false)),
+                text(tr("Inoltra a…")).size(style::fs(20.0)).font(BOLD).width(Fill),
+                button(text("✕").size(style::BODY_PX)).on_press(Msg::Cancel).style(style::flat(false)),
             ]
             .align_y(Center),
-            text_input(tr("Cerca chat…"), &g.fwd_filter)
+            text_input(tr("Cerca chat…"), &g.fwd_filter).size(style::fs(style::BODY_PX))
                 .style(style::input)
                 .id(FWD_SEARCH)
                 .on_input(Msg::FwdFilter)

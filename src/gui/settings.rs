@@ -101,6 +101,12 @@ pub struct Settings {
     pub favorites: Vec<i64>,
     /// scala dell'interfaccia (testo e spazi)
     pub scale: f32,
+    /// il font dell'interfaccia (nome della famiglia), `None` = quello predefinito dell'app
+    pub font: Option<String>,
+    /// lo spessore del testo normale, da 100 a 900 (400 = normale)
+    pub font_weight: u16,
+    /// la scala del solo testo (1.0 = invariata), da 0.70 a 1.60
+    pub text_scale: f32,
     /// i link t.me / tg:// si aprono in Rondine invece che nel browser
     pub links_in_app: bool,
     /// disegno con la GPU (wgpu) invece che in software (tiny-skia)
@@ -155,6 +161,16 @@ pub fn solo() -> Option<UiStyle> {
 pub const PHOTO_SIZES: [(u16, &str); 3] = [(220, "Piccole"), (320, "Medie"), (440, "Grandi")];
 /// i tetti della cache proposti nelle impostazioni (MB)
 pub const CACHE_LIMITS: [u32; 4] = [32, 128, 512, 2048];
+/// lo spessore predefinito del testo normale (Regular)
+const FONT_WEIGHT_DEFAULT: u16 = 400;
+/// il minimo e il massimo dello spessore del testo (Thin..Black)
+const FONT_WEIGHT_MIN: u16 = 100;
+const FONT_WEIGHT_MAX: u16 = 900;
+/// la scala predefinita del solo testo
+const TEXT_SCALE_DEFAULT: f32 = 1.0;
+/// il minimo e il massimo della scala del solo testo
+const TEXT_SCALE_MIN: f32 = 0.70;
+const TEXT_SCALE_MAX: f32 = 1.60;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -164,6 +180,9 @@ impl Default for Settings {
             theme_wa: ThemeChoice::WhatsApp,
             favorites: Vec::new(),
             scale: 1.0,
+            font: None,
+            font_weight: FONT_WEIGHT_DEFAULT,
+            text_scale: TEXT_SCALE_DEFAULT,
             links_in_app: true,
             gpu: true,
             notify: true,
@@ -274,6 +293,18 @@ impl Settings {
                         s.scale = f.clamp(0.7, 1.6);
                     }
                 }
+                ("font", v) => s.font = (!v.is_empty()).then(|| v.to_string()),
+                ("peso_font", v) => {
+                    if let Ok(w) = v.parse::<u16>() {
+                        s.font_weight = w.clamp(FONT_WEIGHT_MIN, FONT_WEIGHT_MAX);
+                    }
+                }
+                // il NaN passa il parse ma non si può fissare con clamp: va scartato
+                ("scala_testo", v) => {
+                    if let Some(f) = v.parse::<f32>().ok().filter(|f| !f.is_nan()) {
+                        s.text_scale = f.clamp(TEXT_SCALE_MIN, TEXT_SCALE_MAX);
+                    }
+                }
                 ("link_in_app", v) => s.links_in_app = v == "true",
                 ("gpu", v) => s.gpu = v == "true",
                 ("notifiche", v) => s.notify = v == "true",
@@ -348,7 +379,7 @@ impl Settings {
                  foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n\
                  stile = {style}\ntema_whatsapp = {}\npreferite = {}\nbarra_ambienti = {}\n\
                  feed_unico = {}\nstile_feed = {}\ntema_feed = {}\nsegno_feed = {}\ndisposizione_feed = {}\n\
-                 mostra_online = {}\nmostra_scrivo = {}\n",
+                 mostra_online = {}\nmostra_scrivo = {}\nfont = {}\npeso_font = {}\nscala_testo = {:.2}\n",
                 self.scale,
                 self.links_in_app,
                 self.gpu,
@@ -374,6 +405,9 @@ impl Settings {
                 },
                 self.show_online,
                 self.show_typing,
+                self.font.as_deref().unwrap_or_default(),
+                self.font_weight,
+                self.text_scale,
             ),
         );
     }
@@ -424,16 +458,27 @@ mod tests {
         s.theme = ThemeChoice::Rondine;
         s.theme_wa = ThemeChoice::Omarchy;
         s.favorites = vec![42, -100123];
+        s.font = Some("Segoe UI".into());
+        s.font_weight = 500;
+        s.text_scale = 1.25;
         s.save();
         let back = Settings::load();
         assert_eq!(back.style, UiStyle::WhatsApp);
         assert_eq!(back.theme, ThemeChoice::Rondine);
         assert_eq!(back.theme_wa, ThemeChoice::Omarchy);
         assert_eq!(back.favorites, vec![42, -100123]);
+        assert_eq!(back.font.as_deref(), Some("Segoe UI"));
+        assert_eq!(back.font_weight, 500);
+        assert_eq!(back.text_scale, 1.25);
         // le impostazioni di prima del cambio di nome restano valide
         std::fs::write(path(), "tema = rtete\n").unwrap();
         let old = Settings::load();
         assert_eq!((old.style, old.theme, old.theme_wa), (UiStyle::Telegram, ThemeChoice::Rondine, ThemeChoice::WhatsApp));
+        assert_eq!((old.font.as_deref(), old.font_weight, old.text_scale), (None, FONT_WEIGHT_DEFAULT, TEXT_SCALE_DEFAULT));
+        // valori vuoti o non numerici: restano i predefiniti
+        std::fs::write(path(), "font = \npeso_font = pesante\nscala_testo = grande\n").unwrap();
+        let bad = Settings::load();
+        assert_eq!((bad.font.as_deref(), bad.font_weight, bad.text_scale), (None, FONT_WEIGHT_DEFAULT, TEXT_SCALE_DEFAULT));
         std::fs::remove_dir_all(&dir).ok();
     }
 

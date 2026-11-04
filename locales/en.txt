@@ -1722,3 +1722,45 @@ Always Telegram
 
 Sempre WhatsApp
 Always WhatsApp
+
+FONT
+FONT
+
+carico l'elenco dei font…
+loading the font list…
+
+Spessore
+Weight
+
+Sottilissimo
+Thin
+
+Extra leggero
+Extra light
+
+Leggero
+Light
+
+Normale
+Regular
+
+Medio
+Medium
+
+Semigrassetto
+Semibold
+
+Grassetto
+Bold
+
+Extra grassetto
+Extra bold
+
+Nero
+Black
+
+Testo  {}%
+Text  {}%
+
+Predefinito
+Default
