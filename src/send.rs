@@ -113,6 +113,8 @@ pub enum Request {
     Avatar { peer_ref: ChatRef, photo_id: i64 },
     /// scheda della chat (bio, membri, bloccato)
     Info { peer_ref: ChatRef, peer: ChatId },
+    /// commenti del post `id` di un canale
+    Comments { peer_ref: ChatRef, peer: ChatId, id: i32 },
     /// contenuti condivisi di un tipo (media, file, link…)
     Shared {
         peer_ref: ChatRef,
@@ -208,6 +210,11 @@ pub enum Response {
     Info {
         peer: ChatId,
         info: Result<PeerInfo, String>,
+    },
+    Comments {
+        peer: ChatId,
+        id: i32,
+        res: Result<crate::model::Comments, String>,
     },
     Shared {
         peer: ChatId,

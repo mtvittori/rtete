@@ -191,6 +191,7 @@ pub fn row_of(store: &mut Store, jid: &str, m: &StoredMsg) -> HistoryRow {
         reply_quote: None,
         fwd: m.fwd.then(String::new),
         edited: m.edited,
+        comments: None,
     }
 }
 
@@ -210,6 +211,7 @@ fn row_kind(jid: &str, m: &StoredMsg, text: &str) -> RowKind {
             caption,
             round: false,
             note: format!("video {}s", m.secs),
+            gif: false,
         },
         ("voice" | "audio", Some(media)) => RowKind::Audio {
             media,

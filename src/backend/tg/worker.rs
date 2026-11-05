@@ -72,6 +72,7 @@ pub async fn send_job(client: &Client, job: SendJob) -> Result<SendDone, String>
                         reply_quote: None,
                         fwd: None,
                         edited: true,
+                        comments: None,
                     },
                 )),
                 Err(e) => Err(e.to_string()),
@@ -116,6 +117,10 @@ pub fn run_worker(
                     tokio::spawn(async move {
                         let _gate = permits.acquire_owned().await;
                         let key = media.key().to_string();
+                        // GIF già in cache come miniatura: manca ancora l'mp4 da animare
+                        if super::wants_gif_file(&media) {
+                            let _ = super::fetch_raw(&cl, &media).await;
+                        }
                         conv_job(key, super::fetch_raw(&cl, &media), &out).await;
                     });
                 }
@@ -248,6 +253,12 @@ pub fn run_worker(
                         let _gate = permits.acquire_owned().await;
                         let path = super::download_avatar(&cl, peer_ref, photo_id).await;
                         let _ = out.send(Response::Avatar { photo_id, path });
+                    });
+                }
+                Request::Comments { peer_ref, peer, id } => {
+                    tokio::spawn(async move {
+                        let res = super::load_comments(&cl, peer_ref, id).await;
+                        let _ = out.send(Response::Comments { peer, id, res });
                     });
                 }
                 Request::Info { peer_ref, peer } => {

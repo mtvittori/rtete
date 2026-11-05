@@ -174,6 +174,16 @@ pub struct HistoryRow {
     /// origine di un inoltro: nome dell'autore originale, vuoto se nascosto.
     pub fwd: Option<String>,
     pub edited: bool,
+    /// commenti di un post di canale (gruppo di discussione collegato).
+    pub comments: Option<i32>,
+}
+
+/// I commenti di un post di canale: vivono nel gruppo di discussione,
+/// come risposte alla copia del post (`root`).
+pub struct Comments {
+    pub group: ChatRef,
+    pub root: i32,
+    pub rows: Vec<HistoryRow>,
 }
 
 /// conteggio di una reazione standard sulla riga.
@@ -225,6 +235,8 @@ pub enum RowKind {
         caption: String,
         round: bool,
         note: String,
+        /// GIF di Telegram: un mp4 muto e in loop, in GUI parte da solo
+        gif: bool,
     },
     /// etichetta informativa: vocale, contatti, sondaggi…
     Note(String),
@@ -249,6 +261,7 @@ impl RowKind {
             RowKind::Audio { voice: true, .. } => tr("🎤 messaggio vocale").into(),
             RowKind::Audio { name, .. } => format!("🎵 {name}"),
             RowKind::Video { round: true, .. } => tr("📹 videomessaggio").into(),
+            RowKind::Video { gif: true, .. } => "GIF".into(),
             RowKind::Video { caption, .. } if !caption.is_empty() => {
                 format!("🎥 {}", self::caption(caption))
             }

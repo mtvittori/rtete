@@ -547,6 +547,20 @@ impl Store {
         })
     }
 
+    /// La chat che contiene il messaggio (per id WhatsApp), qualunque sia:
+    /// prima le chat in RAM, poi i file, dalle più recenti.
+    pub fn chat_with_wa(&mut self, wa: &str) -> Option<String> {
+        if let Some((jid, _)) = self.hot.iter().find(|(_, msgs)| msgs.iter().any(|m| m.wa == wa)) {
+            return Some(jid.clone());
+        }
+        let mut all: Vec<&ChatMeta> = self.chats.values().collect();
+        all.sort_by_key(|c| std::cmp::Reverse(c.ts));
+        let needle = format!("\"{wa}\"");
+        all.into_iter()
+            .map(|c| c.jid.clone())
+            .find(|jid| std::fs::read_to_string(self.msgs_path(jid)).is_ok_and(|raw| raw.contains(&needle)))
+    }
+
     /// Quanti messaggi in arrivo restano da leggere dopo l'ultimo di `ids`;
     /// `None` se nessuno è della chat.
     pub fn unread_after(&mut self, jid: &str, ids: &[String]) -> Option<usize> {

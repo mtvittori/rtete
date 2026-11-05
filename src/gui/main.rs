@@ -2,6 +2,7 @@
 //! stato `App`) con un'interfaccia iced al posto della TUI. L'accesso
 //! (numero, codice) resta alla TUI: qui si riusa la sessione salvata.
 
+mod anim;
 mod font_view;
 mod fonts;
 mod marks;
@@ -11,6 +12,7 @@ mod settings;
 mod style;
 mod ui;
 
+use iced::widget::selector::{self, Target};
 use iced::widget::{operation, scrollable};
 use iced::{keyboard, Subscription, Task};
 
@@ -31,6 +33,8 @@ pub const FWD_SEARCH: &str = "fwd-search";
 pub const LOGIN_FIELD: &str = "login";
 /// Passi per unità della scala (1/20): il fattore si arrotonda a questo multiplo
 const SCALE_STEPS: f32 = 20.0;
+/// quanto resta evidenziato il messaggio raggiunto dalla citazione
+const FLASH: std::time::Duration = std::time::Duration::from_millis(1500);
 
 #[derive(Debug, Clone)]
 pub enum Msg {
@@ -41,6 +45,15 @@ pub enum Msg {
     Submit,
     Scrolled(scrollable::Viewport),
     Older,
+    /// una GIF è entrata in vista: la decodifica (chiave, file sorgente)
+    AnimShow(String, std::path::PathBuf),
+    AnimHide(String),
+    AnimLoaded(String, Result<std::sync::Arc<anim::Anim>, String>),
+    AnimTick(std::time::Instant),
+    /// click su una citazione: porta al messaggio originale
+    Jump(i32),
+    /// bounds del messaggio e della cronologia, per centrare il salto
+    Jumped(i32, Option<iced::widget::selector::Target>, Option<iced::widget::selector::Target>),
     Select(i32),
     Reply(i32),
     Edit(i32),
@@ -96,6 +109,10 @@ pub enum Msg {
     NotifyText(bool),
     /// apre o chiude la scheda della chat (info, media, link…)
     ToggleInfo,
+    OpenComments(i32),
+    CloseComments,
+    CommentDraft(String),
+    SendComment,
     InfoTab(model::SharedTab),
     /// chiede conferma per bloccare (true) o sbloccare l'utente
     AskBlock(bool),
@@ -310,6 +327,17 @@ pub struct Gui {
     pub bar: iced::Animation<bool>,
     /// l'istante del frame che si sta disegnando
     pub now: std::time::Instant,
+    /// GIF decodificate, in vista e in corso; `anim_order` = più vecchia prima
+    pub anims: std::collections::HashMap<String, std::sync::Arc<anim::Anim>>,
+    pub anim_visible: std::collections::HashSet<String>,
+    anim_busy: std::collections::HashSet<String>,
+    anim_order: Vec<String>,
+    /// istante zero del loop delle GIF
+    pub anim_t0: std::time::Instant,
+    /// messaggio citato da raggiungere: aspetta le pagine più vecchie
+    jump: Option<i32>,
+    /// messaggio appena raggiunto, evidenziato per un attimo
+    pub flash: Option<(i32, std::time::Instant)>,
     pub epoch: std::time::Instant,
     /// finestra a fuoco: la chat aperta non notifica
     focused: bool,
@@ -321,6 +349,8 @@ pub struct Gui {
     paste_undo: Option<String>,
     /// scheda della chat aperta accanto (o al posto) della cronologia
     pub show_info: bool,
+    /// testo del commento in scrittura
+    pub comment_draft: String,
     pub info_tab: model::SharedTab,
     /// popup di conferma aperto
     pub confirm: Option<Confirm>,
@@ -474,11 +504,19 @@ fn boot() -> Gui {
         panel: iced::Animation::new(false).quick(),
         bar: iced::Animation::new(false).quick(),
         now: std::time::Instant::now(),
+        jump: None,
+        flash: None,
+        anims: Default::default(),
+        anim_visible: Default::default(),
+        anim_busy: Default::default(),
+        anim_order: Vec::new(),
+        anim_t0: std::time::Instant::now(),
         epoch: std::time::Instant::now(),
         focused: true,
         viewer: None,
         paste_undo: None,
         show_info: false,
+        comment_draft: String::new(),
         info_tab: model::SharedTab::Media,
         confirm: None,
         revoke: false,
@@ -556,8 +594,12 @@ impl Gui {
         // frame a ogni ridisegno solo mentre un'animazione corre: ferma
         // la finestra non consuma niente
         let now = std::time::Instant::now();
-        if self.panel.is_animating(now) || self.bar.is_animating(now) {
+        if self.panel.is_animating(now) || self.bar.is_animating(now) || self.flash.is_some() {
             subs.push(iced::window::frames().map(Msg::Frame));
+        }
+        // le GIF in vista avanzano a 20 fotogrammi al secondo
+        if self.anim_visible.iter().any(|k| self.anims.contains_key(k)) {
+            subs.push(iced::time::every(std::time::Duration::from_millis(50)).map(Msg::AnimTick));
         }
         // il tema Omarchy si ricontrolla ogni 2s; con qualcuno che scrive
         // ogni 400 ms, per i puntini e perché il «sta scrivendo» scada
@@ -599,6 +641,9 @@ impl Gui {
         let task = match msg {
             Msg::Frame(at) => {
                 self.now = at;
+                if self.flash.is_some_and(|(_, t)| at.saturating_duration_since(t) > FLASH) {
+                    self.flash = None;
+                }
                 return Task::none();
             }
             Msg::View(id) => {
@@ -665,7 +710,11 @@ impl Gui {
                     let switch = self.switch_env(env);
                     Task::batch([switch, self.open_chat(pid)])
                 }
-                Some((env, ev)) => self.in_env(env, |g| g.on_net(ev)),
+                Some((env, ev)) => {
+                    let task = self.in_env(env, |g| g.on_net(ev));
+                    // è arrivata una pagina più vecchia: forse c'è il messaggio cercato
+                    Task::batch([task, self.continue_jump()])
+                }
                 None => Task::none(),
             },
             Msg::SwitchEnv(env) => self.switch_env(env),
@@ -745,6 +794,66 @@ impl Gui {
             Msg::Older => {
                 self.app.want_older = true;
                 Task::none()
+            }
+            Msg::AnimShow(key, src) => {
+                self.anim_visible.insert(key.clone());
+                if self.anims.contains_key(&key) || !self.anim_busy.insert(key.clone()) {
+                    return Task::none();
+                }
+                let px = self.settings.photo_px as u32;
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || anim::decode(&src, px).map(std::sync::Arc::new))
+                            .await
+                            .unwrap_or_else(|e| Err(format!("join: {e}")))
+                    },
+                    move |res| Msg::AnimLoaded(key.clone(), res),
+                );
+            }
+            Msg::AnimHide(key) => {
+                self.anim_visible.remove(&key);
+                Task::none()
+            }
+            Msg::AnimLoaded(key, res) => {
+                // chi fallisce resta nell'insieme dei «in corso»: niente nuovi tentativi
+                if let Ok(a) = res {
+                    self.anim_busy.remove(&key);
+                    self.anims.insert(key.clone(), a);
+                    self.anim_order.retain(|k| *k != key);
+                    self.anim_order.push(key);
+                    // tiene in memoria al massimo 8 GIF: via le più vecchie fuori vista
+                    while self.anims.len() > 8 {
+                        let Some(i) = self.anim_order.iter().position(|k| !self.anim_visible.contains(k)) else {
+                            break;
+                        };
+                        let old = self.anim_order.remove(i);
+                        self.anims.remove(&old);
+                        self.anim_busy.remove(&old);
+                    }
+                }
+                Task::none()
+            }
+            Msg::AnimTick(at) => {
+                self.now = at;
+                return Task::none();
+            }
+            Msg::Jump(id) => {
+                self.jump = Some(id);
+                self.continue_jump()
+            }
+            Msg::Jumped(id, item, history) => {
+                let (Some(item), Some(Target::Scrollable { bounds, content_bounds, .. })) = (item, history) else {
+                    return Task::none();
+                };
+                // la cronologia è ancorata in fondo: l'offset è la distanza dal
+                // fondo; cima della finestra = centro del messaggio - metà vista
+                let item = item.bounds();
+                let from_top = item.y - bounds.y + item.height / 2.0 - bounds.height / 2.0;
+                let max_top = (content_bounds.height - bounds.height).max(0.0);
+                let from_bottom = max_top - from_top.clamp(0.0, max_top);
+                self.at_bottom = from_bottom < 8.0;
+                self.flash = Some((id, self.now));
+                return operation::scroll_to(HISTORY, scrollable::AbsoluteOffset { x: None, y: Some(from_bottom) });
             }
             Msg::Select(id) => {
                 self.app.msg_cursor = if self.app.msg_cursor == Some(id) { None } else { Some(id) };
@@ -1396,6 +1505,43 @@ impl Gui {
                 }
                 Task::none()
             }
+            Msg::OpenComments(id) => {
+                if let (Some(chat), Some(req)) = (self.app.current_chat(), self.req()) {
+                    let (peer_ref, peer) = (chat.peer_ref, chat.peer_id);
+                    self.app.comments = Some((peer, id, None));
+                    self.show_info = false;
+                    let _ = req.send(Request::Comments { peer_ref, peer, id });
+                }
+                Task::none()
+            }
+            Msg::CloseComments => {
+                self.app.comments = None;
+                Task::none()
+            }
+            Msg::CommentDraft(s) => {
+                self.comment_draft = s;
+                Task::none()
+            }
+            Msg::SendComment => {
+                let text = self.comment_draft.trim().to_string();
+                let Some((_, _, Some(Ok(c)))) = &self.app.comments else {
+                    return Task::none();
+                };
+                if text.is_empty() {
+                    return Task::none();
+                }
+                if let Some(req) = self.req() {
+                    let job = rondine::send::SendJob {
+                        peer: c.group,
+                        peer_id: c.group.id,
+                        kind: rondine::send::SendKind::Text(text),
+                        reply_to: Some(c.root),
+                    };
+                    let _ = req.send(Request::Send(job));
+                    self.comment_draft.clear();
+                }
+                Task::none()
+            }
             Msg::ToggleInfo => {
                 self.show_info = !self.show_info && self.app.open.is_some();
                 if self.show_info {
@@ -1654,6 +1800,34 @@ impl Gui {
         }
     }
 
+    /// Porta al messaggio `self.jump`: se è già in memoria ne cerca la
+    /// posizione, sennò carica pagine più vecchie finché non arriva (o
+    /// finisce la cronologia).
+    fn continue_jump(&mut self) -> Task<Msg> {
+        let Some(id) = self.jump else {
+            return Task::none();
+        };
+        let Some(peer) = self.app.open else {
+            self.jump = None;
+            return Task::none();
+        };
+        if self.app.open_history().is_some_and(|ring| ring.iter().any(|r| r.id == id)) {
+            self.jump = None;
+            return selector::find(selector::id(format!("msg-{id}"))).then(move |item| {
+                selector::find(selector::id(HISTORY)).map(move |history| Msg::Jumped(id, item.clone(), history))
+            });
+        }
+        if self.app.older_done.contains(&peer) {
+            self.jump = None;
+        } else if !self.app.older_busy.contains(&peer) {
+            self.app.want_older = true;
+            if let Some(req) = self.req() {
+                self.app.request_older(&req);
+            }
+        }
+        Task::none()
+    }
+
     /// la cronologia è ancorata in fondo: l'offset 0 (START) è l'ultimo
     /// messaggio, END sarebbe la cima
     fn snap_bottom(&mut self) -> Task<Msg> {
@@ -1764,6 +1938,13 @@ impl Gui {
                         }
                         (_, Some(before)) => self.app.compose = before,
                         (_, None) => {}
+                    }
+                }
+                if matches!(&r, rondine::send::Response::Sent(Ok(_))) {
+                    if let Some((peer, id, _)) = self.app.comments {
+                        if let Some(chat) = self.app.current_chat().filter(|d| d.peer_id == peer) {
+                            let _ = req.send(Request::Comments { peer_ref: chat.peer_ref, peer, id });
+                        }
                     }
                 }
                 let first_page = matches!(&r, rondine::send::Response::Hist { .. });
@@ -1925,6 +2106,9 @@ impl Gui {
         let chat = &self.app.contacts[i];
         let (peer_ref, peer) = (chat.peer_ref, chat.peer_id);
         self.app.open = Some(pid);
+        // i sensori della chat vecchia spariscono senza avvisare
+        self.anim_visible.clear();
+        self.jump = None;
         if let Some(req) = self.req() {
             let _ = req.send(Request::Hist { peer_ref, peer });
         }

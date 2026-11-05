@@ -374,6 +374,11 @@ pub fn handle_response(app: &mut App, resp: Response, req: &mpsc::UnboundedSende
             Ok(to) => app.status = trf!("inoltrato a {}", to),
             Err(err) => app.status = trf!("inoltro: {}", err),
         },
+        Response::Comments { peer, id, res } => {
+            if let Some(c) = app.comments.as_mut().filter(|c| c.0 == peer && c.1 == id) {
+                c.2 = Some(res);
+            }
+        }
         Response::Info { peer, info } => match info {
             Ok(info) => {
                 app.peer_info.insert(peer, info);

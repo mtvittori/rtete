@@ -75,12 +75,17 @@ pub fn view(g: &Gui) -> Element<'_, Msg> {
         Phase::Pairing { qr, code } => wa_pairing(qr.as_ref(), code.as_deref()),
         Phase::Ready => iced::widget::responsive(move |size| {
             let info = g.show_info && g.app.current_chat().is_some();
+            let comments = g.app.comments.as_ref().is_some_and(|c| Some(c.0) == g.app.open);
             let right = if g.forwarding.is_some() {
                 forward_picker(g)
             } else if g.show_settings {
                 settings(g)
             } else if g.show_starred {
                 starred_view(g)
+            } else if comments && size.width < INFO_SIDE_BELOW {
+                comments_panel(g, false)
+            } else if comments {
+                row![chat(g), comments_panel(g, true)].into()
             } else if info && size.width < INFO_SIDE_BELOW {
                 info_panel(g, false)
             } else if info {
@@ -1064,7 +1069,9 @@ fn history(g: &Gui) -> Element<'_, Msg> {
                     || r.date - p.date > 300
             });
         col = col.push(
-            container(message(g, ring, r, first)).padding(iced::Padding::ZERO.top(if first { 10 } else { 2 })),
+            container(message(g, ring, r, first))
+                .id(format!("msg-{}", r.id))
+                .padding(iced::Padding::ZERO.top(if first { 10 } else { 2 })),
         );
         prev = Some(r);
     }
@@ -1110,6 +1117,7 @@ fn message<'a>(
         return container(text(s.as_str()).size(style::fs(12.0)).color(p.muted)).center_x(Fill).into();
     }
     let selected = app.msg_cursor == Some(r.id);
+    let flashing = g.flash.is_some_and(|(id, _)| id == r.id);
     let group = app.current_chat().is_some_and(|c| c.is_group && !c.broadcast);
     let mut content = Column::new().spacing(4);
     if first && group && !r.outgoing && !r.from.is_empty() {
@@ -1174,6 +1182,22 @@ fn message<'a>(
         });
         content = content.push(Row::with_children(chips).spacing(4));
     }
+    if let Some(n) = r.comments {
+        let label = match n {
+            0 => tr("💬 Commenta").to_string(),
+            1 => tr("💬 1 commento").to_string(),
+            n => trf!("💬 {} commenti", n),
+        };
+        let line = container(space()).width(Fill).height(1).style(style::fill(iced::Color { a: 0.25, ..p.text }));
+        content = content.push(column![
+            line,
+            button(text(label).size(13).color(p.link))
+                .on_press(Msg::OpenComments(r.id))
+                .padding([2, 0])
+                .style(|_: &iced::Theme, _| button::Style::default()),
+        ]
+        .spacing(4));
+    }
 
     let bubble: Element<'a, Msg> = if bare {
         container(content).max_width(BUBBLE_W).padding(2).into()
@@ -1181,7 +1205,7 @@ fn message<'a>(
         container(content)
             .max_width(BUBBLE_W)
             .padding([7, 11])
-            .style(style::bubble(r.outgoing, selected, first))
+            .style(style::bubble(r.outgoing, selected || flashing, first))
             .into()
     };
     // click: azioni; doppio click: risposta al volo
@@ -1237,12 +1261,19 @@ fn quote<'a>(app: &'a App, ring: &'a VecDeque<HistoryRow>, r: &'a HistoryRow) ->
         .width(3)
         .height(if who.is_empty() { 16 } else { 32 })
         .style(style::pill(tint));
-    container(row![bar, lines].spacing(7).align_y(Center))
+    let boxed = container(row![bar, lines].spacing(7).align_y(Center))
         .padding([4, 8])
         .max_width(BUBBLE_W - 30.0)
         .clip(true)
-        .style(style::quote_box(r.outgoing))
-        .into()
+        .style(style::quote_box(r.outgoing));
+    // click: salta al messaggio originale (se esiste ancora)
+    match target {
+        Some(None) => boxed.into(),
+        _ => mouse_area(boxed)
+            .on_press(Msg::Jump(id))
+            .interaction(iced::mouse::Interaction::Pointer)
+            .into(),
+    }
 }
 
 fn author<'a>(app: &'a App, r: &'a HistoryRow) -> &'a str {
@@ -1251,6 +1282,39 @@ fn author<'a>(app: &'a App, r: &'a HistoryRow) -> &'a str {
     } else {
         &r.from
     }
+}
+
+/// La GIF che si anima da sola in loop (come in Telegram): finché non è
+/// decodificata si vede l'anteprima ferma. `src` è il file da decodificare.
+/// Le GIF piccole si ingrandiscono alla larghezza della bolla (`Contain`
+/// scala anche in su), quelle alte si fermano a 1,25 volte la larghezza.
+fn animated<'a>(
+    g: &'a Gui,
+    media: &MediaRef,
+    src: std::path::PathBuf,
+    px: f32,
+    poster: Option<&std::path::PathBuf>,
+) -> Element<'a, Msg> {
+    let key = media.key().to_string();
+    let handle = match (g.anims.get(&key), poster) {
+        (Some(a), _) => Some(a.frame_at(g.now.saturating_duration_since(g.anim_t0)).clone()),
+        (None, Some(path)) => Some(image::Handle::from_path(path)),
+        (None, None) => None,
+    };
+    let shown: Element<'a, Msg> = match handle {
+        Some(h) => container(
+            image(h).width(px).content_fit(iced::ContentFit::Contain).border_radius(8),
+        )
+        .max_width(px)
+        .max_height(px * 1.25)
+        .into(),
+        None => container(space()).width(px).height(px * 0.6).into(),
+    };
+    let hide = Msg::AnimHide(key.clone());
+    iced::widget::sensor(shown)
+        .on_show(move |_| Msg::AnimShow(key.clone(), src.clone()))
+        .on_hide(hide)
+        .into()
 }
 
 fn preview<'a>(app: &App, media: &MediaRef, px: f32) -> Option<Element<'a, Msg>> {
@@ -1266,6 +1330,28 @@ fn preview<'a>(app: &App, media: &MediaRef, px: f32) -> Option<Element<'a, Msg>>
 fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
     let app = &g.app;
     match &r.kind {
+        RowKind::Video { media, caption, gif: true, .. }
+            if rondine::loader::cache_raw(media.key(), "mp4").exists() =>
+        {
+            // GIF di Telegram: loop muto nella bolla, click = player
+            let px = g.settings.photo_px as f32;
+            let src = rondine::loader::cache_raw(media.key(), "mp4");
+            let badge = container(text("GIF").size(style::fs(11.0)).color(iced::Color::WHITE))
+                .padding([1, 6])
+                .style(style::pill(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
+            let clip = iced::widget::stack![
+                animated(g, media, src, px, app.previews.get(media.key())),
+                container(badge).padding(6).align_left(Fill).align_top(Fill),
+            ];
+            let mut c = column![mouse_area(clip)
+                .on_press(Msg::Play(r.id))
+                .interaction(iced::mouse::Interaction::Pointer)]
+            .spacing(6);
+            if !caption.is_empty() {
+                c = c.push(linked(caption));
+            }
+            c.into()
+        }
         RowKind::Video { media, seconds, caption, round, .. } => {
             let p = style::p();
             let px = if *round { 220.0 } else { g.settings.photo_px as f32 };
@@ -1324,7 +1410,14 @@ fn body<'a>(g: &'a Gui, r: &'a HistoryRow) -> Element<'a, Msg> {
         RowKind::Photo { media, caption, gif } => {
             let mut c = Column::new().spacing(6);
             // click sulla foto: visore a tutta finestra con zoom
-            let pic = preview(app, media, g.settings.photo_px as f32).map(|img| -> Element<'a, Msg> {
+            let px = g.settings.photo_px as f32;
+            let pic = preview(app, media, px).map(|img| -> Element<'a, Msg> {
+                let src = rondine::loader::cache_raw(media.key(), "gif");
+                let img = if *gif && src.exists() {
+                    animated(g, media, src, px, app.previews.get(media.key()))
+                } else {
+                    img
+                };
                 mouse_area(img)
                     .on_press(Msg::View(r.id))
                     .interaction(iced::mouse::Interaction::ZoomIn)
@@ -2520,6 +2613,9 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     let auto_tr = iced::widget::toggler(app.translate.is_auto(chat.peer_id))
         .label(tr("🌐 Traduci da solo i messaggi di questa chat")).text_size(style::fs(style::BODY_PX))
         .on_toggle(Msg::AutoTranslate);
+    let mute = iced::widget::toggler(!chat.muted)
+        .label(tr("🔔 Notifiche"))
+        .on_toggle(|on| Msg::ChatDo(chat.peer_id, model::ChatAction::Mute(!on)));
     // messaggi effimeri: come i «messaggi temporanei» di WhatsApp
     let ttl_now = info.map_or(0, |i| i.ttl);
     let ttl_choice = |label: &'static str, secs: i32| -> Element<'_, Msg> {
@@ -2574,10 +2670,64 @@ fn info_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
     };
 
     let sep = || container(space()).width(Fill).height(1).style(style::fill(p.selected));
-    let body = column![top, face, details, sep(), acts, auto_tr, ephemeral, sep(), tabs, shared]
+    let body = column![top, face, details, sep(), mute, acts, auto_tr, ephemeral, sep(), tabs, shared]
         .spacing(14)
         .padding(iced::Padding::new(18.0).right(24.0));
     container(scrollable(body).height(Fill))
+        .width(if side { Length::Fixed(INFO_W) } else { Length::Fill })
+        .height(Fill)
+        .style(style::fill(p.sidebar))
+        .into()
+}
+
+/// i commenti di un post di canale, come il thread di Telegram Desktop
+fn comments_panel(g: &Gui, side: bool) -> Element<'_, Msg> {
+    let p = style::p();
+    let Some((_, _, res)) = &g.app.comments else {
+        return space().into();
+    };
+    let top = row![
+        text(tr("Commenti")).size(16).font(BOLD).width(Fill),
+        button(text("✕")).on_press(Msg::CloseComments).style(style::flat(false)),
+    ]
+    .align_y(Center);
+    let list: Element<'_, Msg> = match res {
+        None => text(tr("carico i commenti…")).size(12).color(p.muted).into(),
+        Some(Err(e)) => text(e.as_str()).size(12).color(p.danger).into(),
+        Some(Ok(c)) if c.rows.is_empty() => text(tr("Ancora nessun commento")).size(12).color(p.muted).into(),
+        Some(Ok(c)) => Column::with_children(c.rows.iter().map(|r| {
+            let who = if r.outgoing { tr("Tu") } else { r.from.as_str() };
+            let time = local(g, r.date).map(|z| z.strftime("%H:%M").to_string()).unwrap_or_default();
+            container(
+                column![
+                    row![text(who).size(13).font(BOLD).color(p.link).width(Fill), text(time).size(11).color(p.muted)],
+                    body(g, r),
+                ]
+                .spacing(2),
+            )
+            .width(Fill)
+            .padding([6, 10])
+            .style(style::bubble(r.outgoing, false, true))
+            .into()
+        }))
+        .spacing(6)
+        .into(),
+    };
+    let ready = matches!(res, Some(Ok(_)));
+    let mut input = iced::widget::text_input(tr("Scrivi un commento…"), &g.comment_draft).padding(8);
+    let mut send = button(text("➤")).style(style::flat(false));
+    if ready {
+        input = input.on_input(Msg::CommentDraft).on_submit(Msg::SendComment);
+        send = send.on_press(Msg::SendComment);
+    }
+    let body = column![
+        top,
+        scrollable(container(list).padding(iced::Padding::ZERO.right(10.0))).anchor_bottom().height(Fill),
+        row![input, send].spacing(6).align_y(Center),
+    ]
+    .spacing(12)
+    .padding(14);
+    container(body)
         .width(if side { Length::Fixed(INFO_W) } else { Length::Fill })
         .height(Fill)
         .style(style::fill(p.sidebar))

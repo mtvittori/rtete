@@ -211,7 +211,7 @@ impl Shared {
             Event::TemporaryBan(b) => self.fail(crate::trf!("WhatsApp ha sospeso l'account: {}", format!("{b:?}"))),
             Event::Messages(batch) => {
                 for m in batch.messages.iter() {
-                    self.message(&m.message, &m.info);
+                    self.message(&m.message, &m.info, client);
                 }
             }
             Event::Receipt(r) => self.receipt(r, client),
@@ -302,7 +302,7 @@ impl Shared {
     }
 
     /// Un messaggio (nuovo, reazione, modifica o cancellazione).
-    fn message(&self, msg: &wa::Message, info: &MessageInfo) {
+    fn message(&self, msg: &wa::Message, info: &MessageInfo, client: &Arc<Client>) {
         let mut store = self.store();
         if self.learn(&mut store, &info.source) {
             let _ = self.0.out.send(Response::Dialogs(Ok(store.dialogs())));
@@ -315,8 +315,22 @@ impl Shared {
 
         if let Some(r) = base.reaction_message.as_option() {
             let Some(target) = r.key.as_option().and_then(|k| k.id.clone()) else { return };
-            let who = if me { "me".to_string() } else { sender };
+            // una reazione messa dal telefono può arrivare senza `is_from_me`:
+            // il mittente allora è uno dei miei JID
+            let mine = me || [client.pn(), client.lid()].iter().flatten().any(|j| store.canon(&bare(j)) == sender);
+            let who = if mine { "me".to_string() } else { sender };
             let emoji = r.text.clone().unwrap_or_default();
+            // la chat della reazione può non coincidere con quella salvata
+            // (numero ↔ @lid): si cerca il messaggio bersaglio ovunque
+            let jid = if store.by_wa(&jid, &target).is_some() {
+                jid
+            } else {
+                match store.chat_with_wa(&target) {
+                    Some(j) => j,
+                    None => return,
+                }
+            };
+            let chat = chat_id_of(&jid);
             let res = store.update(&jid, &target, |m| {
                 m.reactions.retain(|(w, _)| *w != who);
                 if !emoji.is_empty() {

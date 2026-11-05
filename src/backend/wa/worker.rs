@@ -535,6 +535,9 @@ pub fn run_worker(wa: Wa, mut req_rx: mpsc::UnboundedReceiver<Request>, out: mps
                 Request::Shared { peer_ref, peer, tab } => {
                     let _ = out.send(Response::Shared { peer, tab, items: wa.shared(peer_ref, tab) });
                 }
+                Request::Comments { peer, id, .. } => {
+                    let _ = out.send(Response::Comments { peer, id, res: Err("commenti solo su Telegram".into()) });
+                }
                 Request::Info { peer_ref, peer } => {
                     let _ = out.send(Response::Info { peer, info: wa.info(peer_ref) });
                 }

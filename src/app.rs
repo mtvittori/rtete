@@ -81,6 +81,7 @@ impl MediaPrefs {
         match kind {
             model::RowKind::Sticker { animated, .. } => !animated,
             model::RowKind::Photo { .. } => self.photos,
+            model::RowKind::Video { gif: true, .. } => self.photos,
             model::RowKind::Video { .. } => self.video_thumbs,
             _ => false,
         }
@@ -211,6 +212,8 @@ pub struct App {
     pub quoted_failed: HashMap<ChatId, (Instant, u32)>,
     /// schede delle chat (bio, membri, bloccato), chieste aprendo le info
     pub peer_info: HashMap<ChatId, model::PeerInfo>,
+    /// commenti aperti: canale, id del post, esito (None = in arrivo)
+    pub comments: Option<(ChatId, i32, Option<Result<model::Comments, String>>)>,
     /// contenuti condivisi per chat e tipo (media, file, link…)
     pub shared: HashMap<(ChatId, model::SharedTab), Vec<model::SharedItem>>,
     /// schede condivise già chieste (in corso o arrivate)

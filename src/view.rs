@@ -1647,6 +1647,7 @@ mod tests {
             reply_quote: None,
             fwd: Some("Anna".into()),
             edited: true,
+            comments: None,
         };
         let m = row_meta(&row, &jiff::tz::TimeZone::UTC);
         assert_eq!(
@@ -1668,6 +1669,7 @@ mod tests {
             reply_quote: None,
             fwd: None,
             edited: false,
+            comments: None,
         }
     }
 

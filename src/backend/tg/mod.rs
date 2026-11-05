@@ -187,6 +187,13 @@ pub fn row_from_message(m: &grammers_client::message::Message, from: String) -> 
             h.from_name.unwrap_or_default()
         }),
         edited: m.edit_date().is_some() && !m.edit_hide(),
+        comments: match &m.raw {
+            tl::enums::Message::Message(tl::types::Message {
+                replies: Some(tl::enums::MessageReplies::Replies(r)),
+                ..
+            }) if r.comments => Some(r.replies),
+            _ => None,
+        },
     }
 }
 
@@ -220,6 +227,26 @@ pub fn collect_reactions(raw: &tl::enums::Message) -> Vec<ReactionItem> {
         Some(r) => reactions_from(r),
         None => Vec::new(),
     }
+}
+
+/// oltre questa dimensione una GIF resta un video con miniatura
+const GIF_MAX_BYTES: usize = 8 * 1024 * 1024;
+
+/// Le GIF di Telegram sono mp4 con l'attributo «animated».
+fn is_gif_video(doc: &grammers_client::media::Document) -> bool {
+    matches!(
+        &doc.raw.document,
+        Some(tl::enums::Document::Document(d))
+            if d.attributes.iter().any(|a| matches!(a, tl::enums::DocumentAttribute::Animated))
+    )
+}
+
+/// È una GIF di Telegram di cui manca l'mp4 in cache?
+pub fn wants_gif_file(media: &MediaRef) -> bool {
+    matches!(media_of(media), Ok(Media::Document(doc))
+        if is_gif_video(doc)
+            && doc.size().is_some_and(|n| n <= GIF_MAX_BYTES)
+            && !crate::loader::cache_raw(media.key(), "mp4").exists())
 }
 
 /// Etichetta breve per i media che non renderizziamo (video, vocale…);
@@ -686,6 +713,7 @@ pub fn row_kind(media: Option<Media>, text: String) -> RowKind {
                     caption: cap,
                     round,
                     note: media_note(&doc),
+                    gif: is_gif_video(&doc),
                     media: to_media_ref(media.unwrap()),
                 };
             }
@@ -776,6 +804,76 @@ pub async fn load_history_before(
     }
     rows.reverse();
     Ok(rows)
+}
+
+/// I commenti del post `id` di un canale: il gruppo di discussione, la
+/// copia del post lì dentro e le risposte, dalla più vecchia.
+pub async fn load_comments(
+    client: &Client,
+    channel: ChatRef,
+    id: i32,
+) -> Result<crate::model::Comments, String> {
+    let peer: tl::enums::InputPeer = (&to_peer_ref(channel)).into();
+    let tl::enums::messages::DiscussionMessage::Message(d) = client
+        .invoke(&tl::functions::messages::GetDiscussionMessage { peer: peer.clone(), msg_id: id })
+        .await
+        .map_err(|e| e.to_string())?;
+    let (root, group_id) = d
+        .messages
+        .iter()
+        .find_map(|m| match m {
+            tl::enums::Message::Message(m) => match &m.peer_id {
+                tl::enums::Peer::Channel(c) => Some((m.id, c.channel_id)),
+                _ => None,
+            },
+            _ => None,
+        })
+        .ok_or_else(|| tr("questo post non ha commenti").to_string())?;
+    let hash = d
+        .chats
+        .iter()
+        .find_map(|c| match c {
+            tl::enums::Chat::Channel(c) if c.id == group_id => c.access_hash,
+            _ => None,
+        })
+        .unwrap_or(0);
+    let pid = PeerId::channel(group_id).ok_or("gruppo non valido")?;
+    let group = ChatRef { id: to_chat_id(pid), auth: hash };
+    let replies = client
+        .invoke(&tl::functions::messages::GetReplies {
+            peer,
+            msg_id: id,
+            offset_id: 0,
+            offset_date: 0,
+            add_offset: 0,
+            limit: 100,
+            max_id: 0,
+            min_id: 0,
+            hash: 0,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    let raw = match replies {
+        tl::enums::messages::Messages::Messages(m) => m.messages,
+        tl::enums::messages::Messages::Slice(m) => m.messages,
+        tl::enums::messages::Messages::ChannelMessages(m) => m.messages,
+        tl::enums::messages::Messages::NotModified(_) => Vec::new(),
+    };
+    let mut ids: Vec<i32> = raw
+        .iter()
+        .filter_map(|m| match m {
+            tl::enums::Message::Message(m) => Some(m.id),
+            _ => None,
+        })
+        .collect();
+    ids.reverse();
+    let rows = load_by_id(client, group, &ids)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .flatten()
+        .collect();
+    Ok(crate::model::Comments { group, root, rows })
 }
 
 /// Messaggi per id, nell'ordine di `ids`; `None` per quelli eliminati.
@@ -1433,6 +1531,25 @@ pub async fn download_media_to(
 pub async fn fetch_raw(client: &Client, media: &MediaRef) -> Result<PathBuf, String> {
     let key = media.key();
     let inner = media_of(media)?;
+    // GIF (mp4 animato, di pochi MB): serve il file intero per animarla;
+    // l'anteprima statica ne viene dal primo fotogramma (loader)
+    if let Media::Document(doc) = inner {
+        if doc.mime_type().unwrap_or("").starts_with("video/")
+            && is_gif_video(doc)
+            && doc.size().is_some_and(|n| n <= GIF_MAX_BYTES)
+        {
+            let raw_path = crate::loader::cache_raw(key, "mp4");
+            if !raw_path.exists() {
+                ensure_private_dir(&crate::paths::media_dir())
+                    .map_err(|e| format!("cache dir: {e}"))?;
+                client
+                    .download_media(doc, raw_path.clone())
+                    .await
+                    .map_err(|e| format!("download: {e}"))?;
+            }
+            return Ok(raw_path);
+        }
+    }
     // video: basta la miniatura più grande, non il file intero
     if let Media::Document(doc) = inner {
         if doc.mime_type().unwrap_or("").starts_with("video/") {

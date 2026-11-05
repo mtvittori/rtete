@@ -162,7 +162,26 @@ fn gif_dims(bytes: &[u8]) -> Option<(u32, u32)> {
     ))
 }
 
+/// Primo fotogramma di un mp4 (le GIF di Telegram) come png.
+fn mp4_poster(src: &Path, dst: &Path) -> Result<(), String> {
+    let out = std::process::Command::new("ffmpeg")
+        .args(["-v", "error", "-y", "-i"])
+        .arg(src)
+        .args(["-frames:v", "1", "-vf", "scale='min(iw,640)':-2", "-f", "image2", "-c:v", "png"])
+        .arg(dst)
+        .output()
+        .map_err(|e| format!("ffmpeg: {e}"))?;
+    if out.status.success() && dst.exists() {
+        Ok(())
+    } else {
+        Err(format!("ffmpeg: {}", String::from_utf8_lossy(&out.stderr).trim()))
+    }
+}
+
 fn convert_sync(src: &Path, dst: &Path) -> Result<(), String> {
+    if src.extension().is_some_and(|e| e == "mp4") {
+        return mp4_poster(src, dst);
+    }
     let bytes = std::fs::read(src).map_err(|e| format!("read: {e}"))?;
     match (sniff(&bytes), is_apng(&bytes)) {
         // APNG: byte intatti, kitty anima in autonomia.

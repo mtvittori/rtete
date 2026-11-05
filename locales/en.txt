@@ -1764,3 +1764,33 @@ Text  {}%
 
 Predefinito
 Default
+
+🔔 Notifiche
+🔔 Notifications
+
+💬 Commenta
+💬 Comment
+
+💬 1 commento
+💬 1 comment
+
+💬 {} commenti
+💬 {} comments
+
+Commenti
+Comments
+
+carico i commenti…
+loading comments…
+
+Ancora nessun commento
+No comments yet
+
+Scrivi un commento…
+Write a comment…
+
+questo post non ha commenti
+this post has no comments
+
+Tu
+You
