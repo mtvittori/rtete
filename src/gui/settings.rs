@@ -25,6 +25,8 @@ pub enum ThemeChoice {
     WhatsApp,
     /// il tema chiaro di Telegram
     TelegramLight,
+    /// il tema chiaro di Unigram
+    Unigram,
 }
 
 impl ThemeChoice {
@@ -34,6 +36,7 @@ impl ThemeChoice {
             ThemeChoice::Rondine => "rondine",
             ThemeChoice::WhatsApp => "whatsapp",
             ThemeChoice::TelegramLight => "telegram_chiaro",
+            ThemeChoice::Unigram => "unigram",
         }
     }
 
@@ -43,13 +46,13 @@ impl ThemeChoice {
             "rondine" | "rtete" => Some(ThemeChoice::Rondine),
             "whatsapp" => Some(ThemeChoice::WhatsApp),
             "telegram_chiaro" => Some(ThemeChoice::TelegramLight),
+            "unigram" => Some(ThemeChoice::Unigram),
             _ => None,
         }
     }
 }
 
-/// L'ambiente (Telegram o WhatsApp) e con esso la disposizione
-/// dell'interfaccia; ognuno ricorda il suo tema.
+/// L'ambiente (Telegram o WhatsApp); ognuno ricorda il suo tema.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum UiStyle {
     Telegram,
@@ -134,14 +137,10 @@ pub struct Settings {
     /// col feed unico, i segni del servizio della chat aperta (uno o più
     /// insieme, un bit per `EnvMark`)
     env_marks: u8,
-    /// col feed unico e i colori del servizio: la disposizione fissa
-    /// (sempre Telegram o sempre WhatsApp), o `None` se segue il servizio
-    pub layout_fixed: Option<UiStyle>,
     /// gli altri mi vedono online quando Rondine è davanti
     pub show_online: bool,
     /// gli altri vedono «sta scrivendo» mentre scrivo
     pub show_typing: bool,
-    pub style_mix: UiStyle,
     pub theme_mix: ThemeChoice,
 }
 
@@ -196,10 +195,8 @@ impl Default for Settings {
             env_rail: true,
             unified: false,
             env_marks: EnvMark::Chip.bit(),
-            layout_fixed: None,
             show_online: true,
             show_typing: true,
-            style_mix: UiStyle::Telegram,
             theme_mix: ThemeChoice::Omarchy,
         }
     }
@@ -232,18 +229,6 @@ impl Settings {
     /// o col feed unico e il segno «tema» (vale quello della chat aperta).
     pub fn per_env(&self) -> bool {
         !self.mixed() || self.has_mark(EnvMark::Theme)
-    }
-
-    /// la disposizione dell'interfaccia: quella del feed unico o
-    /// dell'ambiente in vista
-    pub fn layout(&self) -> UiStyle {
-        if !self.per_env() {
-            self.style_mix
-        } else if let Some(fixed) = self.layout_fixed.filter(|_| self.mixed()) {
-            fixed
-        } else {
-            self.style
-        }
     }
 
     /// il tema dello stile in uso
@@ -324,14 +309,6 @@ impl Settings {
                 }
                 ("mostra_online", v) => s.show_online = v != "false",
                 ("mostra_scrivo", v) => s.show_typing = v != "false",
-                ("disposizione_feed", v) => {
-                    s.layout_fixed = match v {
-                        "telegram" => Some(UiStyle::Telegram),
-                        "whatsapp" => Some(UiStyle::WhatsApp),
-                        _ => None,
-                    }
-                }
-                ("stile_feed", v) => s.style_mix = if v == "whatsapp" { UiStyle::WhatsApp } else { UiStyle::Telegram },
                 ("tema_feed", v) => s.theme_mix = ThemeChoice::from_code(v).unwrap_or(s.theme_mix),
                 ("lingua", v) => s.lang = LangChoice(Lang::from_code(v)),
                 ("cache_mb", v) => {
@@ -378,7 +355,7 @@ impl Settings {
                 "tema = {theme}\nscala = {:.2}\nlink_in_app = {}\ngpu = {}\nnotifiche = {}\nnotifiche_testo = {}\n\
                  foto_auto = {}\nminiature_video = {}\nfoto_profilo = {}\nmisura_foto = {}\ncache_mb = {}\nlingua = {}\n\
                  stile = {style}\ntema_whatsapp = {}\npreferite = {}\nbarra_ambienti = {}\n\
-                 feed_unico = {}\nstile_feed = {}\ntema_feed = {}\nsegno_feed = {}\ndisposizione_feed = {}\n\
+                 feed_unico = {}\ntema_feed = {}\nsegno_feed = {}\n\
                  mostra_online = {}\nmostra_scrivo = {}\nfont = {}\npeso_font = {}\nscala_testo = {:.2}\n",
                 self.scale,
                 self.links_in_app,
@@ -395,14 +372,8 @@ impl Settings {
                 favorites.join(","),
                 self.env_rail,
                 self.unified,
-                if self.style_mix == UiStyle::WhatsApp { "whatsapp" } else { "telegram" },
                 self.theme_mix.code(),
                 EnvMark::ALL.into_iter().filter(|&m| self.has_mark(m)).map(EnvMark::code).collect::<Vec<_>>().join(","),
-                match self.layout_fixed {
-                    None => "servizio",
-                    Some(UiStyle::Telegram) => "telegram",
-                    Some(UiStyle::WhatsApp) => "whatsapp",
-                },
                 self.show_online,
                 self.show_typing,
                 self.font.as_deref().unwrap_or_default(),
@@ -434,6 +405,10 @@ pub fn set_tg_handler() -> bool {
 mod tests {
     use super::*;
 
+    /// Serializza i test che cambiano `XDG_CONFIG_HOME`: senza il lock girano in
+    /// parallelo e leggono o cancellano la cartella di un altro test.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn ogni_stile_tiene_il_suo_tema() {
         let mut s = Settings::default();
@@ -451,6 +426,7 @@ mod tests {
 
     #[test]
     fn salva_e_rilegge_stile_temi_e_preferite() {
+        let _env = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("rondine-conf-{}", std::process::id()));
         std::env::set_var("XDG_CONFIG_HOME", &dir);
         let mut s = Settings::default();
@@ -493,4 +469,12 @@ mod tests {
         s.theme = ThemeChoice::from_code("telegram_chiaro").unwrap_or(s.theme);
         assert_eq!(s.active_theme(), ThemeChoice::TelegramLight);
     }
+
+    #[test]
+    fn unigram_si_salva_e_si_rilegge() {
+        // il codice scritto nel file e quello riletto da `from_code()`
+        assert_eq!(ThemeChoice::Unigram.code(), "unigram");
+        assert_eq!(ThemeChoice::from_code("unigram"), Some(ThemeChoice::Unigram));
+    }
+
 }

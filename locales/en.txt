@@ -836,9 +836,6 @@ Forward to…
 Interfaccia  {}%
 Interface  {}%
 
-Invia
-Send
-
 Invito a «{}» · {} membri
 Invite to “{}” · {} members
 
@@ -1349,9 +1346,6 @@ Favorites
 Gruppi
 Groups
 
-Chat
-Chats
-
 Nessuna chat archiviata
 No archived chats
 
@@ -1397,17 +1391,8 @@ Leave and delete
 ⭐ Importante
 ⭐ Star
 
-STILE
-STYLE
-
 Verde WhatsApp
 WhatsApp green
-
-Il tema scelto vale solo per lo stile Telegram.
-The chosen theme applies only to the Telegram style.
-
-Il tema scelto vale solo per lo stile WhatsApp.
-The chosen theme applies only to the WhatsApp style.
 
 ⏱ Messaggi effimeri
 ⏱ Disappearing messages
@@ -1669,9 +1654,6 @@ Without the sidebar: Ctrl+1 Telegram, Ctrl+2 WhatsApp. To run them as two separa
 nessuna foto
 no photo
 
-Feed unico: stile e tema valgono per tutte le chat.
-Single feed: style and theme apply to every chat.
-
 Feed unico: le chat di tutti e due in una lista sola
 Single feed: chats from both in one list
 
@@ -1710,18 +1692,6 @@ Which service the open chat belongs to
 
 Colori del servizio (ognuno il suo tema, come separati)
 Service colours (each its own theme, as when separate)
-
-Disposizione degli elementi
-Layout
-
-Come il servizio
-Same as the service
-
-Sempre Telegram
-Always Telegram
-
-Sempre WhatsApp
-Always WhatsApp
 
 FONT
 FONT
@@ -1794,3 +1764,9 @@ this post has no comments
 
 Tu
 You
+
+Unigram chiaro
+Unigram light
+
+Feed unico: il tema vale per tutte le chat.
+Unified feed: the theme applies to all chats.

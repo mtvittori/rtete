@@ -10,6 +10,33 @@ use std::time::SystemTime;
 use iced::widget::{button, container, text_input};
 use iced::{border, color, Background, Border, Color, Theme};
 
+/// raggio degli angoli delle bolle in stile Unigram
+const UNIGRAM_BUBBLE_RADIUS: u32 = 15;
+
+/// raggio della pillola dei messaggi di servizio
+const SERVICE_PILL_RADIUS: u32 = 11;
+
+/// raggio delle superfici grandi Unigram (barra di scrittura, campi, comandi)
+const UNIGRAM_RADIUS: u32 = 8;
+
+/// raggio delle superfici piccole (voci di lista, campi piatti, icone)
+const UNIGRAM_SMALL_RADIUS: u32 = 4;
+
+/// raggio del segno d'accento che marca il tab attivo
+const ACCENT_MARK_RADIUS: u32 = 2;
+
+/// opacità del fondo grigio della pillola di servizio
+const SERVICE_PILL_ALPHA: f32 = 0.4;
+
+/// quanto il testo entra nel bordo dei campi di ricerca
+const SEARCH_BORDER_MIX: f32 = 0.12;
+
+/// quanto il testo entra nel colore dei separatori
+const DIVIDER_MIX: f32 = 0.1;
+
+/// quanto l'accento colora la selezione del testo nei campi
+const SELECTION_MIX: f32 = 0.4;
+
 #[derive(Clone, Copy)]
 pub struct Pal {
     pub bg: Color,
@@ -105,17 +132,35 @@ pub const TELEGRAM_LIGHT: Pal = Pal {
     ],
 };
 
+/// Il tema chiaro di Unigram (il client Telegram per Windows). Accento,
+/// bolle, testo, link e rosso vengono dal sorgente di Unigram; fondo, barra
+/// laterale, testo secondario, selezione e passaggio del mouse sono stimati
+/// da uno screenshot.
+pub const UNIGRAM: Pal = Pal {
+    bg: color!(0xbfd1a2),
+    sidebar: color!(0xeaf3f2),
+    header: color!(0xffffff),
+    bubble_in: color!(0xffffff),
+    bubble_out: color!(0xf0fddf),
+    accent: color!(0x40a7e3),
+    text: color!(0x000000),
+    muted: color!(0x707579),
+    link: color!(0x168acd),
+    danger: color!(0xd13438),
+    selected: color!(0xdce6e8),
+    hover: color!(0xe2eceb),
+    names: [
+        color!(0xc03d33),
+        color!(0x4fad2d),
+        color!(0x168acd),
+        color!(0xd09306),
+        color!(0x8544d6),
+        color!(0x2996ad),
+        color!(0xce671b),
+    ],
+};
+
 static PAL: RwLock<Pal> = RwLock::new(RONDINE);
-/// disposizione in stile WhatsApp (bolle con la punta, campo tondo…)
-static WA: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-pub fn set_wa(on: bool) {
-    WA.store(on, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub fn wa() -> bool {
-    WA.load(std::sync::atomic::Ordering::Relaxed)
-}
 
 /// dimensione base del testo dell'app in pixel (default di iced): punto di
 /// partenza di `fs`
@@ -292,21 +337,15 @@ pub fn fill(c: Color) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// `tail`: primo messaggio di una serie; in stile WhatsApp l'angolo verso
-/// chi scrive resta vivo, come la punta delle sue bolle.
-pub fn bubble(outgoing: bool, selected: bool, tail: bool) -> impl Fn(&Theme) -> container::Style {
+/// stile della bolla di un messaggio: fondo in/out, bordo di selezione e
+/// raggio Unigram.
+/// Input: `outgoing`, messaggio scritto da noi; `selected`, bolla scelta;
+/// `_tail`, tenuto per il chiamante e ormai ininfluente sulla forma.
+/// Output: lo stile della bolla. Effetti: nessuno.
+pub fn bubble(outgoing: bool, selected: bool, _tail: bool) -> impl Fn(&Theme) -> container::Style {
     move |_| {
         let p = p();
-        let radius = if wa() {
-            let r = border::radius(8);
-            match (tail, outgoing) {
-                (true, true) => r.top_right(0),
-                (true, false) => r.top_left(0),
-                _ => r,
-            }
-        } else {
-            border::radius(12)
-        };
+        let radius = border::radius(UNIGRAM_BUBBLE_RADIUS);
         container::Style {
             background: Some(Background::Color(if outgoing { bubble_out(&p) } else { p.bubble_in })),
             text_color: Some(p.text),
@@ -325,6 +364,149 @@ pub fn pill(c: Color) -> impl Fn(&Theme) -> container::Style {
         background: Some(Background::Color(c)),
         text_color: Some(p().text),
         border: border::rounded(10),
+        ..Default::default()
+    }
+}
+
+/// pillola dei messaggi di servizio in stile Unigram: fondo grigio
+/// traslucido, testo bianco
+pub fn service_pill(_: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgba8(
+            0x7a,
+            0x8a,
+            0x96,
+            SERVICE_PILL_ALPHA,
+        ))),
+        text_color: Some(Color::WHITE),
+        border: border::rounded(SERVICE_PILL_RADIUS),
+        ..Default::default()
+    }
+}
+
+/// voce di lista in stile Unigram: evidenziata se aperta, chiara al
+/// passaggio, altrimenti senza fondo
+pub fn list_item(open: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let p = p();
+        button::Style {
+            background: match (open, status) {
+                (true, _) => Some(Background::Color(p.selected)),
+                (false, button::Status::Hovered | button::Status::Pressed) => {
+                    Some(Background::Color(p.hover))
+                }
+                _ => None,
+            },
+            text_color: p.text,
+            border: border::rounded(UNIGRAM_SMALL_RADIUS),
+            ..Default::default()
+        }
+    }
+}
+
+/// barra di scrittura in stile Unigram: tonda in alto, dritta verso il
+/// fondo della finestra
+pub fn composer_bar(_: &Theme) -> container::Style {
+    let p = p();
+    container::Style {
+        background: Some(Background::Color(p.header)),
+        text_color: Some(p.text),
+        border: Border {
+            radius: border::radius(0)
+                .top_left(UNIGRAM_RADIUS)
+                .top_right(UNIGRAM_RADIUS),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+/// campo di testo piatto in stile Unigram: nessun fondo, nessun bordo
+pub fn flat_input(_: &Theme, _status: text_input::Status) -> text_input::Style {
+    let p = p();
+    text_input::Style {
+        background: Background::Color(Color::TRANSPARENT),
+        border: Border {
+            radius: border::radius(UNIGRAM_SMALL_RADIUS),
+            width: 0.0,
+            color: Color::TRANSPARENT,
+        },
+        icon: p.muted,
+        placeholder: p.muted,
+        value: p.text,
+        selection: mix(p.selected, p.accent, SELECTION_MIX),
+    }
+}
+
+/// campo di ricerca in stile Unigram: fondo bianco, bordo leggero che si
+/// accende con il fuoco
+pub fn search_box(_: &Theme, status: text_input::Status) -> text_input::Style {
+    let p = p();
+    let edge = match status {
+        text_input::Status::Focused { .. } => p.accent,
+        _ => mix(p.sidebar, p.text, SEARCH_BORDER_MIX),
+    };
+    text_input::Style {
+        background: Background::Color(p.header),
+        border: Border {
+            radius: border::radius(UNIGRAM_SMALL_RADIUS),
+            width: 1.0,
+            color: edge,
+        },
+        icon: p.muted,
+        placeholder: p.muted,
+        value: p.text,
+        selection: mix(p.selected, p.accent, SELECTION_MIX),
+    }
+}
+
+/// barretta d'accento che marca il tab attivo in stile Unigram
+pub fn accent_mark(_: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(p().accent)),
+        border: border::rounded(ACCENT_MARK_RADIUS),
+        ..Default::default()
+    }
+}
+
+/// tab in stile Unigram: solo testo, colorato quando è quello attivo
+pub fn tab(on: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let p = p();
+        button::Style {
+            background: None,
+            text_color: if on {
+                p.accent
+            } else {
+                match status {
+                    button::Status::Hovered | button::Status::Pressed => p.text,
+                    _ => p.muted,
+                }
+            },
+            ..Default::default()
+        }
+    }
+}
+
+/// separatore sottile in stile Unigram
+pub fn divider(_: &Theme) -> container::Style {
+    let p = p();
+    container::Style {
+        background: Some(Background::Color(mix(p.sidebar, p.text, DIVIDER_MIX))),
+        ..Default::default()
+    }
+}
+
+/// icona d'accento in stile Unigram: si accende al passaggio
+pub fn accent_icon(_: &Theme, status: button::Status) -> button::Style {
+    let p = p();
+    button::Style {
+        background: match status {
+            button::Status::Hovered | button::Status::Pressed => Some(Background::Color(p.hover)),
+            _ => None,
+        },
+        text_color: p.accent,
+        border: border::rounded(UNIGRAM_SMALL_RADIUS),
         ..Default::default()
     }
 }
@@ -436,11 +618,10 @@ pub fn input(_: &Theme, status: text_input::Status) -> text_input::Style {
         text_input::Status::Hovered => mix(p.selected, p.text, 0.2),
         _ => p.selected,
     };
-    let (fill, radius) = if wa() { (p.header, 20) } else { (mix(p.bg, Color::BLACK, 0.15), 12) };
     text_input::Style {
-        background: Background::Color(fill),
+        background: Background::Color(mix(p.bg, Color::BLACK, 0.15)),
         border: Border {
-            radius: border::radius(radius),
+            radius: border::radius(12),
             width: 1.0,
             color: edge,
         },

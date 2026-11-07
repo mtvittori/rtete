@@ -25,7 +25,7 @@ use rondine::{links, model, paths};
 use rondine::{i18n, tr, trf, translate};
 
 use crate::net::{Carrier, Env, Link, NetEvent, Pairing};
-use crate::settings::{Settings, ThemeChoice, UiStyle};
+use crate::settings::{Settings, ThemeChoice};
 
 pub const COMPOSE: &str = "compose";
 pub const HISTORY: &str = "history";
@@ -150,7 +150,6 @@ pub enum Msg {
     EnvRail(bool),
     Unified(bool),
     EnvMark(crate::settings::EnvMark, bool),
-    LayoutFixed(Option<UiStyle>),
     ShowOnline(bool),
     ShowTyping(bool),
     /// un messaggio per una chat dell'altro ambiente (feed unico)
@@ -180,8 +179,6 @@ pub enum Msg {
     TrTarget(Option<String>),
     /// traduce una frase di prova
     TrTest,
-    /// stile dell'interfaccia: Telegram o WhatsApp
-    SetStyle(UiStyle),
     /// filtro della lista chat (Tutte, Non lette…)
     ChatFilter(ChatFilter),
     /// mostra le chat archiviate (o torna alla lista)
@@ -466,7 +463,6 @@ fn boot() -> Gui {
         settings.style = env;
     }
     let env = if cfg!(feature = "whatsapp") { settings.style } else { Env::Telegram };
-    style::set_wa(settings.layout() == UiStyle::WhatsApp);
     apply_theme(settings.active_theme());
     style::set_text_scale(settings.text_scale);
     // senza font scelto il sistema dei font resta intatto
@@ -567,6 +563,7 @@ fn apply_theme(choice: ThemeChoice) {
         ThemeChoice::Rondine => style::RONDINE,
         ThemeChoice::WhatsApp => style::WHATSAPP,
         ThemeChoice::TelegramLight => style::TELEGRAM_LIGHT,
+        ThemeChoice::Unigram => style::UNIGRAM,
     };
     style::set(pal);
 }
@@ -1282,18 +1279,6 @@ impl Gui {
                 }
                 Task::none()
             }
-            Msg::SetStyle(s) => {
-                if !self.settings.per_env() {
-                    self.settings.style_mix = s;
-                } else {
-                    self.settings.style = s;
-                }
-                style::set_wa(s == UiStyle::WhatsApp);
-                apply_theme(self.settings.active_theme());
-                self.theme_stamp = style::omarchy_stamp();
-                self.settings.save();
-                Task::none()
-            }
             Msg::ChatFilter(f) => {
                 self.chat_filter = f;
                 self.show_archived = false;
@@ -1446,26 +1431,17 @@ impl Gui {
                 self.settings.set_mark(m, on);
                 self.settings.save();
                 // il segno «tema» cambia stile e tema subito
-                style::set_wa(self.settings.layout() == UiStyle::WhatsApp);
                 apply_theme(self.settings.active_theme());
                 self.theme_stamp = style::omarchy_stamp();
                 Task::none()
             }
-            Msg::LayoutFixed(l) => {
-                self.settings.layout_fixed = l;
-                self.settings.save();
-                style::set_wa(self.settings.layout() == UiStyle::WhatsApp);
-                Task::none()
-            }
             Msg::Unified(on) => {
-                // si parte dallo stile e dal tema che si stanno guardando
+                // si parte dal tema che si sta guardando
                 if on {
-                    self.settings.style_mix = self.settings.layout();
                     self.settings.theme_mix = self.settings.active_theme();
                 }
                 self.settings.unified = on;
                 self.settings.save();
-                style::set_wa(self.settings.layout() == UiStyle::WhatsApp);
                 apply_theme(self.settings.active_theme());
                 self.theme_stamp = style::omarchy_stamp();
                 Task::none()
@@ -2019,7 +1995,6 @@ impl Gui {
         }
         self.settings.style = to;
         self.settings.save();
-        style::set_wa(self.settings.layout() == Env::WhatsApp);
         apply_theme(self.settings.active_theme());
         self.theme_stamp = style::omarchy_stamp();
         let mixed = self.settings.mixed();
